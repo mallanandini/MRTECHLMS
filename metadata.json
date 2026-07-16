@@ -1,0 +1,6 @@
+{
+  "name": "Learning Management System",
+  "description": "An AI-Powered Learning Management System (LMS) with Student, Trainer, and Admin Portals, course player, assessments, coding practice, and blogs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
