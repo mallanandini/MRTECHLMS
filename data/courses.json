@@ -1,0 +1,49 @@
+[
+  {
+    "id": "course-1",
+    "title": "Introduction to Full-Stack Web Development",
+    "description": "Learn HTML, CSS, JavaScript, React, Node.js, and Express to build scalable and highly polished full-stack web applications from scratch.",
+    "thumbnail": "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&auto=format&fit=crop&q=80",
+    "banner": "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=1200&auto=format&fit=crop&q=80",
+    "instructorId": "trainer-1",
+    "instructorName": "Dr. Sarah Mitchell",
+    "category": "Web Development",
+    "requirements": [
+      "Basic understanding of computers",
+      "No programming experience required"
+    ],
+    "skillsCovered": [
+      "Modern React (v19)",
+      "Express.js REST APIs",
+      "Tailwind CSS Layouts",
+      "TypeScript Type Safety"
+    ],
+    "isFeatured": false,
+    "rating": 4.8,
+    "reviewsCount": 150,
+    "createdAt": "2026-01-15T00:00:00.000Z"
+  },
+  {
+    "id": "course-2",
+    "title": "Mastering Python for AI and Data Science",
+    "description": "Go from absolute beginner to master in Python programming, covering lists, dictionaries, data analysis, and integrating Gemini AI models.",
+    "thumbnail": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600&auto=format&fit=crop&q=80",
+    "banner": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1200&auto=format&fit=crop&q=80",
+    "instructorId": "trainer-1",
+    "instructorName": "Dr. Sarah Mitchell",
+    "category": "Artificial Intelligence",
+    "requirements": [
+      "A working computer with Python installed"
+    ],
+    "skillsCovered": [
+      "Python Object-Oriented Programming",
+      "Data Manipulation with Pandas",
+      "Gemini AI SDK Integration",
+      "Statistical Analysis"
+    ],
+    "isFeatured": true,
+    "rating": 4.6,
+    "reviewsCount": 75,
+    "createdAt": "2026-02-01T00:00:00.000Z"
+  }
+]

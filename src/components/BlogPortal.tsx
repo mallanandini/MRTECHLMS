@@ -6,17 +6,21 @@
 import React, { useState, useEffect } from "react";
 import { 
   PenSquare, Search, ThumbsUp, MessageSquare, ArrowRight, 
-  X, Check, AlertCircle, FileText, Send, Calendar, User 
+  X, Check, AlertCircle, FileText, Send, Calendar, User as UserIcon, Bookmark
 } from "lucide-react";
-import { Blog, Comment, UserRole } from "../types.js";
+import { Blog, Comment, UserRole, User } from "../types.js";
 
 interface BlogPortalProps {
   authToken: string;
   userRole: UserRole;
   userId: string;
+  currentUser?: User;
+  setCurrentUser?: (user: User) => void;
 }
 
-export function BlogPortal({ authToken, userRole, userId }: BlogPortalProps) {
+export function BlogPortal({ 
+  authToken, userRole, userId, currentUser, setCurrentUser 
+}: BlogPortalProps) {
   const [blogs, setBlogs] = useState<Blog[]>([]);
   const [selectedBlog, setSelectedBlog] = useState<Blog | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -105,6 +109,38 @@ export function BlogPortal({ authToken, userRole, userId }: BlogPortalProps) {
     } catch (err) {
       console.error("Error liking blog", err);
     }
+  };
+
+  const handleBookmarkBlog = async (blogId: string) => {
+    try {
+      const res = await fetch(`/api/blogs/${blogId}/bookmark`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${authToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        
+        // Update blogs array
+        setBlogs(prev => prev.map(b => b.id === blogId ? { ...b, bookmarksCount: data.bookmarksCount } : b));
+        
+        if (selectedBlog && selectedBlog.id === blogId) {
+          setSelectedBlog(prev => prev ? { ...prev, bookmarksCount: data.bookmarksCount } : null);
+        }
+        
+        if (currentUser && setCurrentUser) {
+          setCurrentUser({
+            ...currentUser,
+            bookmarkedBlogIds: data.bookmarkedBlogIds
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Error bookmarking blog", err);
+    }
+  };
+
+  const isBookmarked = (blogId: string) => {
+    return currentUser?.bookmarkedBlogIds?.includes(blogId) || false;
   };
 
   const handleCreateBlog = async (e: React.FormEvent) => {
@@ -242,7 +278,7 @@ export function BlogPortal({ authToken, userRole, userId }: BlogPortalProps) {
               <div className="p-5 flex-1 flex flex-col justify-between">
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-[10px] text-gray-400 font-semibold font-mono">
-                    <User className="w-3.5 h-3.5 text-slate-400" />
+                    <UserIcon className="w-3.5 h-3.5 text-slate-400" />
                     <span>{blog.authorName}</span>
                     <span>•</span>
                     <Calendar className="w-3.5 h-3.5 text-slate-400" />
@@ -256,14 +292,27 @@ export function BlogPortal({ authToken, userRole, userId }: BlogPortalProps) {
                   <div className="flex items-center gap-3">
                     <button 
                       onClick={() => handleLikeBlog(blog.id)}
-                      className="flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-blue-600 transition"
+                      className="flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-blue-600 transition cursor-pointer"
                     >
                       <ThumbsUp className="w-4 h-4" />
                       <span>{blog.likesCount}</span>
                     </button>
+
+                    {currentUser?.role === UserRole.STUDENT && (
+                      <button 
+                        onClick={() => handleBookmarkBlog(blog.id)}
+                        className={`flex items-center gap-1 text-xs font-semibold transition cursor-pointer ${
+                          isBookmarked(blog.id) ? "text-amber-500 hover:text-amber-600" : "text-gray-500 hover:text-amber-500"
+                        }`}
+                      >
+                        <Bookmark className={`w-4 h-4 ${isBookmarked(blog.id) ? "fill-amber-500 text-amber-500" : ""}`} />
+                        <span>{blog.bookmarksCount || 0}</span>
+                      </button>
+                    )}
+
                     <div className="flex items-center gap-1 text-xs font-semibold text-gray-500">
                       <MessageSquare className="w-4 h-4" />
-                      <span>{blog.bookmarksCount || 0} Comments</span>
+                      <span>Comments</span>
                     </div>
                   </div>
 

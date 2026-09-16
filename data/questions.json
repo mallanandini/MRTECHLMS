@@ -1,0 +1,32 @@
+[
+  {
+    "id": "q-1",
+    "assessmentId": "assess-1",
+    "type": "mcq_single",
+    "questionText": "Which JavaScript array method is used to create a new array with all elements that pass the test implemented by the provided function?",
+    "options": [
+      "map()",
+      "filter()",
+      "reduce()",
+      "forEach()"
+    ],
+    "correctAnswers": [
+      "filter()"
+    ],
+    "points": 5
+  },
+  {
+    "id": "q-2",
+    "assessmentId": "assess-1",
+    "type": "true_false",
+    "questionText": "Arrow functions in JavaScript bind their own 'this' value dynamically.",
+    "options": [
+      "True",
+      "False"
+    ],
+    "correctAnswers": [
+      "False"
+    ],
+    "points": 5
+  }
+]

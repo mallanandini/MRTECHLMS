@@ -1,0 +1,26 @@
+[
+  {
+    "studentId": "3a695a6e-6443-4d19-afd2-08b708e75c55",
+    "courseId": "course-2",
+    "lessonId": "les-4",
+    "completed": true,
+    "completedAt": "2026-07-18T06:47:14.980Z",
+    "id": "8cc9a6a0-01b1-4f49-b6a7-d70472730329"
+  },
+  {
+    "studentId": "3a695a6e-6443-4d19-afd2-08b708e75c55",
+    "courseId": "course-1",
+    "lessonId": "les-1",
+    "completed": true,
+    "completedAt": "2026-07-18T06:47:09.837Z",
+    "id": "38eae43c-f716-4baa-a028-b7da7fdf5ca5"
+  },
+  {
+    "studentId": "admin-1",
+    "courseId": "course-1",
+    "lessonId": "les-3",
+    "completed": true,
+    "completedAt": "2026-07-22T09:42:01.993Z",
+    "id": "88f0d516-7ad9-4b19-a759-d59d57296f23"
+  }
+]

@@ -1,0 +1,96 @@
+[
+  {
+    "id": "les-1",
+    "moduleId": "mod-1",
+    "courseId": "course-1",
+    "title": "Welcome to Full-Stack Development",
+    "type": "video",
+    "videoUrl": "https://assets.mixkit.co/videos/preview/mixkit-software-developer-working-on-his-computer-34282-large.mp4",
+    "order": 1,
+    "durationMinutes": 5,
+    "content": "## Welcome!\nWelcome to the course. We'll start our full-stack engineering journey in this lesson by looking at the internet structure, clients, and servers."
+  },
+  {
+    "id": "les-2",
+    "moduleId": "mod-1",
+    "courseId": "course-1",
+    "title": "Understanding JavaScript ES6+ Features",
+    "type": "text",
+    "order": 2,
+    "durationMinutes": 10,
+    "content": "## JavaScript ES6+ Concepts\n\nIn this lesson, we will cover key ES6+ additions that make React development simple and elegant:\n\n### 1. Arrow Functions\nProvides a concise syntax for writing function expressions.\n```javascript\nconst double = (x) => x * 2;\n```\n\n### 2. Destructuring\nEasily extract fields from arrays or objects.\n```javascript\nconst user = { name: \"Alex\", role: \"Student\" };\nconst { name, role } = user;\n```\n\n### 3. Spread/Rest Operator\nClone or join arrays and objects efficiently.\n```javascript\nconst list = [1, 2];\nconst newList = [...list, 3, 4];\n```"
+  },
+  {
+    "id": "les-3",
+    "moduleId": "mod-2",
+    "courseId": "course-1",
+    "title": "Creating React Functional Components",
+    "type": "text",
+    "order": 1,
+    "durationMinutes": 12,
+    "content": "## React Functional Components\n\nReact components are JavaScript functions that return markup. Let's look at how to declare them using TypeScript!\n\n```tsx\ninterface CardProps {\n  title: string;\n  count: number;\n}\n\nexport function StatCard({ title, count }: CardProps) {\n  return (\n    <div className=\"p-6 bg-white border border-gray-100 rounded-xl shadow-sm hover:shadow-md transition\">\n      <h4 className=\"text-sm font-medium text-gray-500 uppercase\">{title}</h4>\n      <p className=\"mt-2 text-3xl font-semibold text-gray-950\">{count}</p>\n    </div>\n  );\n}\n```"
+  },
+  {
+    "id": "les-4",
+    "moduleId": "mod-3",
+    "courseId": "course-2",
+    "title": "Python Variables and Control Flow",
+    "type": "text",
+    "order": 1,
+    "durationMinutes": 15,
+    "content": "## Python Variable Allocation & Logical Paths\n\nWelcome to Python! Let's review standard variables and conditions:\n\n```python\n# Declaring a simple profile status\nname = \"Alex Johnson\"\nscore = 88\npassed = score >= 50\n\nif passed:\n    print(f\"Congratulations {name}! You successfully passed.\")\nelse:\n    print(f\"Keep practicing, {name}. Try again!\")\n```"
+  },
+  {
+    "id": "les-5",
+    "moduleId": "mod-4",
+    "courseId": "course-2",
+    "title": "Hands-on Coding Practice: Python Prime Numbers",
+    "type": "coding",
+    "order": 1,
+    "durationMinutes": 20,
+    "codingPrompt": {
+      "id": "prob-1",
+      "title": "Check If Prime Number",
+      "description": "Write a function `is_prime(n)` in Python that takes an integer `n` and returns `True` if `n` is prime, and `False` otherwise.",
+      "difficulty": "easy",
+      "allowedLanguages": [
+        "python",
+        "javascript"
+      ],
+      "starterCode": {
+        "python": "def is_prime(n):\n    # Write your logic here\n    pass\n",
+        "javascript": "function isPrime(n) {\n    // Write your logic here\n    return false;\n}\n"
+      },
+      "testCases": [
+        {
+          "id": "tc-1",
+          "input": "5",
+          "expectedOutput": "True",
+          "isPublic": true
+        },
+        {
+          "id": "tc-2",
+          "input": "4",
+          "expectedOutput": "False",
+          "isPublic": true
+        },
+        {
+          "id": "tc-3",
+          "input": "1",
+          "expectedOutput": "False",
+          "isPublic": false
+        },
+        {
+          "id": "tc-4",
+          "input": "2",
+          "expectedOutput": "True",
+          "isPublic": false
+        }
+      ],
+      "hints": [
+        "Prime numbers are strictly greater than 1.",
+        "A number is prime if it has no positive divisors other than 1 and itself."
+      ]
+    }
+  }
+]

@@ -1,0 +1,47 @@
+[
+  {
+    "id": "student-1",
+    "name": "Alex Johnson",
+    "email": "student@lms.com",
+    "role": "student",
+    "passwordHash": "703b0a3d6ad75b649a28adde7d83c6251da457549263bc7ff45ec709b0a8448b",
+    "createdAt": "2026-01-10T00:00:00.000Z",
+    "status": "active"
+  },
+  {
+    "id": "trainer-1",
+    "name": "Dr. Sarah Mitchell",
+    "email": "trainer@lms.com",
+    "role": "trainer",
+    "passwordHash": "5b3d264e4cdc2c39ca6708b3e1e21f082722be12e63ee21484bdbe15735ab066",
+    "createdAt": "2025-11-15T00:00:00.000Z",
+    "status": "active"
+  },
+  {
+    "id": "admin-1",
+    "name": "System Administrator",
+    "email": "admin@lms.com",
+    "role": "admin",
+    "passwordHash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+    "createdAt": "2025-10-01T00:00:00.000Z",
+    "status": "active"
+  },
+  {
+    "name": "user1",
+    "email": "user1@gmail.com",
+    "role": "student",
+    "passwordHash": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",
+    "createdAt": "2026-07-16T05:57:31.534Z",
+    "status": "active",
+    "id": "3a695a6e-6443-4d19-afd2-08b708e75c55"
+  },
+  {
+    "name": "Nandini",
+    "email": "nandinimalla@rubiksbs.com",
+    "role": "student",
+    "passwordHash": "75d60e73dbca19fb4f667df380bf7bf0e72bf988373f5e0f983fa773d5377e27",
+    "createdAt": "2026-08-31T11:13:23.695Z",
+    "status": "active",
+    "id": "8334b70c-4ae1-451a-a604-67a6fd7da632"
+  }
+]

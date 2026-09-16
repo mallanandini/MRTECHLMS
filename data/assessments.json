@@ -1,0 +1,15 @@
+[
+  {
+    "id": "assess-1",
+    "courseId": "course-1",
+    "moduleId": "mod-1",
+    "title": "Foundational Web and JS Assessment",
+    "description": "Test your understanding of HTML, CSS, JavaScript structures, array operations, and functional programming before moving on to React.",
+    "durationMinutes": 15,
+    "passingScore": 70,
+    "totalPoints": 10,
+    "questionsCount": 2,
+    "createdAt": "2026-01-20T00:00:00.000Z",
+    "status": "published"
+  }
+]

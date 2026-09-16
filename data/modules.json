@@ -1,0 +1,26 @@
+[
+  {
+    "id": "mod-1",
+    "courseId": "course-1",
+    "title": "Module 1: JavaScript & Web Foundations",
+    "order": 1
+  },
+  {
+    "id": "mod-2",
+    "courseId": "course-1",
+    "title": "Module 2: Building UIs with Modern React",
+    "order": 2
+  },
+  {
+    "id": "mod-3",
+    "courseId": "course-2",
+    "title": "Module 1: Python Core Foundations",
+    "order": 1
+  },
+  {
+    "id": "mod-4",
+    "courseId": "course-2",
+    "title": "Module 2: Real-World Coding & AI Solutions",
+    "order": 2
+  }
+]

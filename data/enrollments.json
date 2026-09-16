@@ -1,0 +1,26 @@
+[
+  {
+    "studentId": "3a695a6e-6443-4d19-afd2-08b708e75c55",
+    "courseId": "course-1",
+    "enrolledAt": "2026-07-16T05:57:51.166Z",
+    "id": "24bf886e-7554-4817-a799-44bb28fb25d7"
+  },
+  {
+    "studentId": "3a695a6e-6443-4d19-afd2-08b708e75c55",
+    "courseId": "course-2",
+    "enrolledAt": "2026-07-16T09:53:39.870Z",
+    "id": "1a70b4da-1b91-43d4-97c5-6fb8633fb942"
+  },
+  {
+    "studentId": "student-1",
+    "courseId": "course-1",
+    "enrolledAt": "2026-07-22T09:34:51.609Z",
+    "id": "e07046b3-4b18-4ce2-8d95-25f611bf3325"
+  },
+  {
+    "studentId": "admin-1",
+    "courseId": "course-1",
+    "enrolledAt": "2026-07-22T09:41:23.051Z",
+    "id": "61456ea7-4dbc-4596-8f8f-7d9eef8d6b98"
+  }
+]

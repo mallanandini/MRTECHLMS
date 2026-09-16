@@ -1,0 +1,21 @@
+[
+  {
+    "id": "blog-1",
+    "title": "The Future of Web Engineering: React 19 & Next-Gen Bundlers",
+    "content": "## The Evolution of React\n\nReact 19 introduces major features like **Server Actions**, the **React Compiler**, and out-of-the-box support for async transitions. In this blog, we'll look at why React continues to dominate full-stack interfaces:\n\n### 1. The Compiler (React Forget)\nNo more manual memoization using `useMemo` and `useCallback`. The compiler auto-optimizes the render pathways, saving developer cycles and minimizing re-render cascades.\n\n### 2. Unified Asset Loading\nReact 19 supports loading stylesheets, fonts, and scripts eagerly before the page finishes compiling, resulting in lightning-fast initial load times.",
+    "summary": "An in-depth look at Server Actions, automatic compiler optimizations, and unified document asset loading introduced in React 19.",
+    "coverImage": "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=600&auto=format&fit=crop&q=80",
+    "authorId": "trainer-1",
+    "authorName": "Dr. Sarah Mitchell",
+    "category": "Web Development",
+    "tags": [
+      "react",
+      "frontend",
+      "webdev"
+    ],
+    "likesCount": 45,
+    "bookmarksCount": 12,
+    "status": "approved",
+    "createdAt": "2026-02-15T00:00:00.000Z"
+  }
+]

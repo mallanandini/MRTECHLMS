@@ -45,6 +45,9 @@ export function TrainerConsole({ authToken }: TrainerConsoleProps) {
   const [lessonContent, setLessonContent] = useState("");
   const [lessonVideoUrl, setLessonVideoUrl] = useState("");
 
+  const [courseSubTab, setCourseSubTab] = useState<"curriculum" | "students">("curriculum");
+  const [enrolledStudents, setEnrolledStudents] = useState<any[]>([]);
+
   const loadDashboard = async () => {
     try {
       const statsRes = await fetch("/api/trainer/dashboard", {
@@ -64,8 +67,23 @@ export function TrainerConsole({ authToken }: TrainerConsoleProps) {
     loadDashboard();
   }, [authToken]);
 
+  const loadCourseStudents = async (courseId: string) => {
+    try {
+      const res = await fetch(`/api/trainer/courses/${courseId}/students`, {
+        headers: { "Authorization": `Bearer ${authToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setEnrolledStudents(data || []);
+      }
+    } catch (e) {
+      console.error("Error loading enrolled students", e);
+    }
+  };
+
   const handleSelectCourse = async (course: Course) => {
     setSelectedCourse(course);
+    setCourseSubTab("curriculum");
     try {
       const res = await fetch(`/api/courses/${course.id}`, {
         headers: { "Authorization": `Bearer ${authToken}` }
@@ -75,8 +93,39 @@ export function TrainerConsole({ authToken }: TrainerConsoleProps) {
         setModules(data.modules || []);
         setLessons(data.lessons || []);
       }
+      loadCourseStudents(course.id);
     } catch (e) {
       console.error("Error loading course hierarchy", e);
+    }
+  };
+
+  const handleDeleteModule = async (moduleId: string) => {
+    if (!confirm("Are you sure you want to delete this chapter and its lessons?")) return;
+    try {
+      const res = await fetch(`/api/trainer/modules/${moduleId}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${authToken}` }
+      });
+      if (res.ok && selectedCourse) {
+        handleSelectCourse(selectedCourse);
+      }
+    } catch (e) {
+      console.error("Error deleting module", e);
+    }
+  };
+
+  const handleDeleteLesson = async (lessonId: string) => {
+    if (!confirm("Are you sure you want to delete this lesson?")) return;
+    try {
+      const res = await fetch(`/api/trainer/lessons/${lessonId}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${authToken}` }
+      });
+      if (res.ok && selectedCourse) {
+        handleSelectCourse(selectedCourse);
+      }
+    } catch (e) {
+      console.error("Error deleting lesson", e);
     }
   };
 
@@ -276,70 +325,154 @@ export function TrainerConsole({ authToken }: TrainerConsoleProps) {
                 </button>
               </div>
 
-              {/* Design structure */}
-              <div className="space-y-4">
-                <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
-                  <span className="text-xs font-bold text-slate-600 font-mono uppercase">Course Curriculum Builder</span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setIsCreatingModule(true)}
-                      className="bg-white hover:bg-slate-100 text-slate-700 text-[10px] font-bold px-3 py-1.5 border border-slate-200 rounded-lg flex items-center gap-1 shadow-xs transition"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Add Chapter
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (modules.length === 0) {
-                          alert("Please create at least one Module/Chapter first.");
-                          return;
-                        }
-                        setSelectedModuleId(modules[0].id);
-                        setIsCreatingLesson(true);
-                      }}
-                      className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-xs transition"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Add Lesson
-                    </button>
+              {/* Sub-tab Navigation */}
+              <div className="flex border-b border-gray-100 gap-4">
+                <button
+                  onClick={() => setCourseSubTab("curriculum")}
+                  className={`pb-2.5 text-xs font-bold font-mono uppercase tracking-wider transition border-b-2 ${
+                    courseSubTab === "curriculum"
+                      ? "border-blue-600 text-blue-600"
+                      : "border-transparent text-gray-400 hover:text-gray-600"
+                  }`}
+                >
+                  Curriculum Builder
+                </button>
+                <button
+                  onClick={() => setCourseSubTab("students")}
+                  className={`pb-2.5 text-xs font-bold font-mono uppercase tracking-wider transition border-b-2 ${
+                    courseSubTab === "students"
+                      ? "border-blue-600 text-blue-600"
+                      : "border-transparent text-gray-400 hover:text-gray-600"
+                  }`}
+                >
+                  Enrolled Students ({enrolledStudents.length})
+                </button>
+              </div>
+
+              {courseSubTab === "curriculum" ? (
+                /* Design structure */
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <span className="text-xs font-bold text-slate-600 font-mono uppercase">Course Curriculum Builder</span>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setIsCreatingModule(true)}
+                        className="bg-white hover:bg-slate-100 text-slate-700 text-[10px] font-bold px-3 py-1.5 border border-slate-200 rounded-lg flex items-center gap-1 shadow-xs transition"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add Chapter
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (modules.length === 0) {
+                            alert("Please create at least one Module/Chapter first.");
+                            return;
+                          }
+                          setSelectedModuleId(modules[0].id);
+                          setIsCreatingLesson(true);
+                        }}
+                        className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-xs transition"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add Lesson
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Modules/Lessons structure preview */}
+                  <div className="space-y-4 max-h-[350px] overflow-y-auto">
+                    {modules.map((mod) => {
+                      const moduleLessons = lessons.filter(l => l.moduleId === mod.id);
+                      return (
+                        <div key={mod.id} className="p-4 border border-gray-100 rounded-xl space-y-2 bg-slate-50/50">
+                          <div className="flex justify-between items-center">
+                            <h4 className="text-xs font-bold text-slate-700 font-mono uppercase tracking-wider">{mod.title}</h4>
+                            <button
+                              onClick={() => handleDeleteModule(mod.id)}
+                              className="text-gray-400 hover:text-rose-500 transition p-1"
+                              title="Delete Chapter"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <div className="space-y-1.5 pl-3 border-l-2 border-slate-100">
+                            {moduleLessons.map((les) => (
+                              <div key={les.id} className="flex justify-between items-center text-xs py-1 hover:bg-white rounded px-2 transition">
+                                <div className="flex items-center gap-2 text-gray-600 font-semibold">
+                                  {les.type === LessonType.VIDEO ? (
+                                    <Play className="w-3.5 h-3.5 text-blue-500 fill-blue-500" />
+                                  ) : les.type === LessonType.CODING ? (
+                                    <Code className="w-3.5 h-3.5 text-emerald-600" />
+                                  ) : (
+                                    <FileText className="w-3.5 h-3.5 text-slate-500" />
+                                  )}
+                                  <span>{les.title}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className="text-[10px] text-gray-400 font-mono">{les.durationMinutes} mins</span>
+                                  <button
+                                    onClick={() => handleDeleteLesson(les.id)}
+                                    className="text-gray-300 hover:text-rose-500 transition"
+                                    title="Delete Lesson"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                            {moduleLessons.length === 0 && (
+                              <p className="text-[10px] text-gray-400 italic">No lessons in this chapter yet.</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {modules.length === 0 && (
+                      <p className="text-xs text-gray-400 text-center py-6">Your course syllabus is empty. Create chapters and add curriculum lessons to publish!</p>
+                    )}
                   </div>
                 </div>
-
-                {/* Modules/Lessons structure preview */}
-                <div className="space-y-4 max-h-[350px] overflow-y-auto">
-                  {modules.map((mod) => {
-                    const moduleLessons = lessons.filter(l => l.moduleId === mod.id);
-                    return (
-                      <div key={mod.id} className="p-4 border border-gray-100 rounded-xl space-y-2">
-                        <h4 className="text-xs font-bold text-slate-700 font-mono uppercase tracking-wider">{mod.title}</h4>
-                        <div className="space-y-1.5 pl-3 border-l-2 border-slate-100">
-                          {moduleLessons.map((les) => (
-                            <div key={les.id} className="flex justify-between items-center text-xs py-1">
-                              <div className="flex items-center gap-2 text-gray-600 font-semibold">
-                                {les.type === LessonType.VIDEO ? (
-                                  <Play className="w-3.5 h-3.5 text-blue-500 fill-blue-500" />
-                                ) : les.type === LessonType.CODING ? (
-                                  <Code className="w-3.5 h-3.5 text-emerald-600" />
-                                ) : (
-                                  <FileText className="w-3.5 h-3.5 text-slate-500" />
-                                )}
-                                <span>{les.title}</span>
-                              </div>
-                              <span className="text-[10px] text-gray-400 font-mono">{les.durationMinutes} mins</span>
-                            </div>
+              ) : (
+                /* Enrolled Students list */
+                <div className="space-y-4">
+                  {enrolledStudents.length > 0 ? (
+                    <div className="border border-gray-100 rounded-xl overflow-hidden">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-50 border-b border-gray-100 text-slate-500 font-mono uppercase text-[10px]">
+                          <tr>
+                            <th className="p-3">Student</th>
+                            <th className="p-3">Email</th>
+                            <th className="p-3">Enrolled On</th>
+                            <th className="p-3">Progress</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {enrolledStudents.map((s) => (
+                            <tr key={s.studentId} className="hover:bg-slate-50/50">
+                              <td className="p-3 font-bold text-slate-800">{s.studentName}</td>
+                              <td className="p-3 text-slate-500 font-mono text-[11px]">{s.studentEmail}</td>
+                              <td className="p-3 text-slate-400 font-mono text-[10px]">{new Date(s.enrolledAt).toLocaleDateString()}</td>
+                              <td className="p-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-20 bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                    <div 
+                                      className="bg-blue-600 h-full rounded-full" 
+                                      style={{ width: `${s.percentage}%` }} 
+                                    />
+                                  </div>
+                                  <span className="font-mono text-[10px] font-bold text-slate-600">{s.percentage}%</span>
+                                </div>
+                              </td>
+                            </tr>
                           ))}
-                          {moduleLessons.length === 0 && (
-                            <p className="text-[10px] text-gray-400 italic">No lessons in this chapter yet.</p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {modules.length === 0 && (
-                    <p className="text-xs text-gray-400 text-center py-6">Your course syllabus is empty. Create chapters and add curriculum lessons to publish!</p>
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 text-center py-10">No students are currently enrolled in this course.</p>
                   )}
                 </div>
-              </div>
+              )}
             </div>
           ) : (
             <div className="text-center text-gray-400 py-12 flex flex-col items-center justify-center h-full">

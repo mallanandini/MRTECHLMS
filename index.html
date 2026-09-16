@@ -3,7 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <title>MR TECHNOLOGIES - Medha Rubiks LMS</title>
+    <script>
+      (function() {
+        try {
+          var savedTheme = localStorage.getItem('mrtechlms_theme') || 'default-blue';
+          var savedMode = localStorage.getItem('mrtechlms_mode') || 'light';
+          document.documentElement.setAttribute('data-theme', savedTheme);
+          document.documentElement.setAttribute('data-mode', savedMode);
+          if (savedMode === 'dark') {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch(e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
