@@ -15,6 +15,7 @@ import { useTheme } from "../../context/ThemeContext.js";
 import { MonacoCodeEditor } from "./MonacoCodeEditor.js";
 import { WebPlayground } from "./WebPlayground.js";
 import { PlaygroundProgramsModal } from "./PlaygroundProgramsModal.js";
+import { useToast, useConfirm } from "../../context/NotificationContext.js";
 
 interface CodePlaygroundProps {
   authToken: string;
@@ -91,6 +92,8 @@ export function CodePlayground({
   initialProgramId
 }: CodePlaygroundProps) {
   const { isDark, toggleTheme } = useTheme();
+  const toast = useToast();
+  const confirm = useConfirm();
 
   // Runtimes
   const [runtimes, setRuntimes] = useState<RuntimeInfo[]>([]);
@@ -139,6 +142,7 @@ export function CodePlayground({
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
+    toast.info(msg);
     setTimeout(() => setToastMessage(null), 3000);
   };
 
@@ -224,7 +228,10 @@ export function CodePlayground({
       const startTime = performance.now();
       const res = await fetch("/api/playground/run", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
+        },
         body: JSON.stringify({
           language: selectedLanguage,
           code,
@@ -244,7 +251,8 @@ export function CodePlayground({
           setErrorOutput(data.error || data.stderr);
         }
         setExecutionTime(data.executionTimeMs || clientDuration);
-        setExitStatus(data.status || (data.exitCode === 0 ? "success" : "error"));
+        const isSuccessful = !data.error && (data.status === "passed" || data.status === "success" || data.exitCode === 0);
+        setExitStatus(isSuccessful ? "success" : "error");
       }
     } catch (err: any) {
       setErrorOutput("Failed to connect to execution server: " + err.message);
@@ -401,16 +409,22 @@ export function CodePlayground({
   };
 
   // Reset to default template
-  const handleReset = () => {
-    if (confirm("Reset current editor to the default template? Any unsaved changes will be cleared.")) {
-      const template = DEFAULT_STARTER_CODE[selectedLanguage] || "";
-      setCode(template);
-      setActiveProgram(null);
-      setProgramTitle("Untitled Program");
-      setIsSaved(false);
-      localStorage.removeItem(`mrtechlms_playground_draft_${selectedLanguage}`);
-      showToast("Reset to default template.");
-    }
+  const handleReset = async () => {
+    const confirmed = await confirm({
+      title: "Reset Editor Code?",
+      message: "Reset current editor to the default template? Any unsaved changes will be cleared.",
+      confirmText: "Reset Code",
+      variant: "danger"
+    });
+    if (!confirmed) return;
+
+    const template = DEFAULT_STARTER_CODE[selectedLanguage] || "";
+    setCode(template);
+    setActiveProgram(null);
+    setProgramTitle("Untitled Program");
+    setIsSaved(false);
+    localStorage.removeItem(`mrtechlms_playground_draft_${selectedLanguage}`);
+    showToast("Reset to default template.");
   };
 
   return (

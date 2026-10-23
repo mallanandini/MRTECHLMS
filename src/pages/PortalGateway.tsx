@@ -24,6 +24,8 @@ export function PortalGateway() {
         navigate("/student/dashboard", { replace: true });
       } else if (currentUser.role === UserRole.ADMIN) {
         navigate("/admin/dashboard", { replace: true });
+      } else if (currentUser.role === UserRole.MANAGER) {
+        navigate("/manager/team", { replace: true });
       }
     }
   }, [currentUser, authToken, isAuthenticating, navigate]);
@@ -153,8 +155,7 @@ export function PortalGateway() {
 
             <Link
               to="/student/login"
-              style={{ backgroundColor: "var(--theme-primary)" }}
-              className="w-full flex items-center justify-center gap-2 py-3.5 px-5 rounded-2xl text-white font-bold text-xs shadow-md hover:opacity-95 transition cursor-pointer"
+              className="w-full btn-theme-primary flex items-center justify-center gap-2 py-3.5 px-5 rounded-2xl text-black font-bold text-xs shadow-md hover:opacity-95 transition cursor-pointer"
             >
               <span>Enter Student Portal</span>
               <ArrowRight className="w-4 h-4" />
@@ -209,55 +210,12 @@ export function PortalGateway() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <Link
                 to="/admin/login"
-                className="flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold text-xs shadow-md transition cursor-pointer"
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold text-xs shadow-md transition cursor-pointer"
               >
                 <LogIn className="w-3.5 h-3.5" />
                 <span>Admin Login</span>
               </Link>
-              <Link
-                to="/admin/register"
-                className="flex items-center justify-center gap-2 py-3 px-4 rounded-2xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs transition cursor-pointer text-slate-800 dark:text-slate-200"
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                <span>Register Admin</span>
-              </Link>
             </div>
-          </div>
-        </div>
-
-        {/* Reviewer Quick Credentials (STUDENT & ADMIN ONLY - NO TRAINER) */}
-        <div 
-          style={{ 
-            backgroundColor: "var(--theme-surface)", 
-            borderColor: "var(--theme-border)" 
-          }}
-          className="mt-12 p-5 sm:p-6 rounded-2xl border max-w-3xl mx-auto w-full text-center"
-        >
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono mb-3">
-            Quick Reviewer Credentials
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl mx-auto">
-            <Link
-              to="/student/login?email=student@lms.com"
-              className="p-3 bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/40 rounded-xl text-left hover:border-blue-400 transition block"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 font-mono uppercase">Student Portal</span>
-                <span className="text-[10px] text-slate-400 font-mono">student123</span>
-              </div>
-              <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-1">student@lms.com</p>
-            </Link>
-
-            <Link
-              to="/admin/login?email=admin@lms.com"
-              className="p-3 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl text-left hover:border-amber-400 transition block"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 font-mono uppercase">Admin Portal</span>
-                <span className="text-[10px] text-slate-400 font-mono">admin123</span>
-              </div>
-              <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-1">admin@lms.com</p>
-            </Link>
           </div>
         </div>
       </main>

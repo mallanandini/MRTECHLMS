@@ -9,12 +9,15 @@ import {
   Users, Award, BarChart2, CheckCircle2, XCircle, Clock 
 } from "lucide-react";
 import { Course, Module, Lesson, LessonType } from "../types.js";
+import { useToast, useConfirm } from "../context/NotificationContext.js";
 
 interface TrainerConsoleProps {
   authToken: string;
 }
 
 export function TrainerConsole({ authToken }: TrainerConsoleProps) {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [dashboardStats, setDashboardStats] = useState<any>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
@@ -100,32 +103,54 @@ export function TrainerConsole({ authToken }: TrainerConsoleProps) {
   };
 
   const handleDeleteModule = async (moduleId: string) => {
-    if (!confirm("Are you sure you want to delete this chapter and its lessons?")) return;
+    const ok = await confirm({
+      title: "Delete Chapter?",
+      message: "Are you sure you want to delete this chapter and all its lessons? This action cannot be undone.",
+      confirmText: "Delete Chapter",
+      variant: "danger"
+    });
+    if (!ok) return;
+
     try {
       const res = await fetch(`/api/trainer/modules/${moduleId}`, {
         method: "DELETE",
         headers: { "Authorization": `Bearer ${authToken}` }
       });
       if (res.ok && selectedCourse) {
+        toast.success("Chapter deleted successfully");
         handleSelectCourse(selectedCourse);
+      } else {
+        toast.error("Failed to delete chapter");
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Error deleting module", e);
+      toast.error(e.message || "Error deleting chapter");
     }
   };
 
   const handleDeleteLesson = async (lessonId: string) => {
-    if (!confirm("Are you sure you want to delete this lesson?")) return;
+    const ok = await confirm({
+      title: "Delete Lesson?",
+      message: "Are you sure you want to delete this lesson? This action cannot be undone.",
+      confirmText: "Delete Lesson",
+      variant: "danger"
+    });
+    if (!ok) return;
+
     try {
       const res = await fetch(`/api/trainer/lessons/${lessonId}`, {
         method: "DELETE",
         headers: { "Authorization": `Bearer ${authToken}` }
       });
       if (res.ok && selectedCourse) {
+        toast.success("Lesson deleted successfully");
         handleSelectCourse(selectedCourse);
+      } else {
+        toast.error("Failed to delete lesson");
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Error deleting lesson", e);
+      toast.error(e.message || "Error deleting lesson");
     }
   };
 
@@ -223,18 +248,29 @@ export function TrainerConsole({ authToken }: TrainerConsoleProps) {
   };
 
   const handleDeleteCourse = async (courseId: string) => {
-    if (!confirm("Are you sure you want to delete this course entirely?")) return;
+    const ok = await confirm({
+      title: "Delete Course Entirely?",
+      message: "Are you sure you want to delete this course entirely? All chapters, lessons, and student progress will be permanently removed.",
+      confirmText: "Delete Course",
+      variant: "danger"
+    });
+    if (!ok) return;
+
     try {
       const res = await fetch(`/api/trainer/courses/${courseId}`, {
         method: "DELETE",
         headers: { "Authorization": `Bearer ${authToken}` }
       });
       if (res.ok) {
+        toast.success("Course deleted successfully");
         setSelectedCourse(null);
         loadDashboard();
+      } else {
+        toast.error("Failed to delete course");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error deleting course", err);
+      toast.error(err.message || "Error deleting course");
     }
   };
 
@@ -365,7 +401,7 @@ export function TrainerConsole({ authToken }: TrainerConsoleProps) {
                       <button
                         onClick={() => {
                           if (modules.length === 0) {
-                            alert("Please create at least one Module/Chapter first.");
+                            toast.warning("Please create at least one Module/Chapter first.");
                             return;
                           }
                           setSelectedModuleId(modules[0].id);

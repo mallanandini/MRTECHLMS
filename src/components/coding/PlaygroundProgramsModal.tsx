@@ -9,6 +9,7 @@ import {
   Search, Clock, Code2, AlertCircle 
 } from "lucide-react";
 import { StudentPlaygroundProgram } from "../../types.js";
+import { useConfirm } from "../../context/NotificationContext.js";
 
 interface PlaygroundProgramsModalProps {
   isOpen: boolean;
@@ -29,6 +30,7 @@ export function PlaygroundProgramsModal({
   onRenameProgram,
   isLoading = false
 }: PlaygroundProgramsModalProps) {
+  const confirm = useConfirm();
   const [searchQuery, setSearchQuery] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
@@ -52,10 +54,18 @@ export function PlaygroundProgramsModal({
     setEditingId(null);
   };
 
-  const handleDelete = async (id: string) => {
-    setDeletingId(id);
+  const handleDelete = async (prog: StudentPlaygroundProgram) => {
+    const ok = await confirm({
+      title: "Delete Program?",
+      message: `Are you sure you want to delete "${prog.title}"? This action cannot be undone.`,
+      confirmText: "Delete Program",
+      variant: "danger"
+    });
+    if (!ok) return;
+
+    setDeletingId(prog.id);
     try {
-      await onDeleteProgram(id);
+      await onDeleteProgram(prog.id);
     } finally {
       setDeletingId(null);
     }
@@ -196,7 +206,7 @@ export function PlaygroundProgramsModal({
                     </button>
                   )}
                   <button
-                    onClick={() => handleDelete(prog.id)}
+                    onClick={() => handleDelete(prog)}
                     disabled={deletingId === prog.id}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
                     title="Delete program"

@@ -16,14 +16,14 @@ export const PREDEFINED_THEMES: Record<ThemeId, ThemeDefinition> = {
       secondaryColor: "#4f46e5",
       backgroundColor: "#f8fafc",
       surfaceColor: "#ffffff",
-      textColor: "#0f172a"
+      textColor: "#000000"
     },
     dark: {
       primaryColor: "#3b82f6",
       secondaryColor: "#6366f1",
-      backgroundColor: "#0b0f19",
-      surfaceColor: "#111827",
-      textColor: "#f8fafc"
+      backgroundColor: "#f1f5f9",
+      surfaceColor: "#ffffff",
+      textColor: "#000000"
     }
   },
   "purple-royal": {
@@ -35,14 +35,14 @@ export const PREDEFINED_THEMES: Record<ThemeId, ThemeDefinition> = {
       secondaryColor: "#9333ea",
       backgroundColor: "#faf5ff",
       surfaceColor: "#ffffff",
-      textColor: "#2e1065"
+      textColor: "#000000"
     },
     dark: {
       primaryColor: "#a855f7",
       secondaryColor: "#c084fc",
-      backgroundColor: "#0f0919",
-      surfaceColor: "#191129",
-      textColor: "#faf5ff"
+      backgroundColor: "#f1f5f9",
+      surfaceColor: "#ffffff",
+      textColor: "#000000"
     }
   },
   "emerald-green": {
@@ -54,14 +54,14 @@ export const PREDEFINED_THEMES: Record<ThemeId, ThemeDefinition> = {
       secondaryColor: "#0d9488",
       backgroundColor: "#f0fdf4",
       surfaceColor: "#ffffff",
-      textColor: "#064e3b"
+      textColor: "#000000"
     },
     dark: {
       primaryColor: "#10b981",
       secondaryColor: "#14b8a6",
-      backgroundColor: "#05140d",
-      surfaceColor: "#0a2217",
-      textColor: "#ecfdf5"
+      backgroundColor: "#f1f5f9",
+      surfaceColor: "#ffffff",
+      textColor: "#000000"
     }
   },
   "sunset-orange": {
@@ -73,14 +73,14 @@ export const PREDEFINED_THEMES: Record<ThemeId, ThemeDefinition> = {
       secondaryColor: "#d97706",
       backgroundColor: "#fff7ed",
       surfaceColor: "#ffffff",
-      textColor: "#431407"
+      textColor: "#000000"
     },
     dark: {
       primaryColor: "#f97316",
       secondaryColor: "#fbbf24",
-      backgroundColor: "#180c05",
-      surfaceColor: "#241408",
-      textColor: "#fff7ed"
+      backgroundColor: "#f1f5f9",
+      surfaceColor: "#ffffff",
+      textColor: "#000000"
     }
   },
   "cyber-dark": {
@@ -92,14 +92,14 @@ export const PREDEFINED_THEMES: Record<ThemeId, ThemeDefinition> = {
       secondaryColor: "#06b6d4",
       backgroundColor: "#f8fafc",
       surfaceColor: "#ffffff",
-      textColor: "#0f172a"
+      textColor: "#000000"
     },
     dark: {
       primaryColor: "#38bdf8",
       secondaryColor: "#22d3ee",
-      backgroundColor: "#0b0f19",
-      surfaceColor: "#111827",
-      textColor: "#f8fafc"
+      backgroundColor: "#f1f5f9",
+      surfaceColor: "#ffffff",
+      textColor: "#000000"
     }
   },
   "high-contrast": {
@@ -116,9 +116,9 @@ export const PREDEFINED_THEMES: Record<ThemeId, ThemeDefinition> = {
     dark: {
       primaryColor: "#facc15",
       secondaryColor: "#ffffff",
-      backgroundColor: "#000000",
-      surfaceColor: "#0a0a0a",
-      textColor: "#ffffff"
+      backgroundColor: "#f1f5f9",
+      surfaceColor: "#ffffff",
+      textColor: "#000000"
     }
   }
 };
@@ -192,7 +192,7 @@ export function ThemeProvider({ children, authToken }: { children: ReactNode; au
 
   // Load preferences from MySQL when user is authenticated
   const loadPreferences = async (token?: string) => {
-    const activeToken = token || authToken || localStorage.getItem("lms_token");
+    const activeToken = token || authToken || localStorage.getItem("mrtechlms_student_token") || localStorage.getItem("mrtechlms_admin_token") || localStorage.getItem("lms_token");
     if (!activeToken) return;
 
     try {
@@ -222,7 +222,7 @@ export function ThemeProvider({ children, authToken }: { children: ReactNode; au
 
   // Save changes to MySQL backend
   const persistToServer = async (newTheme: ThemeId, newMode: ThemeMode) => {
-    const activeToken = authToken || localStorage.getItem("lms_token");
+    const activeToken = authToken || localStorage.getItem("mrtechlms_student_token") || localStorage.getItem("mrtechlms_admin_token") || localStorage.getItem("lms_token");
     if (!activeToken) return; // User not logged in, localStorage is sufficient
 
     setIsSaving(true);

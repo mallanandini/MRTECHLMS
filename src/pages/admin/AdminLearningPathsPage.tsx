@@ -8,15 +8,18 @@ import { useNavigate } from "react-router-dom";
 import { 
   Compass, Plus, Search, Filter, Layers, Users, Award, 
   Sparkles, CheckCircle2, Clock, Trash2, Copy, Edit3, 
-  ExternalLink, Eye, ArrowRight, X, AlertCircle 
+  ExternalLink, Eye, ArrowRight, X, AlertCircle, ShieldAlert, ShieldCheck 
 } from "lucide-react";
 import { LearningPath } from "../../types.js";
 import { useAuth } from "../../context/AuthContext.js";
 import { ThemeQuickControls } from "../../components/ThemeQuickControls.js";
+import { useToast, useConfirm } from "../../context/NotificationContext.js";
 
 export function AdminLearningPathsPage() {
   const { authToken } = useAuth();
   const navigate = useNavigate();
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const [paths, setPaths] = useState<LearningPath[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,6 +35,11 @@ export function AdminLearningPathsPage() {
 
   const showToast = (text: string, type: "success" | "error" = "success") => {
     setToastMessage({ text, type });
+    if (type === "success") {
+      toast.success(text);
+    } else {
+      toast.error(text);
+    }
     setTimeout(() => setToastMessage(null), 4000);
   };
 
@@ -71,7 +79,14 @@ export function AdminLearningPathsPage() {
   };
 
   const handleDelete = async (pathId: string) => {
-    if (!confirm("Are you sure you want to delete this Learning Path? This will remove all sections, items, and student progress.")) return;
+    const confirmed = await confirm({
+      title: "Delete Learning Path?",
+      message: "Are you sure you want to delete this Learning Path? This will remove all sections, items, and student progress.",
+      confirmText: "Delete Learning Path",
+      variant: "danger"
+    });
+    if (!confirmed) return;
+
     try {
       const res = await fetch(`/api/admin/learning-paths/${pathId}`, {
         method: "DELETE",
@@ -103,34 +118,93 @@ export function AdminLearningPathsPage() {
     }
   };
 
-  const handleToggleAccess = async (studentId: string, currentlyAssigned: boolean) => {
+  const refreshModalRoster = async () => {
+    if (!accessModalPath) return;
+    const rosterRes = await fetch(`/api/admin/learning-paths/${accessModalPath.id}/students`, {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    if (rosterRes.ok) {
+      const data = await rosterRes.json();
+      setStudentsList(data);
+    }
+    fetchPaths();
+  };
+
+  const handleGrantDirect = async (studentId: string) => {
     if (!accessModalPath) return;
     try {
-      const endpoint = currentlyAssigned
-        ? `/api/admin/learning-paths/${accessModalPath.id}/revoke`
-        : `/api/admin/learning-paths/${accessModalPath.id}/assign`;
-
-      const res = await fetch(endpoint, {
+      const res = await fetch(`/api/admin/learning-paths/${accessModalPath.id}/assign`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${authToken}`
-        },
-        body: JSON.stringify({ studentIds: [studentId] })
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ studentId })
       });
+      if (!res.ok) throw new Error("Failed to grant direct access");
+      showToast("Direct access granted successfully", "success");
+      await refreshModalRoster();
+    } catch (err: any) {
+      showToast(err.message, "error");
+    }
+  };
 
-      if (!res.ok) throw new Error("Failed to change access");
-      showToast(currentlyAssigned ? "Access revoked" : "Access granted", "success");
-      
-      // Refresh modal roster & main list
-      const rosterRes = await fetch(`/api/admin/learning-paths/${accessModalPath.id}/students`, {
-        headers: { Authorization: `Bearer ${authToken}` }
+  const handleRemoveDirect = async (studentId: string, studentName: string) => {
+    if (!accessModalPath) return;
+    const confirmed = await confirm({
+      title: "Remove Direct Assignment?",
+      message: `Remove direct assignment for ${studentName}? If this student belongs to a batch with this Learning Path, batch access remains active.`,
+      confirmText: "Remove Direct Assignment",
+      variant: "warning"
+    });
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(`/api/admin/learning-paths/${accessModalPath.id}/revoke`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ studentId, mode: "direct" })
       });
-      if (rosterRes.ok) {
-        const data = await rosterRes.json();
-        setStudentsList(data);
-      }
-      fetchPaths();
+      if (!res.ok) throw new Error("Failed to remove direct assignment");
+      showToast("Direct assignment removed", "success");
+      await refreshModalRoster();
+    } catch (err: any) {
+      showToast(err.message, "error");
+    }
+  };
+
+  const handleRevokeAll = async (studentId: string, studentName: string) => {
+    if (!accessModalPath) return;
+    const confirmed = await confirm({
+      title: "Revoke All Access / Block Student?",
+      message: `Revoke all access for ${studentName}? This places an explicit denial in MySQL overriding direct assignments and batch grants immediately.`,
+      confirmText: "Revoke All (Block)",
+      variant: "danger"
+    });
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(`/api/admin/learning-paths/${accessModalPath.id}/revoke`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ studentId, mode: "all", reason: "Access revoked and blocked by administrator" })
+      });
+      if (!res.ok) throw new Error("Failed to revoke all access");
+      showToast("All access revoked and blocked", "success");
+      await refreshModalRoster();
+    } catch (err: any) {
+      showToast(err.message, "error");
+    }
+  };
+
+  const handleRestore = async (studentId: string) => {
+    if (!accessModalPath) return;
+    try {
+      const res = await fetch(`/api/admin/learning-paths/${accessModalPath.id}/restore`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ studentId })
+      });
+      if (!res.ok) throw new Error("Failed to restore access");
+      showToast("Access restored successfully", "success");
+      await refreshModalRoster();
     } catch (err: any) {
       showToast(err.message, "error");
     }
@@ -174,7 +248,7 @@ export function AdminLearningPathsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 shrink-0">
           <ThemeQuickControls onOpenPreferences={() => navigate("/admin/profile")} />
           <button
             onClick={() => navigate("/admin/learning-paths/new")}
@@ -415,35 +489,88 @@ export function AdminLearningPathsPage() {
                     s.email.toLowerCase().includes(studentSearch.toLowerCase())
                   )
                   .map(student => (
-                    <div key={student.id} className="py-2.5 flex items-center justify-between gap-3">
+                    <div key={student.id} className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <span className="text-xs font-semibold text-slate-900 dark:text-white block truncate">
-                          {student.name}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                            {student.name}
+                          </span>
+                          {student.progressPercent !== undefined && student.isAssigned && (
+                            <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.2 rounded">
+                              {student.progressPercent}%
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[11px] text-slate-400 font-mono block truncate">
                           {student.email}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                          student.isAssigned
-                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                            : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-                        }`}>
-                          {student.isAssigned ? "Assigned" : "Not Assigned"}
-                        </span>
+                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        {/* Source Badge */}
+                        {student.isDenied ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200">
+                            Blocked / Revoked
+                          </span>
+                        ) : student.hasDirectAccess && student.hasBatchAccess ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200" title={student.sourceLabel}>
+                            Direct + Batch
+                          </span>
+                        ) : student.hasBatchAccess ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200" title={student.sourceLabel}>
+                            Batch: {student.batches?.[0]?.name || "Cohort"}
+                          </span>
+                        ) : student.hasDirectAccess ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200">
+                            Direct Grant
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                            Not Assigned
+                          </span>
+                        )}
 
-                        <button
-                          onClick={() => handleToggleAccess(student.id, student.isAssigned)}
-                          className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
-                            student.isAssigned
-                              ? "bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-300"
-                              : "bg-emerald-50 hover:bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300"
-                          }`}
-                        >
-                          {student.isAssigned ? "Revoke Access" : "Grant Access"}
-                        </button>
+                        {/* Action Buttons */}
+                        {student.isDenied ? (
+                          <button
+                            onClick={() => handleRestore(student.id)}
+                            className="px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200"
+                            title="Restore access (clears explicit denial)"
+                          >
+                            Restore Access
+                          </button>
+                        ) : (
+                          <>
+                            {student.hasDirectAccess && (
+                              <button
+                                onClick={() => handleRemoveDirect(student.id, student.name)}
+                                className="px-2 py-1 rounded-md text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200"
+                                title="Remove direct assignment (preserves batch access if present)"
+                              >
+                                Remove Direct
+                              </button>
+                            )}
+
+                            {student.isAssigned && (
+                              <button
+                                onClick={() => handleRevokeAll(student.id, student.name)}
+                                className="px-2 py-1 rounded-md text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200"
+                                title="Revoke all access / block student completely"
+                              >
+                                Revoke All (Block)
+                              </button>
+                            )}
+
+                            {!student.hasDirectAccess && !student.isAssigned && (
+                              <button
+                                onClick={() => handleGrantDirect(student.id)}
+                                className="px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300"
+                              >
+                                Grant Access
+                              </button>
+                            )}
+                          </>
+                        )}
                       </div>
                     </div>
                   ))

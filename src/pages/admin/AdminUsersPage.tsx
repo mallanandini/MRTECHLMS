@@ -22,10 +22,10 @@ export function AdminUsersPage() {
         <div className="min-w-0 flex-1">
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight truncate flex items-center gap-2.5">
             <Users className="w-6 h-6 text-blue-600" />
-            <span>Manage Users & Access</span>
+            <span>Manage Users & User Directory</span>
           </h1>
           <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider mt-1 truncate font-mono">
-            Student Provisioning, Excel Bulk Import, and Course/Assessment Rights
+            User Account Provisioning, Role Assignments, and Excel Onboarding
           </p>
         </div>
 
@@ -35,7 +35,7 @@ export function AdminUsersPage() {
       </div>
 
       <div className="animate-in fade-in duration-150">
-        <AdminConsole authToken={authToken} initialTab="users" />
+        <AdminConsole authToken={authToken} initialTab="users" mode="users_only" />
       </div>
     </div>
   );

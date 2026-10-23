@@ -9,6 +9,7 @@ import {
   CheckCircle2, Users, Clock, Award, ShieldCheck, ChevronRight
 } from "lucide-react";
 import { Assessment } from "../../types.js";
+import { useToast, useConfirm } from "../../context/NotificationContext.js";
 
 interface StudentItem {
   id: string;
@@ -38,6 +39,8 @@ export function AssessmentAssignmentsModal({
   onClose,
   onUpdated
 }: AssessmentAssignmentsModalProps) {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [students, setStudents] = useState<StudentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -138,9 +141,14 @@ export function AssessmentAssignmentsModal({
   };
 
   const handleRevoke = async (studentId: string, studentName: string) => {
-    if (!confirm(`Revoke assessment access for ${studentName}? Historical attempt records will remain safe.`)) {
-      return;
-    }
+    const confirmed = await confirm({
+      title: "Revoke Assessment Access?",
+      message: `Revoke assessment access for ${studentName}? Historical attempt records will remain safe.`,
+      confirmText: "Revoke Access",
+      variant: "danger"
+    });
+    if (!confirmed) return;
+
     try {
       setActionLoading(true);
       const res = await fetch(`/api/admin/assessments/${assessment.id}/revoke`, {
@@ -155,9 +163,13 @@ export function AssessmentAssignmentsModal({
         showToast(`Revoked access for ${studentName}`);
         await fetchStudents();
         onUpdated?.();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || "Failed to revoke access");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Revoke error", err);
+      toast.error(err.message || "Failed to revoke access");
     } finally {
       setActionLoading(false);
     }
@@ -175,7 +187,7 @@ export function AssessmentAssignmentsModal({
   const totalAssigned = students.filter(s => s.isAssigned).length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs font-sans">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs font-sans">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         
         {/* Modal Header */}

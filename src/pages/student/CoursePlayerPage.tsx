@@ -24,8 +24,9 @@ export function CoursePlayerPage() {
           headers: { Authorization: `Bearer ${authToken}` }
         });
         if (res.ok) {
-          const list = await res.json();
-          setCompletedLessonIds(list.filter((p: any) => p.completed).map((p: any) => p.lessonId));
+          const data = await res.json();
+          const items = Array.isArray(data) ? data : (Array.isArray(data.progress) ? data.progress : []);
+          setCompletedLessonIds(items.filter((p: any) => p.completed).map((p: any) => p.lessonId));
         }
       } catch (err) {
         console.error("Failed loading course progress:", err);
@@ -35,41 +36,21 @@ export function CoursePlayerPage() {
     loadProgress();
   }, [courseId, authToken]);
 
-  const handleLessonCompleteChange = async (lessonId: string, completed: boolean) => {
-    if (!authToken) return;
-    try {
-      const res = await fetch(`/api/student/lessons/${lessonId}/progress`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${authToken}`
-        },
-        body: JSON.stringify({ completed })
-      });
-      if (res.ok) {
-        if (completed) {
-          setCompletedLessonIds(prev => [...prev, lessonId]);
-        } else {
-          setCompletedLessonIds(prev => prev.filter(id => id !== lessonId));
-        }
-      }
-    } catch (e) {
-      console.error("Progress save failed:", e);
+  const handleLessonComplete = (lessonId: string, completed: boolean) => {
+    if (completed) {
+      setCompletedLessonIds(prev => prev.includes(lessonId) ? prev : [...prev, lessonId]);
     }
   };
 
   if (!courseId || !authToken) return null;
 
   return (
-    <div className="flex-1 min-w-0">
+    <div className="flex-1 min-w-0 h-full flex flex-col">
       <CoursePlayer
         courseId={courseId}
         authToken={authToken}
         onBack={() => navigate("/student/courses")}
-        onLessonCompleteChange={(lessonId) => {
-          const isDone = completedLessonIds.includes(lessonId);
-          handleLessonCompleteChange(lessonId, !isDone);
-        }}
+        onLessonCompleteChange={handleLessonComplete}
         completedLessons={completedLessonIds}
       />
     </div>

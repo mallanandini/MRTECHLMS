@@ -5,23 +5,28 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { 
-  Users, BookOpen, Award, ShieldAlert, CheckCircle2, 
+  Users, BookOpen, Award, ShieldAlert, CheckCircle2, Compass, 
   XCircle, Search, ToggleLeft, ToggleRight, Star, ArrowRight,
   UserPlus, Upload, FileSpreadsheet, Download, RefreshCw,
   Key, Mail, UserCheck, AlertTriangle, Trash2, Plus, Filter,
   Lock, BookCheck, Shield, ChevronRight, X, Calendar, Clock,
-  Layers, Video, Edit3, Sparkles
+  Layers, Video, Edit3, Sparkles, Edit2, Eye, EyeOff, CheckSquare, Square
 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { User, Course, UserRole } from "../types.js";
 import { CourseAuthoringStudio } from "./admin/CourseAuthoringStudio.js";
 
 interface AdminConsoleProps {
   authToken: string;
   initialTab?: "users" | "access" | "courses";
+  mode?: "all" | "courses_only" | "users_only" | "dashboard";
 }
 
-export function AdminConsole({ authToken, initialTab = "users" }: AdminConsoleProps) {
+export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: AdminConsoleProps) {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+
   const [adminStats, setAdminStats] = useState<any>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -29,22 +34,58 @@ export function AdminConsole({ authToken, initialTab = "users" }: AdminConsolePr
   const [courseStatusFilter, setCourseStatusFilter] = useState<string>("all");
   const [authoringCourseId, setAuthoringCourseId] = useState<string | null>(null);
   
-  const [activeSubTab, setActiveSubTab] = useState<"users" | "access" | "courses">(initialTab);
+  const [activeSubTab, setActiveSubTab] = useState<"users" | "access" | "courses">(() => {
+    if (mode === "courses_only") return "courses";
+    if (mode === "users_only") return "users";
+    return initialTab;
+  });
 
   useEffect(() => {
-    if (initialTab) {
+    if (mode === "courses_only") {
+      setActiveSubTab("courses");
+    } else if (mode === "users_only") {
+      setActiveSubTab("users");
+    } else if (initialTab) {
       setActiveSubTab(initialTab);
     }
-  }, [initialTab]);
+  }, [mode, initialTab]);
+
+  // Support direct URL actions (e.g. ?action=new to create course, ?action=content to open curriculum)
+  useEffect(() => {
+    const action = searchParams.get("action");
+    if (action === "new") {
+      setAuthoringCourseId("new");
+    } else if (action === "content") {
+      if (courses.length > 0 && !authoringCourseId) {
+        setAuthoringCourseId(courses[0].id);
+      }
+    }
+  }, [searchParams, courses]);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [expandedStudentCourses, setExpandedStudentCourses] = useState<Set<string>>(new Set());
+
+  const toggleStudentCoursesExpanded = (studentId: string) => {
+    setExpandedStudentCourses(prev => {
+      const next = new Set(prev);
+      if (next.has(studentId)) {
+        next.delete(studentId);
+      } else {
+        next.add(studentId);
+      }
+      return next;
+    });
+  };
 
   // Single User Creation State
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [addName, setAddName] = useState("");
   const [addEmail, setAddEmail] = useState("");
   const [addPassword, setAddPassword] = useState("");
+  const [addPhone, setAddPhone] = useState("");
+  const [addLocation, setAddLocation] = useState("");
+  const [addFieldError, setAddFieldError] = useState<{ phone?: string; location?: string }>({});
   const [addRole, setAddRole] = useState<UserRole>(UserRole.STUDENT);
   const [addStatus, setAddStatus] = useState<"active" | "suspended">("active");
   const [addUserLoading, setAddUserLoading] = useState(false);
@@ -71,6 +112,34 @@ export function AdminConsole({ authToken, initialTab = "users" }: AdminConsolePr
   const [studentEnrollments, setStudentEnrollments] = useState<any[]>([]);
   const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
   const [selectedCourseToGrant, setSelectedCourseToGrant] = useState<string>("");
+  const [selectedCoursesToGrant, setSelectedCoursesToGrant] = useState<string[]>([]);
+  const [accessCourseSearchQuery, setAccessCourseSearchQuery] = useState("");
+  const [showMultiConfirmDialog, setShowMultiConfirmDialog] = useState(false);
+
+  // Multi-Course Modal Selection State
+  const [selectedModalCourseIds, setSelectedModalCourseIds] = useState<Set<string>>(new Set());
+  const [showModalMultiConfirm, setShowModalMultiConfirm] = useState(false);
+
+
+  // Edit User Modal State
+  const [showEditUserModal, setShowEditUserModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editLocation, setEditLocation] = useState("");
+  const [editUserLoading, setEditUserLoading] = useState(false);
+  const [editUserError, setEditUserError] = useState("");
+
+  // Reset Password Modal State
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
+  const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
+  const [resetPasswordError, setResetPasswordError] = useState("");
+  const [resetPasswordSuccess, setResetPasswordSuccess] = useState("");
   const [accessMessage, setAccessMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Dedicated User Access Management Modal State
@@ -82,7 +151,7 @@ export function AdminConsole({ authToken, initialTab = "users" }: AdminConsolePr
     assessments: any[];
   } | null>(null);
   const [accessModalLoading, setAccessModalLoading] = useState(false);
-  const [accessModalSubTab, setAccessModalSubTab] = useState<"courses" | "assessments">("courses");
+  const [accessModalSubTab, setAccessModalSubTab] = useState<"courses" | "learning-paths" | "assessments">("courses");
   const [accessModalMessage, setAccessModalMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [accessSearchQuery, setAccessSearchQuery] = useState("");
 
@@ -235,14 +304,50 @@ export function AdminConsole({ authToken, initialTab = "users" }: AdminConsolePr
     e.preventDefault();
     setAddUserError("");
     setAddUserSuccess("");
+    setAddFieldError({});
 
     if (!addName.trim() || !addEmail.trim() || !addPassword) {
       setAddUserError("Please fill out all required fields.");
       return;
     }
 
-    if (addPassword.length < 6) {
-      setAddUserError("Password must be at least 6 characters long.");
+    if (addPassword.length < 8) {
+      setAddUserError("Password must be at least 8 characters long.");
+      return;
+    }
+
+    const trimmedPhone = addPhone.trim();
+    const trimmedLoc = addLocation.trim();
+    const fieldErrors: { phone?: string; location?: string } = {};
+
+    if (addRole === UserRole.STUDENT) {
+      if (!trimmedPhone) {
+        fieldErrors.phone = "Phone number is required for student accounts.";
+      }
+      if (!trimmedLoc) {
+        fieldErrors.location = "Location is required for student accounts.";
+      }
+    }
+
+    if (trimmedPhone) {
+      const phoneRegex = /^\+?[0-9\s\-\(\)\.]{7,25}$/;
+      const digitsOnly = trimmedPhone.replace(/\D/g, "");
+      if (!phoneRegex.test(trimmedPhone)) {
+        fieldErrors.phone = "Invalid phone number format. Allowed: digits, spaces, hyphens, dots, parentheses, and leading +";
+      } else if (digitsOnly.length < 7 || digitsOnly.length > 15) {
+        fieldErrors.phone = `Phone number must contain between 7 and 15 digits (found ${digitsOnly.length})`;
+      }
+    }
+
+    if (trimmedLoc) {
+      if (trimmedLoc.length < 2 || trimmedLoc.length > 255) {
+        fieldErrors.location = "Location must be between 2 and 255 characters.";
+      }
+    }
+
+    if (fieldErrors.phone || fieldErrors.location) {
+      setAddFieldError(fieldErrors);
+      setAddUserError("Please fix the validation errors below.");
       return;
     }
 
@@ -259,7 +364,9 @@ export function AdminConsole({ authToken, initialTab = "users" }: AdminConsolePr
           email: addEmail.trim(),
           password: addPassword,
           role: addRole,
-          status: addStatus
+          status: addStatus,
+          phoneNumber: trimmedPhone || undefined,
+          location: trimmedLoc || undefined
         })
       });
 
@@ -269,11 +376,20 @@ export function AdminConsole({ authToken, initialTab = "users" }: AdminConsolePr
         setAddName("");
         setAddEmail("");
         setAddPassword("");
+        setAddPhone("");
+        setAddLocation("");
+        setAddFieldError({});
         setAddRole(UserRole.STUDENT);
         setAddStatus("active");
         loadAdminDashboard();
       } else {
-        setAddUserError(data.error || "Failed to create user");
+        const errorMsg = data.error || "Failed to create user";
+        setAddUserError(errorMsg);
+        if (errorMsg.toLowerCase().includes("phone")) {
+          setAddFieldError(prev => ({ ...prev, phone: errorMsg }));
+        } else if (errorMsg.toLowerCase().includes("location")) {
+          setAddFieldError(prev => ({ ...prev, location: errorMsg }));
+        }
       }
     } catch (err) {
       setAddUserError("Network error. Please try again.");
@@ -397,6 +513,175 @@ export function AdminConsole({ authToken, initialTab = "users" }: AdminConsolePr
   };
 
   // Course Access: Grant Access
+  // Multi-Course Grant in Course Access Tab
+  const handleMultiGrantCourseAccess = async () => {
+    if (!selectedStudentId || selectedCoursesToGrant.length === 0) return;
+    setAccessMessage(null);
+    try {
+      const res = await fetch(`/api/admin/users/${selectedStudentId}/enrollments`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ courseIds: selectedCoursesToGrant })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setAccessMessage({ 
+          type: "success", 
+          text: `Successfully assigned ${selectedCoursesToGrant.length} course(s) to ${selectedStudent?.name}!` 
+        });
+        setSelectedCoursesToGrant([]);
+        setShowMultiConfirmDialog(false);
+        loadStudentEnrollments(selectedStudentId);
+        loadAdminDashboard();
+      } else {
+        const err = await res.json();
+        setAccessMessage({ type: "error", text: err.error || "Failed to grant courses access." });
+      }
+    } catch (err) {
+      setAccessMessage({ type: "error", text: "Network error granting courses access." });
+    }
+  };
+
+  // Multi-Course Grant in Access Modal
+  const handleMultiGrantInModal = async () => {
+    if (!accessModalStudent || selectedModalCourseIds.size === 0) return;
+    setAccessModalMessage(null);
+    try {
+      const res = await fetch(`/api/admin/users/${accessModalStudent.id}/enrollments`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ courseIds: Array.from(selectedModalCourseIds) })
+      });
+
+      if (res.ok) {
+        setAccessModalMessage({
+          type: "success",
+          text: `Successfully assigned ${selectedModalCourseIds.size} course(s) to ${accessModalStudent.name}!`
+        });
+        setSelectedModalCourseIds(new Set());
+        setShowModalMultiConfirm(false);
+        await loadAccessModalData(accessModalStudent.id);
+        loadAdminDashboard();
+      } else {
+        const err = await res.json();
+        setAccessModalMessage({ type: "error", text: err.error || "Failed to grant courses access." });
+      }
+    } catch (err) {
+      setAccessModalMessage({ type: "error", text: "Network error granting courses access." });
+    }
+  };
+
+  // Edit User Handlers
+  const handleOpenEditModal = (user: User) => {
+    setEditingUser(user);
+    setEditName(user.name);
+    setEditPhone(user.phoneNumber || "");
+    setEditLocation(user.location || "");
+    setEditUserError("");
+    setShowEditUserModal(true);
+  };
+
+  const handleSaveEditUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    setEditUserLoading(true);
+    setEditUserError("");
+
+    try {
+      const res = await fetch(`/api/admin/users/${editingUser.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          name: editName.trim(),
+          phoneNumber: editPhone.trim() || undefined,
+          location: editLocation.trim() || undefined
+        })
+      });
+
+      if (res.ok) {
+        setShowEditUserModal(false);
+        setEditingUser(null);
+        loadAdminDashboard();
+      } else {
+        const err = await res.json();
+        setEditUserError(err.error || "Failed to update user details.");
+      }
+    } catch (err) {
+      setEditUserError("Network error updating user.");
+    } finally {
+      setEditUserLoading(false);
+    }
+  };
+
+  // Reset Password Handlers
+  const handleOpenResetPasswordModal = (user: User) => {
+    setResetPasswordUser(user);
+    setNewPassword("");
+    setConfirmPassword("");
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
+    setResetPasswordError("");
+    setResetPasswordSuccess("");
+    setShowResetPasswordModal(true);
+  };
+
+  const handleSaveResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetPasswordUser) return;
+
+    if (newPassword !== confirmPassword) {
+      setResetPasswordError("New password and confirm password do not match.");
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setResetPasswordError("Password must be at least 8 characters long.");
+      return;
+    }
+
+    setResetPasswordLoading(true);
+    setResetPasswordError("");
+    setResetPasswordSuccess("");
+
+    try {
+      const res = await fetch(`/api/admin/users/${resetPasswordUser.id}/reset-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ newPassword, confirmPassword })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setResetPasswordSuccess(data.message || "Password successfully updated!");
+        setTimeout(() => {
+          setShowResetPasswordModal(false);
+          setResetPasswordUser(null);
+          setResetPasswordSuccess("");
+        }, 1500);
+      } else {
+        const err = await res.json();
+        setResetPasswordError(err.error || "Failed to reset password.");
+      }
+    } catch (err) {
+      setResetPasswordError("Network error resetting password.");
+    } finally {
+      setResetPasswordLoading(false);
+    }
+  };
+
   const handleGrantCourseAccess = async () => {
     if (!selectedStudentId || !selectedCourseToGrant) return;
     setAccessMessage(null);
@@ -668,49 +953,80 @@ export function AdminConsole({ authToken, initialTab = "users" }: AdminConsolePr
       <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-6">
         {/* Navigation Tabs & Action Bar */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-100 pb-4">
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => { setActiveSubTab("users"); }}
-              className={`px-4 py-2 text-xs font-bold rounded-xl border transition flex items-center gap-1.5 cursor-pointer ${
-                activeSubTab === "users" 
-                  ? "bg-slate-900 border-slate-900 text-white shadow-xs" 
-                  : "bg-slate-50 border-slate-100 hover:bg-slate-100 text-slate-600"
-              }`}
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>User Directory</span>
-            </button>
-            <button
-              onClick={() => { setActiveSubTab("access"); }}
-              className={`px-4 py-2 text-xs font-bold rounded-xl border transition flex items-center gap-1.5 cursor-pointer ${
-                activeSubTab === "access" 
-                  ? "bg-slate-900 border-slate-900 text-white shadow-xs" 
-                  : "bg-slate-50 border-slate-100 hover:bg-slate-100 text-slate-600"
-              }`}
-            >
-              <Lock className="w-3.5 h-3.5" />
-              <span>Course Access Control</span>
-            </button>
-            <button
-              onClick={() => { setActiveSubTab("courses"); }}
-              className={`px-4 py-2 text-xs font-bold rounded-xl border transition flex items-center gap-1.5 cursor-pointer ${
-                activeSubTab === "courses" 
-                  ? "bg-slate-900 border-slate-900 text-white shadow-xs" 
-                  : "bg-slate-50 border-slate-100 hover:bg-slate-100 text-slate-600"
-              }`}
-            >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>Course Management & Authoring</span>
-            </button>
-          </div>
+          {mode === "courses_only" ? (
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100 shadow-2xs">
+                <BookOpen className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900 tracking-tight">
+                  Course Catalog & Authoring Studio
+                </h2>
+                <p className="text-xs text-slate-500 font-medium">
+                  Author modules, lessons, reading content, videos, assessments, and manage publishing.
+                </p>
+              </div>
+            </div>
+          ) : mode === "users_only" ? (
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100 shadow-2xs">
+                <Users className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900 tracking-tight">
+                  User Directory & Account Provisioning
+                </h2>
+                <p className="text-xs text-slate-500 font-medium">
+                  Create student and instructor accounts, role assignments, and Excel batch onboarding.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => { setActiveSubTab("users"); }}
+                className={`px-4 py-2 text-xs font-bold rounded-xl border transition flex items-center gap-1.5 cursor-pointer ${
+                  activeSubTab === "users" 
+                    ? "bg-slate-900 border-slate-900 text-white shadow-xs" 
+                    : "bg-slate-50 border-slate-100 hover:bg-slate-100 text-slate-600"
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>User Directory</span>
+              </button>
+              <button
+                onClick={() => { setActiveSubTab("access"); }}
+                className={`px-4 py-2 text-xs font-bold rounded-xl border transition flex items-center gap-1.5 cursor-pointer ${
+                  activeSubTab === "access" 
+                    ? "bg-slate-900 border-slate-900 text-white shadow-xs" 
+                    : "bg-slate-50 border-slate-100 hover:bg-slate-100 text-slate-600"
+                }`}
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>Course Access Control</span>
+              </button>
+              <button
+                onClick={() => { setActiveSubTab("courses"); }}
+                className={`px-4 py-2 text-xs font-bold rounded-xl border transition flex items-center gap-1.5 cursor-pointer ${
+                  activeSubTab === "courses" 
+                    ? "bg-slate-900 border-slate-900 text-white shadow-xs" 
+                    : "bg-slate-50 border-slate-100 hover:bg-slate-100 text-slate-600"
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Course Management & Authoring</span>
+              </button>
+            </div>
+          )}
 
           {/* User Directory Action Buttons */}
-          {activeSubTab === "users" && (
+          {(activeSubTab === "users" || mode === "users_only") && mode !== "courses_only" && (
             <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => {
                   setAddUserError("");
                   setAddUserSuccess("");
+                  setAddFieldError({});
                   setShowAddUserModal(true);
                 }}
                 className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-blue-500/10 cursor-pointer"
@@ -734,7 +1050,7 @@ export function AdminConsole({ authToken, initialTab = "users" }: AdminConsolePr
           )}
 
           {/* Courses Action Buttons */}
-          {activeSubTab === "courses" && (
+          {(activeSubTab === "courses" || mode === "courses_only") && mode !== "users_only" && (
             <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => setAuthoringCourseId("new")}
@@ -815,6 +1131,12 @@ export function AdminConsole({ authToken, initialTab = "users" }: AdminConsolePr
                           <div>
                             <p className="font-bold text-gray-900 text-sm">{u.name}</p>
                             <p className="text-gray-400 font-mono text-[11px] mt-0.5">{u.email}</p>
+                            {(u.phoneNumber || u.location) && (
+                              <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 mt-1 font-sans">
+                                {u.phoneNumber && <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-mono">📞 {u.phoneNumber}</span>}
+                                {u.location && <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">📍 {u.location}</span>}
+                              </div>
+                            )}
                           </div>
                         </td>
                         <td className="py-3.5 px-4">
@@ -838,8 +1160,69 @@ export function AdminConsole({ authToken, initialTab = "users" }: AdminConsolePr
                             {u.status.toUpperCase()}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 font-mono font-bold text-slate-700">
-                          {u.assignedCoursesCount ?? 0} {u.assignedCoursesCount === 1 ? "course" : "courses"}
+                        <td className="py-3.5 px-4 align-top">
+                          {(() => {
+                            const count = u.assignedCoursesCount ?? u.assignedCourses?.length ?? 0;
+                            const coursesList = u.assignedCourses || [];
+                            const isExpanded = expandedStudentCourses.has(u.id);
+                            const visibleCourses = isExpanded ? coursesList : coursesList.slice(0, 2);
+                            const remainingCount = coursesList.length - 2;
+
+                            return (
+                              <div className="flex flex-col gap-1 min-w-[170px]">
+                                <div className="font-mono text-xs font-bold text-slate-700">
+                                  {count} {count === 1 ? "course" : "courses"}
+                                </div>
+                                {count === 0 ? (
+                                  <div className="text-[11px] text-slate-400 font-sans italic">
+                                    No courses assigned
+                                  </div>
+                                ) : (
+                                  <>
+                                    <ul className="space-y-0.5 list-none p-0 m-0">
+                                      {visibleCourses.map((c) => {
+                                        const sourceLabel = c.source === "batch" 
+                                          ? "Batch" 
+                                          : c.source === "individual_and_batch" 
+                                          ? "Direct+Batch" 
+                                          : "Direct";
+                                        const badgeStyle = c.source === "batch"
+                                          ? "bg-purple-50 text-purple-700 border-purple-200"
+                                          : c.source === "individual_and_batch"
+                                          ? "bg-amber-50 text-amber-700 border-amber-200"
+                                          : "bg-blue-50 text-blue-700 border-blue-200";
+
+                                        return (
+                                          <li key={c.id} className="flex items-center gap-1.5 text-[11px] text-slate-700 leading-tight">
+                                            <span className="text-slate-400 select-none">•</span>
+                                            <span className="font-medium truncate max-w-[155px]" title={`${c.title} • ${c.sourceDetails || sourceLabel}`}>
+                                              {c.title}
+                                            </span>
+                                            <span className={`text-[9px] font-mono px-1 py-0.2 rounded border font-semibold shrink-0 ${badgeStyle}`} title={c.sourceDetails || sourceLabel}>
+                                              {sourceLabel}
+                                            </span>
+                                          </li>
+                                        );
+                                      })}
+                                    </ul>
+                                    {coursesList.length > 2 && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          toggleStudentCoursesExpanded(u.id);
+                                        }}
+                                        className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 text-left transition cursor-pointer w-fit mt-0.5 flex items-center gap-1"
+                                        aria-label={isExpanded ? "Show fewer courses" : `View all ${count} courses`}
+                                      >
+                                        {isExpanded ? "Show less" : `View all (${count})`}
+                                      </button>
+                                    )}
+                                  </> 
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="py-3.5 px-4 font-mono text-slate-600">
                           <span className="font-bold text-slate-800">{u.assignedAssessmentsCount ?? 0}</span> assigned
@@ -849,16 +1232,34 @@ export function AdminConsole({ authToken, initialTab = "users" }: AdminConsolePr
                           {new Date(u.createdAt).toLocaleDateString()}
                         </td>
                         <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
                             {u.role === UserRole.STUDENT && (
-                              <button
-                                onClick={() => handleOpenAccessModal(u)}
-                                className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded-lg text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
-                                title="Manage User Access"
-                              >
-                                <Lock className="w-3 h-3 text-blue-500" />
-                                <span>Access</span>
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => navigate(`/admin/access?view=students&studentId=${u.id}`)}
+                                  className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-lg text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
+                                  title="Manage Course Access in Course Access Console"
+                                >
+                                  <Lock className="w-3 h-3 text-indigo-500" />
+                                  <span>Course Access</span>
+                                </button>
+                                <button
+                                  onClick={() => handleOpenEditModal(u)}
+                                  className="px-2 py-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
+                                  title="Edit Contact & Details"
+                                >
+                                  <Edit2 className="w-3 h-3 text-slate-500" />
+                                  <span>Edit</span>
+                                </button>
+                                <button
+                                  onClick={() => handleOpenResetPasswordModal(u)}
+                                  className="px-2 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 rounded-lg text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
+                                  title="Reset Student Password"
+                                >
+                                  <Key className="w-3 h-3 text-amber-600" />
+                                  <span>Reset Pass</span>
+                                </button>
+                              </>
                             )}
                             {u.role !== UserRole.ADMIN && (
                               <button
@@ -990,41 +1391,142 @@ export function AdminConsole({ authToken, initialTab = "users" }: AdminConsolePr
 
                 {/* Right 1 Col: Grant Course Access Card */}
                 <div className="bg-slate-50/80 border border-slate-200/80 rounded-xl p-5 space-y-4">
-                  <div className="flex items-center gap-2 text-slate-900 font-bold text-xs uppercase font-mono tracking-wider">
-                    <Plus className="w-4 h-4 text-blue-600" />
-                    <span>Grant Course Access</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-slate-900 font-bold text-xs uppercase font-mono tracking-wider">
+                      <Plus className="w-4 h-4 text-blue-600" />
+                      <span>Assign Multiple Courses</span>
+                    </div>
+                    {availableCoursesToGrant.length > 0 && (
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-bold">
+                        {availableCoursesToGrant.length} Available
+                      </span>
+                    )}
                   </div>
 
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    Select a published course from the catalog to grant full syllabus and assessment access to <strong className="text-slate-800">{selectedStudent.name}</strong>.
+                    Select one or multiple published courses to assign to <strong className="text-slate-800">{selectedStudent.name}</strong> in a single safe operation.
                   </p>
 
-                  <div className="space-y-3 pt-2">
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-600 uppercase font-mono tracking-wider block mb-1">
-                        Available Courses
-                      </label>
-                      <select
-                        value={selectedCourseToGrant}
-                        onChange={(e) => setSelectedCourseToGrant(e.target.value)}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                      >
-                        <option value="">-- Select Course --</option>
-                        {availableCoursesToGrant.map(c => (
-                          <option key={c.id} value={c.id}>
-                            {c.title} ({c.category})
-                          </option>
-                        ))}
-                      </select>
+                  <div className="space-y-3 pt-1">
+                    {/* Course Search Filter */}
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="Search courses..."
+                        value={accessCourseSearchQuery}
+                        onChange={(e) => setAccessCourseSearchQuery(e.target.value)}
+                        className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
                     </div>
 
+                    {/* Quick Select Actions */}
+                    <div className="flex items-center justify-between text-[11px] pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const filtered = availableCoursesToGrant.filter(c => 
+                            c.title.toLowerCase().includes(accessCourseSearchQuery.toLowerCase()) ||
+                            c.category.toLowerCase().includes(accessCourseSearchQuery.toLowerCase())
+                          );
+                          setSelectedCoursesToGrant(filtered.map(c => c.id));
+                        }}
+                        className="text-blue-600 hover:text-blue-800 font-bold cursor-pointer"
+                      >
+                        Select All Filtered
+                      </button>
+                      {selectedCoursesToGrant.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCoursesToGrant([])}
+                          className="text-slate-500 hover:text-rose-600 font-medium cursor-pointer"
+                        >
+                          Clear Selection ({selectedCoursesToGrant.length})
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Courses Checklist */}
+                    <div className="max-h-56 overflow-y-auto border border-slate-200 rounded-xl bg-white divide-y divide-slate-100 p-1">
+                      {availableCoursesToGrant.filter(c => 
+                        c.title.toLowerCase().includes(accessCourseSearchQuery.toLowerCase()) ||
+                        c.category.toLowerCase().includes(accessCourseSearchQuery.toLowerCase())
+                      ).length === 0 ? (
+                        <div className="p-4 text-center text-slate-400 text-xs">
+                          {availableCoursesToGrant.length === 0 ? "All courses already assigned!" : "No matching courses."}
+                        </div>
+                      ) : (
+                        availableCoursesToGrant.filter(c => 
+                          c.title.toLowerCase().includes(accessCourseSearchQuery.toLowerCase()) ||
+                          c.category.toLowerCase().includes(accessCourseSearchQuery.toLowerCase())
+                        ).map((c) => {
+                          const isSelected = selectedCoursesToGrant.includes(c.id);
+                          return (
+                            <label
+                              key={c.id}
+                              className={`flex items-start gap-2.5 p-2 rounded-lg cursor-pointer transition text-xs ${
+                                isSelected ? "bg-blue-50/70 border-blue-200 text-blue-900" : "hover:bg-slate-50 text-slate-700"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedCoursesToGrant(prev => [...prev, c.id]);
+                                  } else {
+                                    setSelectedCoursesToGrant(prev => prev.filter(id => id !== c.id));
+                                  }
+                                }}
+                                className="mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="font-bold truncate">{c.title}</div>
+                                <div className="text-[10px] text-slate-400 font-mono">{c.category}</div>
+                              </div>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    {/* Selected Preview Tags */}
+                    {selectedCoursesToGrant.length > 0 && (
+                      <div className="p-2.5 bg-blue-50/60 border border-blue-100 rounded-xl space-y-1.5">
+                        <div className="text-[11px] font-bold text-blue-900 font-mono">
+                          Selected for Assignment ({selectedCoursesToGrant.length}):
+                        </div>
+                        <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+                          {selectedCoursesToGrant.map(id => {
+                            const c = courses.find(course => course.id === id);
+                            return (
+                              <span
+                                key={id}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white border border-blue-200 text-[10px] font-semibold text-blue-800 shadow-2xs"
+                              >
+                                <span className="truncate max-w-[140px]">{c?.title || id}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedCoursesToGrant(prev => prev.filter(x => x !== id))}
+                                  className="text-slate-400 hover:text-rose-600 cursor-pointer"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Submit Button */}
                     <button
-                      onClick={handleGrantCourseAccess}
-                      disabled={!selectedCourseToGrant}
+                      onClick={() => setShowMultiConfirmDialog(true)}
+                      disabled={selectedCoursesToGrant.length === 0}
                       className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-sm shadow-blue-500/10 cursor-pointer"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Grant Access to Student</span>
+                      <span>Assign {selectedCoursesToGrant.length > 0 ? `(${selectedCoursesToGrant.length})` : ""} Selected Courses</span>
                     </button>
                   </div>
                 </div>
@@ -1156,7 +1658,15 @@ export function AdminConsole({ authToken, initialTab = "users" }: AdminConsolePr
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                            <button
+                              onClick={() => navigate(`/admin/access?view=assign&courseId=${c.id}`)}
+                              className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-xs"
+                              title="Assign Access to Students & Batches in Course Access Console"
+                            >
+                              <Lock className="w-3.5 h-3.5" />
+                              <span>Course Access</span>
+                            </button>
                             <button
                               onClick={() => setAuthoringCourseId(c.id)}
                               className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-xs"
@@ -1233,7 +1743,12 @@ export function AdminConsole({ authToken, initialTab = "users" }: AdminConsolePr
                 <span>Create New User Account</span>
               </div>
               <button
-                onClick={() => setShowAddUserModal(false)}
+                onClick={() => {
+                  setShowAddUserModal(false);
+                  setAddFieldError({});
+                  setAddUserError("");
+                  setAddUserSuccess("");
+                }}
                 className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -1285,11 +1800,11 @@ export function AdminConsole({ authToken, initialTab = "users" }: AdminConsolePr
                   type="password"
                   value={addPassword}
                   onChange={(e) => setAddPassword(e.target.value)}
-                  placeholder="Min 6 characters"
+                  placeholder="Min 8 characters"
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                   required
                 />
-                <p className="text-[10px] text-slate-400 mt-1">Password will be hashed with bcryptjs (cost factor 10).</p>
+                <p className="text-[10px] text-slate-400 mt-1">Password will be hashed with bcryptjs (minimum 8 characters).</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1319,10 +1834,68 @@ export function AdminConsole({ authToken, initialTab = "users" }: AdminConsolePr
                 </div>
               </div>
 
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-slate-700 uppercase font-mono tracking-wider block">
+                    Phone Number {addRole === UserRole.STUDENT ? <span className="text-rose-500">*</span> : <span className="text-[10px] text-slate-400 font-mono font-normal">Optional</span>}
+                  </label>
+                </div>
+                <input
+                  type="tel"
+                  value={addPhone}
+                  onChange={(e) => {
+                    setAddPhone(e.target.value);
+                    if (addFieldError.phone) setAddFieldError(prev => ({ ...prev, phone: undefined }));
+                  }}
+                  placeholder="e.g. +1 555-123-4567 or +91 9876543210"
+                  className={`w-full bg-white border ${
+                    addFieldError.phone ? "border-rose-500 ring-1 ring-rose-500" : "border-slate-300"
+                  } rounded-xl px-3 py-2 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+                  required={addRole === UserRole.STUDENT}
+                />
+                {addFieldError.phone ? (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">{addFieldError.phone}</p>
+                ) : (
+                  <p className="text-[10px] text-slate-400 mt-1">Country-code friendly format with leading digits</p>
+                )}
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-slate-700 uppercase font-mono tracking-wider block">
+                    Location {addRole === UserRole.STUDENT ? <span className="text-rose-500">*</span> : <span className="text-[10px] text-slate-400 font-mono font-normal">Optional</span>}
+                  </label>
+                </div>
+                <input
+                  type="text"
+                  value={addLocation}
+                  onChange={(e) => {
+                    setAddLocation(e.target.value);
+                    if (addFieldError.location) setAddFieldError(prev => ({ ...prev, location: undefined }));
+                  }}
+                  placeholder="e.g. Hyderabad, India or Austin, TX, USA"
+                  maxLength={255}
+                  className={`w-full bg-white border ${
+                    addFieldError.location ? "border-rose-500 ring-1 ring-rose-500" : "border-slate-300"
+                  } rounded-xl px-3 py-2 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+                  required={addRole === UserRole.STUDENT}
+                />
+                {addFieldError.location ? (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">{addFieldError.location}</p>
+                ) : (
+                  <p className="text-[10px] text-slate-400 mt-1">City, state/region, or country</p>
+                )}
+              </div>
+
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowAddUserModal(false)}
+                  onClick={() => {
+                    setShowAddUserModal(false);
+                    setAddFieldError({});
+                    setAddUserError("");
+                    setAddUserSuccess("");
+                  }}
                   className="w-1/2 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition cursor-pointer"
                 >
                   Cancel
@@ -1644,7 +2217,7 @@ export function AdminConsole({ authToken, initialTab = "users" }: AdminConsolePr
                   <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
-                    placeholder={accessModalSubTab === "courses" ? "Filter courses..." : "Filter assessments..."}
+                    placeholder={accessModalSubTab === "courses" ? "Filter courses..." : accessModalSubTab === "learning-paths" ? "Filter learning paths..." : "Filter assessments..."}
                     value={accessSearchQuery}
                     onChange={(e) => setAccessSearchQuery(e.target.value)}
                     className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -1678,17 +2251,65 @@ export function AdminConsole({ authToken, initialTab = "users" }: AdminConsolePr
                 </div>
               ) : accessModalSubTab === "courses" ? (
                 /* COURSES ACCESS TABLE */
-                <div className="overflow-x-auto border border-slate-100 rounded-2xl">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="bg-slate-50 text-slate-500 font-bold uppercase font-mono text-[10px] border-b border-slate-100">
-                        <th className="py-3 px-4">Course Title</th>
-                        <th className="py-3 px-4">Course Status</th>
-                        <th className="py-3 px-4">Assigned Date</th>
-                        <th className="py-3 px-4">Access Status</th>
-                        <th className="py-3 px-4 text-right">Action</th>
-                      </tr>
-                    </thead>
+                <div className="space-y-3">
+                  {/* Multi-Course Action Bar */}
+                  {accessModalData.courses.filter(c => !c.isAssigned).length > 0 && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-blue-50/70 border border-blue-200/60 rounded-xl text-xs">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const unassigned = accessModalData.courses
+                              .filter(c => !c.isAssigned)
+                              .filter(c => 
+                                c.title.toLowerCase().includes(accessSearchQuery.toLowerCase()) ||
+                                c.category.toLowerCase().includes(accessSearchQuery.toLowerCase())
+                              );
+                            setSelectedModalCourseIds(new Set(unassigned.map(c => c.id)));
+                          }}
+                          className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-[11px] font-bold text-blue-700 transition cursor-pointer"
+                        >
+                          Select All Unassigned
+                        </button>
+                        {selectedModalCourseIds.size > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedModalCourseIds(new Set())}
+                            className="text-[11px] font-medium text-slate-500 hover:text-rose-600 transition cursor-pointer"
+                          >
+                            Clear Selection
+                          </button>
+                        )}
+                        <span className="text-[11px] font-mono text-slate-600">
+                          {selectedModalCourseIds.size} selected
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleMultiGrantInModal}
+                        disabled={selectedModalCourseIds.size === 0}
+                        className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Assign Selected Courses ({selectedModalCourseIds.size})</span>
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="overflow-x-auto border border-slate-100 rounded-2xl">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 text-slate-500 font-bold uppercase font-mono text-[10px] border-b border-slate-100">
+                          <th className="py-3 px-3 w-8 text-center">
+                            <span className="sr-only">Select</span>
+                          </th>
+                          <th className="py-3 px-4">Course Title</th>
+                          <th className="py-3 px-4">Course Status</th>
+                          <th className="py-3 px-4">Assigned Date</th>
+                          <th className="py-3 px-4">Access Status</th>
+                          <th className="py-3 px-4 text-right">Action</th>
+                        </tr>
+                      </thead>
                     <tbody className="divide-y divide-slate-100">
                       {accessModalData.courses
                         .filter(c => 
@@ -1696,7 +2317,28 @@ export function AdminConsole({ authToken, initialTab = "users" }: AdminConsolePr
                           c.category.toLowerCase().includes(accessSearchQuery.toLowerCase())
                         )
                         .map((course) => (
-                          <tr key={course.id} className="hover:bg-slate-50/60 transition">
+                          <tr key={course.id} className={`hover:bg-slate-50/60 transition ${selectedModalCourseIds.has(course.id) ? "bg-blue-50/30" : ""}`}>
+                            <td className="py-3 px-3 text-center">
+                              {!course.isAssigned ? (
+                                <input
+                                  type="checkbox"
+                                  checked={selectedModalCourseIds.has(course.id)}
+                                  onChange={(e) => {
+                                    const next = new Set(selectedModalCourseIds);
+                                    if (e.target.checked) {
+                                      next.add(course.id);
+                                    } else {
+                                      next.delete(course.id);
+                                    }
+                                    setSelectedModalCourseIds(next);
+                                  }}
+                                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                  aria-label={`Select ${course.title}`}
+                                />
+                              ) : (
+                                <span className="text-slate-300 select-none text-xs">—</span>
+                              )}
+                            </td>
                             <td className="py-3 px-4">
                               <div className="font-bold text-slate-900 text-xs">{course.title}</div>
                               <div className="text-[10px] text-slate-400 font-mono mt-0.5">{course.category}</div>
@@ -1751,6 +2393,7 @@ export function AdminConsole({ authToken, initialTab = "users" }: AdminConsolePr
                         ))}
                     </tbody>
                   </table>
+                </div>
                 </div>
               ) : (
                 /* ASSESSMENTS ACCESS TABLE */
@@ -1843,6 +2486,252 @@ export function AdminConsole({ authToken, initialTab = "users" }: AdminConsolePr
           </div>
         </div>
       )}
-    </div>
+    
+      {/* 1. Multi-Course Assignment Confirmation Dialog (Tab) */}
+      {showMultiConfirmDialog && selectedStudent && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
+                <BookOpen className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-900 text-base">Confirm Course Assignment</h4>
+                <p className="text-xs text-slate-500">Assigning courses to {selectedStudent.name}</p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
+              <div className="text-xs font-bold text-slate-700 font-mono">
+                Courses to Assign ({selectedCoursesToGrant.length}):
+              </div>
+              <ul className="space-y-1 max-h-40 overflow-y-auto pr-1 text-xs text-slate-700">
+                {selectedCoursesToGrant.map(id => {
+                  const c = courses.find(course => course.id === id);
+                  return (
+                    <li key={id} className="flex items-center gap-1.5 font-medium">
+                      <span className="text-blue-500">•</span>
+                      <span className="truncate">{c?.title || id}</span>
+                      <span className="text-[10px] text-slate-400 font-mono">({c?.category || "Course"})</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              The student will gain immediate syllabus and assessment access to all selected courses. Existing completions and batch access remain intact.
+            </p>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowMultiConfirmDialog(false)}
+                className="px-4 py-2 border border-slate-200 text-slate-600 text-xs font-bold rounded-xl hover:bg-slate-50 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleMultiGrantCourseAccess}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-blue-500/10 cursor-pointer"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Confirm & Assign Courses</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Edit User Modal */}
+      {showEditUserModal && editingUser && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                  <Edit2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Edit Student Details</h3>
+                  <p className="text-[11px] text-slate-400 font-mono">{editingUser.email}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setShowEditUserModal(false); setEditingUser(null); }}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {editUserError && (
+              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{editUserError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveEditUser} className="space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 uppercase font-mono tracking-wider block mb-1">Full Name *</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 uppercase font-mono tracking-wider block mb-1">Phone Number *</label>
+                <input
+                  type="tel"
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  placeholder="+1 555-123-4567 or +91 9876543210"
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-mono font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 uppercase font-mono tracking-wider block mb-1">Location *</label>
+                <input
+                  type="text"
+                  value={editLocation}
+                  onChange={(e) => setEditLocation(e.target.value)}
+                  placeholder="City, State, Country"
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => { setShowEditUserModal(false); setEditingUser(null); }}
+                  className="px-4 py-2 border border-slate-200 text-slate-600 text-xs font-bold rounded-xl hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editUserLoading}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-blue-500/10 cursor-pointer"
+                >
+                  {editUserLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                  <span>Save Changes</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Reset Password Modal */}
+      {showResetPasswordModal && resetPasswordUser && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
+                  <Key className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Reset Student Password</h3>
+                  <p className="text-[11px] text-slate-400 font-mono">{resetPasswordUser.name} ({resetPasswordUser.email})</p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setShowResetPasswordModal(false); setResetPasswordUser(null); }}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {resetPasswordError && (
+              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{resetPasswordError}</span>
+              </div>
+            )}
+
+            {resetPasswordSuccess && (
+              <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{resetPasswordSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveResetPassword} className="space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 uppercase font-mono tracking-wider block mb-1">New Password *</label>
+                <div className="relative">
+                  <input
+                    type={showNewPassword ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Minimum 8 characters"
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 pr-9 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">Must be at least 8 characters long.</p>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 uppercase font-mono tracking-wider block mb-1">Confirm New Password *</label>
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter new password"
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 pr-9 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => { setShowResetPasswordModal(false); setResetPasswordUser(null); }}
+                  className="px-4 py-2 border border-slate-200 text-slate-600 text-xs font-bold rounded-xl hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetPasswordLoading}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-amber-500/10 cursor-pointer"
+                >
+                  {resetPasswordLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Key className="w-3.5 h-3.5" />}
+                  <span>Update Password</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+</div>
   );
 }

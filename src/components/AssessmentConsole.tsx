@@ -68,19 +68,19 @@ export function AssessmentConsole({
     <div className="space-y-8 animate-in fade-in duration-200">
       
       {/* Header Banner */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-violet-700 via-indigo-700 to-indigo-800 text-white rounded-3xl p-6 md:p-8 shadow-md">
+      <div className="relative overflow-hidden bg-gradient-to-r from-violet-50 via-indigo-50 to-indigo-100 text-black border border-indigo-200 rounded-3xl p-6 md:p-8 shadow-sm">
         <div className="absolute right-0 bottom-0 top-0 w-1/3 opacity-10 flex items-center justify-center">
-          <Award className="w-56 h-56 transform translate-x-12 translate-y-12 rotate-12" />
+          <Award className="w-56 h-56 transform translate-x-12 translate-y-12 rotate-12 text-indigo-400" />
         </div>
         <div className="relative z-10 space-y-3 max-w-xl">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-white text-[10px] font-bold tracking-wider uppercase font-mono backdrop-blur-xs">
-            <GraduationCap className="w-3.5 h-3.5" />
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/70 text-black text-[10px] font-bold tracking-wider uppercase font-mono border border-indigo-200 shadow-2xs">
+            <GraduationCap className="w-3.5 h-3.5 text-indigo-600" />
             Academy Standards & Exams
           </div>
-          <h2 className="text-2xl md:text-3xl font-black tracking-tight">
+          <h2 className="text-2xl md:text-3xl font-black tracking-tight text-black">
             Assessment Console
           </h2>
-          <p className="text-violet-100/90 text-xs leading-relaxed">
+          <p className="text-black text-xs leading-relaxed font-medium">
             Test your programming comprehension, complete course syllabus exams, and track your scoring metrics. Course access is assigned by your LMS Administrator.
           </p>
         </div>

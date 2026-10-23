@@ -22,7 +22,7 @@ export function LearningPathPlayer({ pathId, authToken }: LearningPathPlayerProp
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
-  const [errorRestricted, setErrorRestricted] = useState<{ restricted: boolean; message: string; title?: string } | null>(null);
+  const [errorRestricted, setErrorRestricted] = useState<{ restricted: boolean; message: string; title?: string; isUnpublished?: boolean } | null>(null);
   const [path, setPath] = useState<any | null>(null);
 
   // Active Selected Item
@@ -51,6 +51,7 @@ export function LearningPathPlayer({ pathId, authToken }: LearningPathPlayerProp
         const errData = await res.json();
         setErrorRestricted({
           restricted: true,
+          isUnpublished: !!errData.isUnpublished,
           message: errData.error || "Access denied. You have not been assigned to this Learning Path.",
           title: errData.learningPathTitle || "Restricted Learning Path"
         });
@@ -204,8 +205,52 @@ export function LearningPathPlayer({ pathId, authToken }: LearningPathPlayerProp
     );
   }
 
-  // 2. Strict Access Control Block Screen
+  // 2. Strict Access Control / Unpublished Block Screen
   if (errorRestricted) {
+    if (errorRestricted.isUnpublished) {
+      return (
+        <div className="min-h-[75vh] flex items-center justify-center p-4">
+          <div className="max-w-lg w-full bg-white dark:bg-slate-900 rounded-2xl border border-amber-200/80 dark:border-amber-900/50 shadow-xl p-8 text-center space-y-5">
+            <div className="w-16 h-16 rounded-full bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 flex items-center justify-center mx-auto shadow-xs">
+              <Clock className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                Learning Path In Preparation
+              </h2>
+              {errorRestricted.title && (
+                <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 font-mono">
+                  {errorRestricted.title}
+                </p>
+              )}
+            </div>
+
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+              {errorRestricted.message}
+            </p>
+
+            <div className="p-4 bg-amber-50/60 dark:bg-amber-950/30 rounded-xl text-left text-xs text-amber-800 dark:text-amber-300 space-y-1.5 border border-amber-200/60 dark:border-amber-900/40">
+              <p className="font-bold">Notice for enrolled students:</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>You have been assigned to this learning track</li>
+                <li>The curriculum modules and lessons are being finalized by the instructor</li>
+                <li>Content will automatically become available once the path is published</li>
+              </ul>
+            </div>
+
+            <button
+              onClick={() => navigate("/student/learning-paths")}
+              className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs sm:text-sm font-semibold rounded-lg shadow-xs transition-colors flex items-center justify-center gap-2 mx-auto cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Return to Learning Paths</span>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-[75vh] flex items-center justify-center p-4">
         <div className="max-w-lg w-full bg-white dark:bg-slate-900 rounded-2xl border border-red-200/80 dark:border-red-900/50 shadow-xl p-8 text-center space-y-5">
@@ -747,6 +792,24 @@ export function LearningPathPlayer({ pathId, authToken }: LearningPathPlayerProp
                   </button>
                 )}
               </div>
+            </div>
+          ) : flatItems.length === 0 ? (
+            <div className="py-16 text-center space-y-4">
+              <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto">
+                <Compass className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">Curriculum Content Under Construction</h3>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  This Learning Path is published, but its modules and lessons are currently being populated. Please check back soon or contact your instructor.
+                </p>
+              </div>
+              <button
+                onClick={() => navigate("/student/learning-paths")}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs transition cursor-pointer"
+              >
+                Return to Learning Paths
+              </button>
             </div>
           ) : (
             <div className="py-20 text-center text-xs text-slate-400">

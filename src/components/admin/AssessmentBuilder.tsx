@@ -12,10 +12,12 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Assessment, Question, QuestionType } from "../../types.js";
+import { useToast, useConfirm } from "../../context/NotificationContext.js";
 
 interface AssessmentBuilderProps {
   assessmentId: string;
   authToken: string;
+  isCreate?: boolean;
   onBack: () => void;
   onSaved?: (assessment: Assessment) => void;
 }
@@ -23,9 +25,12 @@ interface AssessmentBuilderProps {
 export function AssessmentBuilder({
   assessmentId,
   authToken,
+  isCreate = false,
   onBack,
   onSaved
 }: AssessmentBuilderProps) {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,7 +50,7 @@ export function AssessmentBuilder({
 
   // Question modal form state
   const [qFormText, setQFormText] = useState("");
-  const [qFormOptions, setQFormOptions] = useState<string[]>(["", "", "", ""]);
+  const [qFormOptions, setQFormOptions] = useState<string[]>(["", "", "", "", ""]);
   const [qFormCorrect, setQFormCorrect] = useState<number>(0);
   const [qFormPoints, setQFormPoints] = useState<number>(10);
   const [qFormNegPoints, setQFormNegPoints] = useState<number>(0);
@@ -113,23 +118,24 @@ export function AssessmentBuilder({
     loadData();
   }, [assessmentId]);
 
-  const handleSaveAssessment = async (overrideData?: Partial<Assessment>) => {
-    if (!assessment) return;
+  const handleSaveAssessment = async (overrideData?: Partial<Assessment>, advanceToQuestions = false): Promise<boolean> => {
+    if (isSaving) return false;
+    if (!assessment) return false;
     const target = {
       ...assessment,
       ...overrideData
     };
     if (!target.title || !target.title.trim()) {
       setErrorMessage("Assessment title is required");
-      return;
+      return false;
     }
     if (!target.durationMinutes || Number(target.durationMinutes) <= 0) {
       setErrorMessage("Duration must be greater than 0 minutes");
-      return;
+      return false;
     }
     if (!target.passingScore || Number(target.passingScore) <= 0 || Number(target.passingScore) > 100) {
       setErrorMessage("Passing score percentage must be between 1% and 100%");
-      return;
+      return false;
     }
 
     try {
@@ -157,12 +163,18 @@ export function AssessmentBuilder({
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3000);
         onSaved?.(updated);
+        if (advanceToQuestions) {
+          setActiveTab("questions");
+        }
+        return true;
       } else {
         const err = await res.json();
         setErrorMessage(err.error || "Failed to update assessment");
+        return false;
       }
     } catch (err: any) {
       setErrorMessage(err.message || "Network error updating assessment");
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -173,7 +185,7 @@ export function AssessmentBuilder({
     setEditingQuestion(null);
     setQuestionModalError(null);
     setQFormText("");
-    setQFormOptions(["", "", "", ""]);
+    setQFormOptions(["", "", "", "", ""]);
     setQFormCorrect(0);
     setQFormPoints(10);
     setQFormNegPoints(0);
@@ -187,9 +199,9 @@ export function AssessmentBuilder({
     setEditingQuestion(q);
     setQuestionModalError(null);
     setQFormText(q.questionText);
-    const opts = q.options && q.options.length > 0 ? [...q.options] : ["", "", "", ""];
-    while (opts.length < 4) opts.push("");
-    setQFormOptions(opts);
+    const opts = q.options && q.options.length > 0 ? [...q.options] : ["", "", "", "", ""];
+    while (opts.length < 5) opts.push("");
+    setQFormOptions(opts.slice(0, 5));
     const correctIdx = opts.findIndex(o => q.correctAnswers?.includes(o));
     setQFormCorrect(correctIdx >= 0 ? correctIdx : 0);
     setQFormPoints(q.points || 10);
@@ -207,13 +219,18 @@ export function AssessmentBuilder({
       return;
     }
 
-    const cleanOptions = qFormOptions.map(o => o.trim()).filter(o => o.length > 0);
-    if (cleanOptions.length < 2) {
-      setQuestionModalError("At least 2 non-empty options are required");
+    const cleanOptions = qFormOptions.map(o => o.trim());
+    if (cleanOptions.length !== 5 || cleanOptions.some(o => o.length === 0)) {
+      setQuestionModalError("All 5 options (Option 1 through Option 5) are required for MCQ questions");
       return;
     }
 
-    const correctText = qFormOptions[qFormCorrect]?.trim();
+    if (qFormCorrect < 0 || qFormCorrect >= 5) {
+      setQuestionModalError("Please select exactly one correct option (positions 1 to 5)");
+      return;
+    }
+
+    const correctText = cleanOptions[qFormCorrect];
     if (!correctText) {
       setQuestionModalError("The chosen correct option cannot be empty");
       return;
@@ -301,17 +318,28 @@ export function AssessmentBuilder({
 
   // Delete Question
   const handleDeleteQuestion = async (questionId: string) => {
-    if (!confirm("Are you sure you want to delete this question?")) return;
+    const confirmed = await confirm({
+      title: "Delete Question?",
+      message: "Are you sure you want to delete this question? This action cannot be undone.",
+      confirmText: "Delete Question",
+      variant: "danger"
+    });
+    if (!confirmed) return;
     try {
       const res = await fetch(`/api/admin/assessment-questions/${questionId}`, {
         method: "DELETE",
         headers: { "Authorization": `Bearer ${authToken}` }
       });
       if (res.ok) {
+        toast.success("Question deleted successfully");
         await loadData();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "Failed to delete question");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Delete question error", err);
+      toast.error(err.message || "Failed to delete question");
     }
   };
 
@@ -537,10 +565,11 @@ export function AssessmentBuilder({
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition cursor-pointer text-xs font-bold"
             title="Back to Assessments Catalog"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4" />
+            <span className="hidden sm:inline">Back to Assessments</span>
           </button>
           <div>
             <div className="flex items-center gap-2">
@@ -565,9 +594,17 @@ export function AssessmentBuilder({
         <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
           {saveSuccess && (
             <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
-              <CheckCircle2 className="w-4 h-4" /> Saved
+              <CheckCircle2 className="w-4 h-4" /> Basic details saved.
             </span>
           )}
+
+          <button
+            type="button"
+            onClick={onBack}
+            className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+          >
+            Cancel
+          </button>
 
           <button
             onClick={() => handleSaveAssessment()}
@@ -802,11 +839,26 @@ export function AssessmentBuilder({
             </div>
           </div>
 
-          <div className="flex justify-end pt-4 border-t border-slate-100">
+          {errorMessage && (
+            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs font-bold text-rose-800 animate-in fade-in duration-150">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
             <button
-              onClick={() => handleSaveAssessment()}
+              type="button"
+              onClick={onBack}
+              className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSaveAssessment(undefined, true)}
               disabled={isSaving}
-              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs cursor-pointer"
+              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSaving ? "Saving..." : "Save Details"}
             </button>
@@ -817,6 +869,12 @@ export function AssessmentBuilder({
       {/* TAB 2: QUESTIONS BUILDER */}
       {activeTab === "questions" && (
         <div className="space-y-6 animate-in fade-in duration-150">
+          {saveSuccess && (
+            <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl flex items-center gap-2 text-xs font-bold text-emerald-800 animate-in fade-in duration-150">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>Basic details saved. You can now add and manage questions for this assessment.</span>
+            </div>
+          )}
           
           {/* Question Action Header */}
           <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -988,6 +1046,35 @@ export function AssessmentBuilder({
               })}
             </div>
           )}
+
+          {/* Tab 2 Footer navigation */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-200">
+            <button
+              type="button"
+              onClick={() => setActiveTab("details")}
+              className="w-full sm:w-auto px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to Details</span>
+            </button>
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+              <button
+                type="button"
+                onClick={onBack}
+                className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                Finish & Close
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("settings")}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <span>Continue to Settings</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1121,14 +1208,24 @@ export function AssessmentBuilder({
         <div className="space-y-4 animate-in fade-in duration-150">
           
           {/* Watermark Banner */}
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center justify-between text-xs text-amber-800 font-bold">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-800 font-bold">
             <div className="flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-amber-600" />
+              <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
               <span>ADMIN PREVIEW MODE — You are previewing the student examination interface. No submissions will be saved.</span>
             </div>
-            <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-amber-200/60 uppercase">
-              Simulation
-            </span>
+            <div className="flex items-center gap-2 shrink-0 justify-end">
+              <button
+                type="button"
+                onClick={() => setActiveTab("questions")}
+                className="px-2.5 py-1 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back to Questions</span>
+              </button>
+              <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-amber-200/60 uppercase">
+                Simulation
+              </span>
+            </div>
           </div>
 
           {questions.length === 0 ? (
@@ -1286,7 +1383,7 @@ export function AssessmentBuilder({
 
       {/* MODAL: ADD / EDIT QUESTION */}
       {showQuestionModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs font-sans">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs font-sans">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
               <h3 className="text-base font-bold text-slate-900">
@@ -1325,21 +1422,15 @@ export function AssessmentBuilder({
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <label className="text-xs font-bold text-slate-700 uppercase font-mono">
-                    Answer Options (Select correct answer radio) *
+                    Answer Options (Exactly 5 options required, select 1 correct option radio) *
                   </label>
-                  {qFormOptions.length < 5 && (
-                    <button
-                      type="button"
-                      onClick={() => setQFormOptions([...qFormOptions, ""])}
-                      className="text-[11px] font-bold text-blue-600 hover:underline cursor-pointer"
-                    >
-                      + Add Option
-                    </button>
-                  )}
+                  <span className="text-[11px] font-bold text-slate-500 font-mono">
+                    5 Options (A - E)
+                  </span>
                 </div>
 
                 <div className="space-y-2.5">
-                  {qFormOptions.map((opt, idx) => (
+                  {qFormOptions.slice(0, 5).map((opt, idx) => (
                     <div key={idx} className="flex items-center gap-2.5">
                       <input
                         type="radio"
@@ -1347,10 +1438,10 @@ export function AssessmentBuilder({
                         checked={qFormCorrect === idx}
                         onChange={() => setQFormCorrect(idx)}
                         className="text-emerald-600 focus:ring-emerald-500 cursor-pointer w-4 h-4"
-                        title="Mark as correct answer"
+                        title={`Mark Option ${idx + 1} (${String.fromCharCode(65 + idx)}) as correct answer`}
                       />
-                      <span className="w-6 text-center font-mono text-xs font-bold text-slate-400">
-                        {String.fromCharCode(65 + idx)}
+                      <span className="w-20 text-center font-mono text-xs font-bold text-slate-600 bg-slate-100 py-1.5 rounded-lg border border-slate-200">
+                        Opt {idx + 1} ({String.fromCharCode(65 + idx)})
                       </span>
                       <input
                         type="text"
@@ -1365,19 +1456,6 @@ export function AssessmentBuilder({
                           qFormCorrect === idx ? "bg-emerald-50/50 border-emerald-300" : "bg-slate-50 border-slate-200"
                         }`}
                       />
-                      {qFormOptions.length > 2 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updated = qFormOptions.filter((_, i) => i !== idx);
-                            setQFormOptions(updated);
-                            if (qFormCorrect >= updated.length) setQFormCorrect(0);
-                          }}
-                          className="text-slate-400 hover:text-rose-500 p-1 cursor-pointer"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      )}
                     </div>
                   ))}
                 </div>

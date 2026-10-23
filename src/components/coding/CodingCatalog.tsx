@@ -608,10 +608,10 @@ export function CodingCatalog({
                   Loading topic problems...
                 </div>
               ) : (currentTopicDetails.problems || []).length === 0 ? (
-                <div className="text-center py-12 bg-slate-900/40 rounded-2xl border border-slate-800 p-8">
-                  <BookOpen className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-                  <p className="text-sm font-semibold text-slate-300">No coding problems assigned to this topic yet.</p>
-                  <p className="text-xs text-slate-500 mt-1">Check other topics or browse all challenges.</p>
+                <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 shadow-xs">
+                  <BookOpen className="w-8 h-8 text-slate-400 dark:text-slate-500 mx-auto mb-2" />
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">No coding problems assigned to this topic yet.</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Check other topics or browse all challenges.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

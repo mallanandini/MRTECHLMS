@@ -10,12 +10,14 @@ import {
   ExternalLink, Clock, HelpCircle, X, ChevronDown, ChevronRight, 
   MoveUp, MoveDown, File, Play, Sparkles, Check, CheckSquare, 
   Square, CircleDot, Circle, RefreshCw, Download, FileSpreadsheet,
-  Lock, ArrowRight, Bold, Italic, Heading1, Heading2, List, Code2, Link2
+  Lock, ArrowRight, Bold, Italic, Heading1, Heading2, List, Code2, Link2,
+  Loader2, Image as ImageIcon
 } from "lucide-react";
 import { 
   LearningPath, LearningPathSection, LearningPathItem, 
   LearningPathItemType, Assessment, Question, QuestionType 
 } from "../../types.js";
+import { useToast, useConfirm } from "../../context/NotificationContext.js";
 
 interface LearningPathBuilderProps {
   pathId: string | null; // null or "new" for brand new learning path
@@ -30,6 +32,8 @@ export function LearningPathBuilder({
   onBack, 
   onSaved 
 }: LearningPathBuilderProps) {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [currentPathId, setCurrentPathId] = useState<string | null>(
     initialPathId && initialPathId !== "new" ? initialPathId : null
   );
@@ -48,6 +52,8 @@ export function LearningPathBuilder({
   const [difficulty, setDifficulty] = useState<"Beginner" | "Intermediate" | "Advanced">("Beginner");
   const [estimatedDuration, setEstimatedDuration] = useState("8 weeks");
   const [thumbnail, setThumbnail] = useState("https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=80");
+  const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
+  const thumbnailFileInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<"draft" | "published" | "archived">("draft");
   const [requirements, setRequirements] = useState<string[]>(["Basic Computer Literacy"]);
   const [reqInput, setReqInput] = useState("");
@@ -134,6 +140,11 @@ export function LearningPathBuilder({
 
   const showToast = (text: string, type: "success" | "error" = "success") => {
     setToastMessage({ type, text });
+    if (type === "success") {
+      toast.success(text);
+    } else {
+      toast.error(text);
+    }
     setTimeout(() => setToastMessage(null), 4000);
   };
 
@@ -154,7 +165,7 @@ export function LearningPathBuilder({
       setCategory(data.category || "Software Engineering");
       setDifficulty(data.difficulty || "Beginner");
       setEstimatedDuration(data.estimatedDuration || "8 weeks");
-      setThumbnail(data.thumbnail || "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=80");
+      setThumbnail(data.thumbnail !== undefined && data.thumbnail !== null ? data.thumbnail : "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=80");
       setStatus(data.status || "draft");
       setRequirements(data.requirements || []);
       setLearningObjectives(data.learningObjectives || []);
@@ -349,7 +360,13 @@ export function LearningPathBuilder({
   };
 
   const handleDeleteSection = async (secId: string) => {
-    if (!confirm("Are you sure you want to delete this section and all its items?")) return;
+    const confirmed = await confirm({
+      title: "Delete Section?",
+      message: "Are you sure you want to delete this section and all its items? This action cannot be undone.",
+      confirmText: "Delete Section",
+      variant: "danger"
+    });
+    if (!confirmed) return;
     try {
       const res = await fetch(`/api/admin/learning-path-sections/${secId}`, {
         method: "DELETE",
@@ -510,7 +527,13 @@ export function LearningPathBuilder({
   };
 
   const handleDeleteItem = async (itemId: string) => {
-    if (!confirm("Are you sure you want to delete this item?")) return;
+    const confirmed = await confirm({
+      title: "Delete Item?",
+      message: "Are you sure you want to delete this item? This action cannot be undone.",
+      confirmText: "Delete Item",
+      variant: "danger"
+    });
+    if (!confirmed) return;
     try {
       const res = await fetch(`/api/admin/learning-path-items/${itemId}`, {
         method: "DELETE",
@@ -583,6 +606,96 @@ export function LearningPathBuilder({
       showToast(err.message, "error");
     } finally {
       setUploadingFile(false);
+    }
+  };
+
+  // Thumbnail Image Upload Handler
+  const handleThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate size (5 MB max)
+    const MAX_SIZE = 5 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      showToast(`File size (${(file.size / (1024 * 1024)).toFixed(2)} MB) exceeds 5 MB limit`, "error");
+      if (e.target) e.target.value = "";
+      return;
+    }
+
+    // Validate format
+    const validTypes = ["image/jpeg", "image/png", "image/webp"];
+    const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
+    const validExts = [".jpg", ".jpeg", ".png", ".webp"];
+    if (!validTypes.includes(file.type) && !validExts.includes(ext)) {
+      showToast("Unsupported file format. Please upload a JPG, PNG, or WebP image.", "error");
+      if (e.target) e.target.value = "";
+      return;
+    }
+
+    setUploadingThumbnail(true);
+    const oldThumbnail = thumbnail;
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/upload?folder=thumbnail", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${authToken}`
+        },
+        body: formData
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to upload image");
+      }
+
+      const data = await res.json();
+      setThumbnail(data.url);
+      showToast("Thumbnail uploaded successfully", "success");
+
+      // Clean up previous uploaded image if replaced
+      if (oldThumbnail && oldThumbnail.startsWith("/storage/") && oldThumbnail !== data.url) {
+        fetch("/api/upload", {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`
+          },
+          body: JSON.stringify({ fileUrl: oldThumbnail })
+        }).catch(() => {});
+      }
+    } catch (err: any) {
+      showToast(err.message || "Failed to upload image", "error");
+    } finally {
+      setUploadingThumbnail(false);
+      if (e.target) e.target.value = "";
+    }
+  };
+
+  const handleRemoveThumbnail = async () => {
+    const oldThumbnail = thumbnail;
+    setThumbnail("");
+    showToast("Thumbnail removed", "success");
+    if (thumbnailFileInputRef.current) {
+      thumbnailFileInputRef.current.value = "";
+    }
+
+    // Attempt cleanup of orphaned server-stored thumbnail
+    if (oldThumbnail && oldThumbnail.startsWith("/storage/")) {
+      try {
+        await fetch("/api/upload", {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`
+          },
+          body: JSON.stringify({ fileUrl: oldThumbnail })
+        });
+      } catch {
+        // Non-blocking cleanup
+      }
     }
   };
 
@@ -672,6 +785,15 @@ export function LearningPathBuilder({
   // Student Access Toggles
   const handleToggleStudentAccess = async (studentId: string, currentlyAssigned: boolean) => {
     if (!currentPathId) return;
+    if (currentlyAssigned) {
+      const confirmed = await confirm({
+        title: "Revoke Access?",
+        message: "Are you sure you want to revoke learning path access for this student? Historical progress will be kept.",
+        confirmText: "Revoke Access",
+        variant: "danger"
+      });
+      if (!confirmed) return;
+    }
     try {
       const endpoint = currentlyAssigned
         ? `/api/admin/learning-paths/${currentPathId}/revoke`
@@ -696,6 +818,15 @@ export function LearningPathBuilder({
 
   const handleBulkAccess = async (assign: boolean) => {
     if (!currentPathId || selectedStudentIds.length === 0) return;
+    if (!assign) {
+      const confirmed = await confirm({
+        title: "Revoke Bulk Access?",
+        message: `Are you sure you want to revoke access for ${selectedStudentIds.length} students?`,
+        confirmText: "Revoke Access",
+        variant: "danger"
+      });
+      if (!confirmed) return;
+    }
     try {
       const endpoint = assign
         ? `/api/admin/learning-paths/${currentPathId}/assign`
@@ -784,7 +915,14 @@ export function LearningPathBuilder({
     setShowQuestionModal(false);
   };
 
-  const handleDeleteQuestion = (target: "item" | "final", index: number) => {
+  const handleDeleteQuestion = async (target: "item" | "final", index: number) => {
+    const confirmed = await confirm({
+      title: "Delete Question?",
+      message: "Are you sure you want to remove this question?",
+      confirmText: "Delete Question",
+      variant: "danger"
+    });
+    if (!confirmed) return;
     if (target === "item") {
       setItemQuestions(itemQuestions.filter((_, i) => i !== index));
     } else {
@@ -1009,22 +1147,95 @@ export function LearningPathBuilder({
                 />
               </div>
 
+              {/* Thumbnail Image Section */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
-                  Thumbnail Image URL
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                  Thumbnail Image
                 </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={thumbnail}
-                    onChange={e => setThumbnail(e.target.value)}
-                    placeholder="https://..."
-                    className="flex-1 px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white"
-                  />
-                  <div className="w-11 h-11 rounded-lg overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700 bg-slate-100">
-                    <img src={thumbnail} alt="Thumbnail preview" className="w-full h-full object-cover" />
+
+                {/* Hidden File Picker */}
+                <input
+                  ref={thumbnailFileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                  onChange={handleThumbnailUpload}
+                  className="hidden"
+                  disabled={uploadingThumbnail}
+                />
+
+                {thumbnail ? (
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-slate-800/50 p-3.5 space-y-3">
+                    <div className="relative aspect-video max-h-52 w-full rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-900 flex items-center justify-center shadow-xs">
+                      <img
+                        src={thumbnail}
+                        alt="Learning path thumbnail preview"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                      {uploadingThumbnail && (
+                        <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-xs flex flex-col items-center justify-center text-white gap-2">
+                          <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
+                          <span className="text-xs font-medium">Uploading image...</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2.5 pt-0.5">
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                        <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+                        <span>JPG, JPEG, PNG, or WebP • Max 5 MB</span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => thumbnailFileInputRef.current?.click()}
+                          disabled={uploadingThumbnail}
+                          className="px-3 py-1.5 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer shadow-2xs"
+                        >
+                          {uploadingThumbnail ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Upload className="w-3.5 h-3.5 text-blue-500" />
+                          )}
+                          <span>Replace Image</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleRemoveThumbnail}
+                          disabled={uploadingThumbnail}
+                          className="px-3 py-1.5 bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/60 border border-red-200 dark:border-red-800/60 rounded-lg text-xs font-semibold text-red-600 dark:text-red-400 flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Remove Image</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div
+                    onClick={() => !uploadingThumbnail && thumbnailFileInputRef.current?.click()}
+                    className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 rounded-xl p-6 flex flex-col items-center justify-center text-center bg-slate-50/60 dark:bg-slate-800/40 hover:bg-blue-50/20 dark:hover:bg-blue-950/20 transition-all cursor-pointer group"
+                  >
+                    <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                      {uploadingThumbnail ? <Loader2 className="w-6 h-6 animate-spin" /> : <Upload className="w-6 h-6" />}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={uploadingThumbnail}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5 mb-2 pointer-events-none"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{uploadingThumbnail ? "Uploading..." : "Upload Image"}</span>
+                    </button>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      JPG, JPEG, PNG, or WebP • Max 5 MB
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Requirements */}
@@ -2337,6 +2548,11 @@ export function LearningPathBuilder({
             <div className="flex-1 flex overflow-hidden">
               {/* Left Sidebar */}
               <div className="w-72 border-r border-slate-200 dark:border-slate-800 p-4 overflow-y-auto space-y-4 bg-slate-50/40 dark:bg-slate-900/50">
+                {thumbnail && (
+                  <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 aspect-video bg-slate-900 mb-2 shadow-xs">
+                    <img src={thumbnail} alt={title} className="w-full h-full object-cover" />
+                  </div>
+                )}
                 <div className="space-y-1">
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Curriculum Path</span>
                   <p className="text-xs text-slate-500">{sections.length} Sections • Linear Progression</p>

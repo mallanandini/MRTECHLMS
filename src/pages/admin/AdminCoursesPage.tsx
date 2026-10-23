@@ -22,10 +22,10 @@ export function AdminCoursesPage() {
         <div className="min-w-0 flex-1">
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight truncate flex items-center gap-2.5">
             <BookOpen className="w-6 h-6 text-emerald-600" />
-            <span>Manage Courses</span>
+            <span>Courses — Catalog & Authoring Studio</span>
           </h1>
           <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider mt-1 truncate font-mono">
-            Course Approvals, Catalog Status, and Course Access Allocation
+            Course Curriculum, Modules, Lessons, Practice Tests, and Publication Lifecycle
           </p>
         </div>
 
@@ -35,7 +35,7 @@ export function AdminCoursesPage() {
       </div>
 
       <div className="animate-in fade-in duration-150">
-        <AdminConsole authToken={authToken} initialTab="courses" />
+        <AdminConsole authToken={authToken} initialTab="courses" mode="courses_only" />
       </div>
     </div>
   );

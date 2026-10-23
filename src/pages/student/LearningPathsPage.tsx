@@ -19,6 +19,7 @@ export function StudentLearningPathsPage() {
   const [paths, setPaths] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [restrictedModalPath, setRestrictedModalPath] = useState<any | null>(null);
+  const [unpublishedModalPath, setUnpublishedModalPath] = useState<any | null>(null);
 
   const fetchPaths = async () => {
     if (!authToken) return;
@@ -42,7 +43,7 @@ export function StudentLearningPathsPage() {
   }, [authToken]);
 
   const assignedPaths = paths.filter(p => p.isAssigned);
-  const availablePaths = paths.filter(p => !p.isAssigned);
+  const availablePaths = paths.filter(p => !p.isAssigned && !p.isUnpublished);
 
   return (
     <div className="p-4 sm:p-6 lg:p-7 xl:p-8 space-y-8 max-w-[1440px] w-full min-w-0 font-sans">
@@ -101,11 +102,13 @@ export function StudentLearningPathsPage() {
                         />
                         <div className="absolute top-2.5 right-2.5">
                           <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider backdrop-blur-xs shadow-xs ${
-                            isCompleted
-                              ? "bg-emerald-600 text-white"
-                              : "bg-blue-600 text-white"
+                            path.isUnpublished
+                              ? "bg-amber-600 text-white"
+                              : isCompleted
+                                ? "bg-emerald-600 text-white"
+                                : "bg-blue-600 text-white"
                           }`}>
-                            {isCompleted ? "Completed" : "In Progress"}
+                            {path.isUnpublished ? "In Preparation" : isCompleted ? "Completed" : "In Progress"}
                           </span>
                         </div>
                         <div className="absolute bottom-2.5 left-2.5">
@@ -116,13 +119,19 @@ export function StudentLearningPathsPage() {
                       </div>
 
                       <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
-                        <div>
+                        <div className="space-y-1">
                           <h3 className="text-sm font-bold text-slate-900 dark:text-white line-clamp-1">
                             {path.title}
                           </h3>
-                          <p className="text-xs text-slate-500 line-clamp-2 mt-1">
+                          <p className="text-xs text-slate-500 line-clamp-2">
                             {path.shortDescription || path.description}
                           </p>
+                          {path.sourceDetails && (
+                            <div className="text-[10px] font-mono text-slate-400 pt-0.5">
+                              <span className="font-semibold text-slate-500 dark:text-slate-300">Grant: </span>
+                              <span>{path.sourceDetails}</span>
+                            </div>
+                          )}
                         </div>
 
                         <div className="space-y-2">
@@ -147,10 +156,20 @@ export function StudentLearningPathsPage() {
                           </span>
 
                           <button
-                            onClick={() => navigate(`/student/learning-path/${path.id}`)}
-                            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1 shadow-xs transition-colors"
+                            onClick={() => {
+                              if (path.isUnpublished) {
+                                setUnpublishedModalPath(path);
+                              } else {
+                                navigate(`/student/learning-path/${path.id}`);
+                              }
+                            }}
+                            className={`px-3.5 py-1.5 text-white text-xs font-semibold rounded-lg flex items-center gap-1 shadow-xs transition-colors cursor-pointer ${
+                              path.isUnpublished
+                                ? "bg-amber-600 hover:bg-amber-700"
+                                : "bg-blue-600 hover:bg-blue-700"
+                            }`}
                           >
-                            <span>{isCompleted ? "Review Path" : path.progressPercent > 0 ? "Continue" : "Start Path"}</span>
+                            <span>{path.isUnpublished ? "In Preparation" : isCompleted ? "Review Path" : path.progressPercent > 0 ? "Continue" : "Start Learning"}</span>
                             <ArrowRight className="w-3.5 h-3.5" />
                           </button>
                         </div>
@@ -267,6 +286,46 @@ export function StudentLearningPathsPage() {
             <button
               onClick={() => setRestrictedModalPath(null)}
               className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors"
+            >
+              Understood
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* CURRICULUM UNPUBLISHED / IN PREPARATION MODAL */}
+      {unpublishedModalPath && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 space-y-4 border border-slate-200 dark:border-slate-800 shadow-2xl text-center">
+            <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-300 flex items-center justify-center mx-auto">
+              <Clock className="w-6 h-6" />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Learning Path In Preparation
+              </h3>
+              <p className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                {unpublishedModalPath.title}
+              </p>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              You have been successfully assigned to this Learning Path! However, the curriculum and modules are currently in draft or review mode and have not yet been published by the instructor.
+            </p>
+
+            <div className="p-3 bg-amber-50/70 dark:bg-amber-950/30 rounded-lg text-[11px] text-amber-800 dark:text-amber-300 text-left space-y-1 border border-amber-200/60 dark:border-amber-900/40">
+              <p className="font-semibold">Next steps:</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                <li>Your assignment is active and saved in your student profile</li>
+                <li>Once the instructor publishes the curriculum, you can start learning immediately</li>
+                <li>Check your notifications or dashboard for status updates</li>
+              </ul>
+            </div>
+
+            <button
+              onClick={() => setUnpublishedModalPath(null)}
+              className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors cursor-pointer"
             >
               Understood
             </button>

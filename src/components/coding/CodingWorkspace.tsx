@@ -14,6 +14,7 @@ import { CodingChallenge, RuntimeInfo, TestCase, TestCaseResult, ExecutionResult
 import { useTheme } from "../../context/ThemeContext.js";
 import { MonacoCodeEditor } from "./MonacoCodeEditor.js";
 import { WebPlayground } from "./WebPlayground.js";
+import { useToast, useConfirm } from "../../context/NotificationContext.js";
 
 interface CodingWorkspaceProps {
   challengeId: string;
@@ -31,6 +32,8 @@ export function CodingWorkspace({
   studentPhoto
 }: CodingWorkspaceProps) {
   const { isDark, toggleTheme } = useTheme();
+  const toast = useToast();
+  const confirm = useConfirm();
 
   // Challenge & Runtime State
   const [challenge, setChallenge] = useState<CodingChallenge | null>(null);
@@ -207,19 +210,26 @@ export function CodingWorkspace({
   };
 
   // 3. Reset Starter Code
-  const handleResetCode = () => {
+  const handleResetCode = async () => {
     if (!challenge) return;
-    if (window.confirm("Reset your code to the original starter template? Unsaved edits will be lost.")) {
-      if (challenge.challengeType === "web") {
-        setHtmlCode(challenge.htmlStarterCode || "");
-        setCssCode(challenge.cssStarterCode || "");
-        setJsCode(challenge.javascriptStarterCode || "");
-      } else {
-        setCode(challenge.starterCode?.[selectedLanguage] || "");
-      }
-      setConsoleOutput("");
-      setExecutionResult(null);
+    const confirmed = await confirm({
+      title: "Reset to Starter Code?",
+      message: "Reset your code to the original starter template? Unsaved edits will be lost.",
+      confirmText: "Reset Code",
+      variant: "danger"
+    });
+    if (!confirmed) return;
+
+    if (challenge.challengeType === "web") {
+      setHtmlCode(challenge.htmlStarterCode || "");
+      setCssCode(challenge.cssStarterCode || "");
+      setJsCode(challenge.javascriptStarterCode || "");
+    } else {
+      setCode(challenge.starterCode?.[selectedLanguage] || "");
     }
+    setConsoleOutput("");
+    setExecutionResult(null);
+    toast.info("Starter code reset.");
   };
 
   // 4. Run Code (Public Test Cases or Custom Input)

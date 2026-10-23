@@ -9,9 +9,11 @@ import {
   AlertCircle, Trash2, Plus, Edit3, Save, Upload, Eye, ArrowLeft, 
   ExternalLink, Clock, HelpCircle, X, ChevronDown, ChevronRight, 
   MoveUp, MoveDown, File, Play, Sparkles, Check, CheckSquare, 
-  Square, CircleDot, Circle, RefreshCw, Download, FileSpreadsheet
+  Square, CircleDot, Circle, RefreshCw, Download, FileSpreadsheet,
+  ShieldCheck, AlertTriangle, Code, Calendar, UserCheck, UserX, Search, Filter
 } from "lucide-react";
 import { Course, Module, Lesson, LessonType, Assessment, Question, QuestionType, User, UserRole } from "../../types.js";
+import { useToast, useConfirm } from "../../context/NotificationContext.js";
 
 interface CourseAuthoringStudioProps {
   courseId: string | null; // null or "new" for brand new course
@@ -26,6 +28,8 @@ export function CourseAuthoringStudio({
   onBack, 
   onCourseSaved 
 }: CourseAuthoringStudioProps) {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [currentCourseId, setCurrentCourseId] = useState<string | null>(
     initialCourseId && initialCourseId !== "new" ? initialCourseId : null
   );
@@ -43,7 +47,13 @@ export function CourseAuthoringStudio({
   const [courseDifficulty, setCourseDifficulty] = useState("Beginner");
   const [courseThumbnail, setCourseThumbnail] = useState("https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=80");
   const [courseBanner, setCourseBanner] = useState("https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=1600&auto=format&fit=crop&q=80");
-  const [courseStatus, setCourseStatus] = useState<"draft" | "published" | "archived">("draft");
+  const [courseStatus, setCourseStatus] = useState<"draft" | "review" | "published" | "archived">("draft");
+  const [courseEstimatedDuration, setCourseEstimatedDuration] = useState("");
+  const [courseTags, setCourseTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
+  const [coursePrerequisites, setCoursePrerequisites] = useState<string[]>([]);
+  const [prereqInput, setPrereqInput] = useState("");
+  const [courseVersion, setCourseVersion] = useState<number>(1);
   const [courseRequirements, setCourseRequirements] = useState<string[]>(["Basic Computer Literacy"]);
   const [reqInput, setReqInput] = useState("");
   const [courseSkills, setCourseSkills] = useState<string[]>(["Web Development"]);
@@ -56,11 +66,22 @@ export function CourseAuthoringStudio({
   const [finalAssessment, setFinalAssessment] = useState<Assessment | null>(null);
   const [enrolledStudentsCount, setEnrolledStudentsCount] = useState<number>(0);
 
+  // Validation Results State
+  const [validationResults, setValidationResults] = useState<{
+    valid: boolean;
+    issues: string[];
+    moduleCount: number;
+    lessonCount: number;
+  } | null>(null);
+  const [validating, setValidating] = useState(false);
+  const [bumpVersionOnPublish, setBumpVersionOnPublish] = useState<boolean>(false);
+
   // Module Modal State
   const [showModuleModal, setShowModuleModal] = useState(false);
   const [editingModuleId, setEditingModuleId] = useState<string | null>(null);
   const [moduleTitle, setModuleTitle] = useState("");
   const [moduleDescription, setModuleDescription] = useState("");
+  const [moduleStatus, setModuleStatus] = useState<"draft" | "published">("published");
 
   // Lesson Modal State
   const [showLessonModal, setShowLessonModal] = useState(false);
@@ -74,6 +95,8 @@ export function CourseAuthoringStudio({
   const [lessonContent, setLessonContent] = useState("");
   const [lessonMaterialTitle, setLessonMaterialTitle] = useState("");
   const [lessonMaterialUrl, setLessonMaterialUrl] = useState("");
+  const [lessonAssessmentId, setLessonAssessmentId] = useState("");
+  const [lessonStatus, setLessonStatus] = useState<"draft" | "published">("published");
   const [lessonActiveTab, setLessonActiveTab] = useState<"video" | "text" | "pdf">("video");
   const [uploadingFile, setUploadingFile] = useState(false);
 
@@ -90,13 +113,39 @@ export function CourseAuthoringStudio({
   const [questionExplanation, setQuestionExplanation] = useState("");
   const [questionDifficulty, setQuestionDifficulty] = useState<"easy" | "medium" | "hard">("medium");
 
-  // Student Access State
-  const [students, setStudents] = useState<any[]>([]);
+  // Student Access & Enrollment State
+  const [accessMatrix, setAccessMatrix] = useState<any[]>([]);
+  const [allStudents, setAllStudents] = useState<User[]>([]);
+  const [availableGroups, setAvailableGroups] = useState<any[]>([]);
   const [studentSearch, setStudentSearch] = useState("");
+  const [accessFilter, setAccessFilter] = useState<"all" | "assigned" | "in_progress" | "completed" | "overdue" | "revoked" | "mandatory">("all");
   const [accessLoading, setAccessLoading] = useState(false);
+
+  // Modals for Access Control
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [showRevokeModal, setShowRevokeModal] = useState(false);
+  const [showEditEnrollmentModal, setShowEditEnrollmentModal] = useState(false);
+
+  // Form states for modals
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [assignDueDate, setAssignDueDate] = useState<string>("");
+  const [assignIsMandatory, setAssignIsMandatory] = useState<boolean>(false);
+  const [selectedGroupId, setSelectedGroupId] = useState<string>("");
+  const [revokingEnrollment, setRevokingEnrollment] = useState<any | null>(null);
+  const [revocationReason, setRevocationReason] = useState<string>("");
+  const [editingEnrollment, setEditingEnrollment] = useState<any | null>(null);
+  const [editDueDate, setEditDueDate] = useState<string>("");
+  const [editIsMandatory, setEditIsMandatory] = useState<boolean>(false);
+  const [assignSearch, setAssignSearch] = useState<string>("");
 
   const showToast = (text: string, type: "success" | "error" = "success") => {
     setToastMessage({ type, text });
+    if (type === "success") {
+      toast.success(text);
+    } else {
+      toast.error(text);
+    }
     setTimeout(() => setToastMessage(null), 4000);
   };
 
@@ -119,6 +168,10 @@ export function CourseAuthoringStudio({
       setCourseThumbnail(c.thumbnail || "");
       setCourseBanner(c.banner || "");
       setCourseStatus((c.status as any) || "draft");
+      setCourseEstimatedDuration(c.estimatedDuration || "");
+      setCourseTags(c.tags || []);
+      setCoursePrerequisites(c.prerequisites || []);
+      setCourseVersion(c.version || 1);
       setCourseRequirements(c.requirements || []);
       setCourseSkills(c.skillsCovered || []);
       setIsFeatured(!!c.isFeatured);
@@ -138,45 +191,40 @@ export function CourseAuthoringStudio({
     }
   };
 
-  // Load students for access tab
-  const loadStudents = async () => {
+  // Load Access Control Matrix, Users and Groups
+  const loadAccessData = async () => {
     if (!currentCourseId) return;
     setAccessLoading(true);
     try {
+      // 1. Fetch access matrix for current course
+      const matrixRes = await fetch(`/api/admin/courses/${currentCourseId}/access`, {
+        headers: { "Authorization": `Bearer ${authToken}` }
+      });
+      if (matrixRes.ok) {
+        const matrixData = await matrixRes.json();
+        setAccessMatrix(matrixData || []);
+      }
+
+      // 2. Fetch all student users (for assignment modals)
       const usersRes = await fetch("/api/admin/users", {
         headers: { "Authorization": `Bearer ${authToken}` }
       });
-      if (!usersRes.ok) throw new Error("Failed to load users");
-      const allUsers: User[] = await usersRes.json();
-      const studentUsers = allUsers.filter(u => u.role === UserRole.STUDENT);
+      if (usersRes.ok) {
+        const allUsers: User[] = await usersRes.json();
+        const studentUsers = allUsers.filter(u => u.role === UserRole.STUDENT && u.status !== "suspended");
+        setAllStudents(studentUsers);
+      }
 
-      // Now query student enrollment status
-      const studentList = await Promise.all(
-        studentUsers.map(async (st) => {
-          try {
-            const accRes = await fetch(`/api/admin/users/${st.id}/enrollments`, {
-              headers: { "Authorization": `Bearer ${authToken}` }
-            });
-            if (accRes.ok) {
-              const enrs: any[] = await accRes.json();
-              const isAssigned = enrs.some(e => e.courseId === currentCourseId);
-              const enr = enrs.find(e => e.courseId === currentCourseId);
-              return {
-                ...st,
-                isAssigned,
-                assignedDate: enr?.enrolledAt || null
-              };
-            }
-          } catch {
-            // fallback
-          }
-          return { ...st, isAssigned: false, assignedDate: null };
-        })
-      );
-
-      setStudents(studentList);
+      // 3. Fetch groups (for cohort assignments)
+      const groupsRes = await fetch("/api/admin/groups", {
+        headers: { "Authorization": `Bearer ${authToken}` }
+      });
+      if (groupsRes.ok) {
+        const groupsData = await groupsRes.json();
+        setAvailableGroups(groupsData || []);
+      }
     } catch (err: any) {
-      console.error(err);
+      console.error("Failed to load access data", err);
     } finally {
       setAccessLoading(false);
     }
@@ -190,7 +238,7 @@ export function CourseAuthoringStudio({
 
   useEffect(() => {
     if (activeTab === "access" && currentCourseId) {
-      loadStudents();
+      loadAccessData();
     }
   }, [activeTab, currentCourseId]);
 
@@ -209,6 +257,9 @@ export function CourseAuthoringStudio({
         description: courseDescription.trim(),
         category: courseCategory.trim(),
         difficulty: courseDifficulty,
+        estimatedDuration: courseEstimatedDuration.trim(),
+        tags: courseTags,
+        prerequisites: coursePrerequisites,
         thumbnail: courseThumbnail.trim(),
         banner: courseBanner.trim(),
         status: courseStatus,
@@ -366,9 +417,13 @@ export function CourseAuthoringStudio({
   };
 
   const handleDeleteModule = async (moduleId: string) => {
-    if (!window.confirm("Are you sure you want to delete this module and all its lessons? This action cannot be undone.")) {
-      return;
-    }
+    const confirmed = await confirm({
+      title: "Delete Module?",
+      message: "Are you sure you want to delete this module and all its lessons? This action cannot be undone.",
+      confirmText: "Delete Module",
+      variant: "danger"
+    });
+    if (!confirmed) return;
     try {
       const res = await fetch(`/api/admin/modules/${moduleId}`, {
         method: "DELETE",
@@ -394,6 +449,8 @@ export function CourseAuthoringStudio({
     setLessonContent("");
     setLessonMaterialTitle("");
     setLessonMaterialUrl("");
+    setLessonAssessmentId("");
+    setLessonStatus("published");
     setLessonActiveTab("video");
     setShowLessonModal(true);
   };
@@ -409,6 +466,8 @@ export function CourseAuthoringStudio({
     setLessonContent(lesson.content || "");
     setLessonMaterialTitle(lesson.materialTitle || "");
     setLessonMaterialUrl(lesson.materialUrl || lesson.fileUrl || "");
+    setLessonAssessmentId(lesson.assessmentId || "");
+    setLessonStatus((lesson.status as any) || "published");
     setLessonActiveTab(lesson.videoUrl ? "video" : lesson.content ? "text" : "pdf");
     setShowLessonModal(true);
   };
@@ -421,15 +480,23 @@ export function CourseAuthoringStudio({
     if (!targetModuleIdForLesson || !currentCourseId) return;
 
     try {
+      const resolvedType = lessonActiveTab === "text"
+        ? LessonType.TEXT
+        : lessonActiveTab === "pdf"
+          ? LessonType.PDF
+          : LessonType.VIDEO;
+
       const payload = {
         title: lessonTitle.trim(),
         description: lessonDescription.trim(),
-        type: lessonType,
+        type: resolvedType,
         durationMinutes: Number(lessonDuration) || 15,
         videoUrl: lessonVideoUrl.trim(),
         content: lessonContent,
         materialTitle: lessonMaterialTitle.trim(),
-        materialUrl: lessonMaterialUrl.trim()
+        materialUrl: lessonMaterialUrl.trim(),
+        assessmentId: lessonAssessmentId || null,
+        status: lessonStatus
       };
 
       if (editingLessonId) {
@@ -463,7 +530,13 @@ export function CourseAuthoringStudio({
   };
 
   const handleDeleteLesson = async (lessonId: string) => {
-    if (!window.confirm("Are you sure you want to delete this lesson and its practice test?")) return;
+    const confirmed = await confirm({
+      title: "Delete Lesson?",
+      message: "Are you sure you want to delete this lesson and its practice test? This action cannot be undone.",
+      confirmText: "Delete Lesson",
+      variant: "danger"
+    });
+    if (!confirmed) return;
     try {
       const res = await fetch(`/api/admin/lessons/${lessonId}`, {
         method: "DELETE",
@@ -474,6 +547,158 @@ export function CourseAuthoringStudio({
       if (currentCourseId) loadCourse(currentCourseId);
     } catch (err: any) {
       showToast(err.message || "Error deleting lesson", "error");
+    }
+  };
+
+  // Reorder Modules
+  const handleReorderModules = async (direction: "up" | "down", index: number) => {
+    if (!currentCourseId) return;
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= modules.length) return;
+
+    const reordered = [...modules];
+    const temp = reordered[index];
+    reordered[index] = reordered[targetIndex];
+    reordered[targetIndex] = temp;
+
+    setModules(reordered);
+    try {
+      const res = await fetch(`/api/admin/courses/${currentCourseId}/modules/reorder`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ moduleIds: reordered.map(m => m.id) })
+      });
+      if (!res.ok) throw new Error("Failed to reorder modules");
+      showToast("Module order updated", "success");
+    } catch (e: any) {
+      showToast(e.message || "Reorder failed", "error");
+      loadCourse(currentCourseId);
+    }
+  };
+
+  // Reorder Lessons within Module
+  const handleReorderLessons = async (moduleId: string, direction: "up" | "down", index: number) => {
+    const mod = modules.find(m => m.id === moduleId);
+    if (!mod || !mod.lessons) return;
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= mod.lessons.length) return;
+
+    const reordered = [...mod.lessons];
+    const temp = reordered[index];
+    reordered[index] = reordered[targetIndex];
+    reordered[targetIndex] = temp;
+
+    setModules(prev => prev.map(m => m.id === moduleId ? { ...m, lessons: reordered } : m));
+    try {
+      const res = await fetch(`/api/admin/modules/${moduleId}/lessons/reorder`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ lessonIds: reordered.map(l => l.id) })
+      });
+      if (!res.ok) throw new Error("Failed to reorder lessons");
+      showToast("Lesson order updated", "success");
+    } catch (e: any) {
+      showToast(e.message || "Reorder failed", "error");
+      if (currentCourseId) loadCourse(currentCourseId);
+    }
+  };
+
+  // Duplicate Lesson
+  const handleDuplicateLesson = async (lessonId: string) => {
+    if (!currentCourseId) return;
+    try {
+      const res = await fetch(`/api/admin/lessons/${lessonId}/duplicate`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${authToken}` }
+      });
+      if (!res.ok) throw new Error("Failed to duplicate lesson");
+      showToast("Lesson duplicated successfully", "success");
+      loadCourse(currentCourseId);
+    } catch (e: any) {
+      showToast(e.message || "Duplication failed", "error");
+    }
+  };
+
+  // Toggle Module Publish Status
+  const handleToggleModuleStatus = async (mod: Module) => {
+    if (!currentCourseId) return;
+    const newStatus = (mod.status || "published") === "published" ? "draft" : "published";
+    try {
+      const res = await fetch(`/api/admin/modules/${mod.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (!res.ok) throw new Error("Failed to update module status");
+      showToast(`Module marked as ${newStatus}`);
+      loadCourse(currentCourseId);
+    } catch (e: any) {
+      showToast(e.message || "Status update failed", "error");
+    }
+  };
+
+  // Run Pre-Publish Content Validation
+  const handleValidateCourse = async () => {
+    if (!currentCourseId) return;
+    setValidating(true);
+    try {
+      const res = await fetch(`/api/admin/courses/${currentCourseId}/validate`, {
+        headers: { "Authorization": `Bearer ${authToken}` }
+      });
+      if (!res.ok) throw new Error("Validation check failed");
+      const data = await res.json();
+      setValidationResults(data);
+      if (data.valid) {
+        showToast("Course passed all publishing validation checks!", "success");
+      } else {
+        showToast(`Course has ${data.issues.length} issue(s) to fix before publishing`, "error");
+      }
+    } catch (e: any) {
+      showToast(e.message || "Validation failed", "error");
+    } finally {
+      setValidating(false);
+    }
+  };
+
+  // Publish Course with Verification Guard
+  const handlePublishCourse = async (incrementVersion = false) => {
+    if (!currentCourseId) return;
+    try {
+      const res = await fetch(`/api/admin/courses/${currentCourseId}/publish`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ incrementVersion })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setValidationResults({ 
+          valid: false, 
+          issues: data.issues || [data.error], 
+          moduleCount: modules.length, 
+          lessonCount: totalLessons 
+        });
+        throw new Error(data.error || "Publishing validation failed");
+      }
+      showToast("Course successfully published to active student catalog!", "success");
+      setCourseStatus("published");
+      if (data.course) {
+        setCourseVersion(data.course.version || 1);
+      }
+      loadCourse(currentCourseId);
+    } catch (e: any) {
+      showToast(e.message || "Publishing failed", "error");
     }
   };
 
@@ -638,7 +863,13 @@ export function CourseAuthoringStudio({
   };
 
   const handleDeleteQuestion = async (questionId: string) => {
-    if (!window.confirm("Are you sure you want to delete this question?")) return;
+    const confirmed = await confirm({
+      title: "Delete Question?",
+      message: "Are you sure you want to delete this question? This action cannot be undone.",
+      confirmText: "Delete Question",
+      variant: "danger"
+    });
+    if (!confirmed) return;
     try {
       const res = await fetch(`/api/admin/questions/${questionId}`, {
         method: "DELETE",
@@ -652,38 +883,152 @@ export function CourseAuthoringStudio({
     }
   };
 
-  // STUDENT ACCESS ASSIGNMENT
-  const handleToggleStudentAccess = async (studentId: string, currentAssigned: boolean) => {
-    if (!currentCourseId) return;
+  // STUDENT ACCESS & ENROLLMENT HANDLERS
+  const handleAssignStudents = async () => {
+    if (!currentCourseId || selectedStudentIds.length === 0) return;
     try {
-      if (currentAssigned) {
-        const res = await fetch(`/api/admin/users/${studentId}/enrollments/${currentCourseId}`, {
-          method: "DELETE",
-          headers: { "Authorization": `Bearer ${authToken}` }
-        });
-        if (!res.ok) throw new Error("Failed to revoke access");
-        showToast("Student access revoked");
-      } else {
-        const res = await fetch(`/api/admin/users/${studentId}/enrollments`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${authToken}`
-          },
-          body: JSON.stringify({ courseId: currentCourseId })
-        });
-        if (!res.ok) throw new Error("Failed to grant access");
-        showToast("Course access granted to student");
+      const res = await fetch("/api/admin/enrollments/bulk", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          courseId: currentCourseId,
+          studentIds: selectedStudentIds,
+          dueDate: assignDueDate || null,
+          isMandatory: assignIsMandatory
+        })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to assign students");
       }
-      loadStudents();
+      const data = await res.json();
+      showToast(data.message || `Successfully assigned ${selectedStudentIds.length} student(s)`);
+      setShowAssignModal(false);
+      setSelectedStudentIds([]);
+      setAssignDueDate("");
+      setAssignIsMandatory(false);
+      loadAccessData();
       loadCourse(currentCourseId);
     } catch (err: any) {
-      showToast(err.message || "Access error", "error");
+      showToast(err.message || "Failed to assign students", "error");
+    }
+  };
+
+  const handleAssignGroup = async () => {
+    if (!currentCourseId || !selectedGroupId) return;
+    try {
+      const res = await fetch("/api/admin/enrollments/group", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          courseId: currentCourseId,
+          groupId: selectedGroupId,
+          dueDate: assignDueDate || null,
+          isMandatory: assignIsMandatory
+        })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to assign group");
+      }
+      const data = await res.json();
+      showToast(data.message || "Course assigned to group");
+      setShowGroupModal(false);
+      setSelectedGroupId("");
+      setAssignDueDate("");
+      setAssignIsMandatory(false);
+      loadAccessData();
+      loadCourse(currentCourseId);
+    } catch (err: any) {
+      showToast(err.message || "Failed to assign group", "error");
+    }
+  };
+
+  const handleRevokeAccess = async () => {
+    if (!currentCourseId || !revokingEnrollment) return;
+    try {
+      const res = await fetch("/api/admin/enrollments/revoke", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          courseId: currentCourseId,
+          studentId: revokingEnrollment.studentId,
+          reason: revocationReason || "Revoked by Administrator"
+        })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to revoke access");
+      }
+      showToast(`Access revoked for ${revokingEnrollment.studentName}`);
+      setShowRevokeModal(false);
+      setRevokingEnrollment(null);
+      setRevocationReason("");
+      loadAccessData();
+      loadCourse(currentCourseId);
+    } catch (err: any) {
+      showToast(err.message || "Revocation error", "error");
+    }
+  };
+
+  const handleRestoreAccess = async (studentId: string, studentName: string) => {
+    if (!currentCourseId) return;
+    try {
+      const res = await fetch(`/api/admin/users/${studentId}/enrollments`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ courseId: currentCourseId })
+      });
+      if (!res.ok) throw new Error("Failed to restore access");
+      showToast(`Course access restored for ${studentName}`);
+      loadAccessData();
+      loadCourse(currentCourseId);
+    } catch (err: any) {
+      showToast(err.message || "Error restoring access", "error");
+    }
+  };
+
+  const handleUpdateEnrollment = async () => {
+    if (!editingEnrollment) return;
+    try {
+      const res = await fetch(`/api/admin/enrollments/${editingEnrollment.enrollmentId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          dueDate: editDueDate || null,
+          isMandatory: editIsMandatory
+        })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to update enrollment settings");
+      }
+      showToast("Enrollment parameters updated");
+      setShowEditEnrollmentModal(false);
+      setEditingEnrollment(null);
+      loadAccessData();
+    } catch (err: any) {
+      showToast(err.message || "Error updating enrollment", "error");
     }
   };
 
   // PUBLISH / DRAFT TOGGLE
-  const handleUpdateCourseStatus = async (newStatus: "draft" | "published" | "archived") => {
+  const handleUpdateCourseStatus = async (newStatus: "draft" | "review" | "published" | "archived") => {
     if (!currentCourseId) return;
     try {
       const res = await fetch(`/api/admin/courses/${currentCourseId}`, {
@@ -706,6 +1051,27 @@ export function CourseAuthoringStudio({
   // Compute Total Stats
   const totalLessons = modules.reduce((acc, m) => acc + (m.lessons?.length || 0), 0);
   const totalQuestions = assessments.reduce((acc, a) => acc + (a.questions?.length || 0), 0);
+
+  const filteredMatrix = accessMatrix.filter(row => {
+    if (studentSearch) {
+      const q = studentSearch.toLowerCase();
+      const matchName = row.studentName?.toLowerCase().includes(q);
+      const matchEmail = row.studentEmail?.toLowerCase().includes(q);
+      if (!matchName && !matchEmail) return false;
+    }
+    if (accessFilter === "all") return true;
+    if (accessFilter === "mandatory") return !!row.isMandatory;
+    if (accessFilter === "overdue") return !!row.isOverdue || row.status === "expired";
+    if (accessFilter === "assigned") return row.status === "assigned" || row.status === "not_started";
+    return row.status === accessFilter;
+  });
+
+  const enrolledCount = accessMatrix.filter(r => r.rawStatus !== "revoked").length;
+  const inProgressCount = accessMatrix.filter(r => r.status === "in_progress").length;
+  const completedCount = accessMatrix.filter(r => r.status === "completed").length;
+  const overdueCount = accessMatrix.filter(r => r.isOverdue || r.status === "expired").length;
+  const revokedCount = accessMatrix.filter(r => r.rawStatus === "revoked").length;
+  const mandatoryCount = accessMatrix.filter(r => !!r.isMandatory).length;
 
   return (
     <div className="bg-slate-50 min-h-screen text-slate-800 pb-16">
@@ -957,7 +1323,7 @@ export function CourseAuthoringStudio({
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1.5">Category</label>
                     <input
@@ -980,6 +1346,16 @@ export function CourseAuthoringStudio({
                       <option value="Advanced">Advanced</option>
                       <option value="All Levels">All Levels</option>
                     </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">Estimated Duration</label>
+                    <input
+                      type="text"
+                      value={courseEstimatedDuration}
+                      onChange={(e) => setCourseEstimatedDuration(e.target.value)}
+                      placeholder="e.g. 12 Hours, 4 Weeks"
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition"
+                    />
                   </div>
                 </div>
               </div>
@@ -1147,6 +1523,7 @@ export function CourseAuthoringStudio({
                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:bg-white cursor-pointer"
                   >
                     <option value="draft">DRAFT (Hidden from Students)</option>
+                    <option value="review">REVIEW (Under Quality Review)</option>
                     <option value="published">PUBLISHED (Active & Accessible)</option>
                     <option value="archived">ARCHIVED (Inactive)</option>
                   </select>
@@ -1245,6 +1622,37 @@ export function CourseAuthoringStudio({
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5">
+                          <button
+                            onClick={() => handleReorderModules("up", modIdx)}
+                            disabled={modIdx === 0}
+                            className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                            title="Move Module Up"
+                          >
+                            <MoveUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleReorderModules("down", modIdx)}
+                            disabled={modIdx === modules.length - 1}
+                            className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                            title="Move Module Down"
+                          >
+                            <MoveDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        <button
+                          onClick={() => handleToggleModuleStatus(mod)}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase font-mono border cursor-pointer transition ${
+                            (mod.status || "published") === "published"
+                              ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                              : "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
+                          }`}
+                          title="Click to toggle module publish state"
+                        >
+                          {mod.status || "published"}
+                        </button>
+
                         <button
                           onClick={() => handleOpenAddLesson(mod.id)}
                           className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-blue-600 text-xs font-bold rounded-xl transition flex items-center gap-1 cursor-pointer shadow-xs"
@@ -1288,9 +1696,14 @@ export function CourseAuthoringStudio({
                               <div className={`p-2 rounded-lg shrink-0 ${
                                 les.type === LessonType.VIDEO ? "bg-purple-50 text-purple-600" :
                                 les.type === LessonType.TEXT ? "bg-blue-50 text-blue-600" :
+                                les.type === LessonType.CODING ? "bg-cyan-50 text-cyan-600" :
+                                les.type === LessonType.ASSESSMENT ? "bg-emerald-50 text-emerald-600" :
+                                les.type === LessonType.IMAGE ? "bg-pink-50 text-pink-600" :
                                 les.type === LessonType.PDF ? "bg-amber-50 text-amber-600" : "bg-slate-100 text-slate-600"
                               }`}>
                                 {les.type === LessonType.VIDEO ? <Video className="w-4 h-4" /> :
+                                 les.type === LessonType.CODING ? <Code className="w-4 h-4" /> :
+                                 les.type === LessonType.ASSESSMENT ? <Award className="w-4 h-4" /> :
                                  les.type === LessonType.PDF ? <FileText className="w-4 h-4" /> : <BookOpen className="w-4 h-4" />}
                               </div>
                               <div className="min-w-0">
@@ -1300,6 +1713,9 @@ export function CourseAuthoringStudio({
                                     <Clock className="w-3 h-3" />
                                     {les.durationMinutes} mins
                                   </span>
+                                  <span className="text-blue-600 font-semibold uppercase font-mono text-[10px]">
+                                    • {les.type}
+                                  </span>
                                   {les.videoUrl && (
                                     <span className="text-purple-600 font-semibold flex items-center gap-0.5">
                                       • Video Attached
@@ -1307,7 +1723,7 @@ export function CourseAuthoringStudio({
                                   )}
                                   {(les.materialUrl || les.fileUrl) && (
                                     <span className="text-amber-600 font-semibold flex items-center gap-0.5">
-                                      • Study Material PDF
+                                      • Study Material
                                     </span>
                                   )}
                                   {les.practiceTest && (
@@ -1320,6 +1736,33 @@ export function CourseAuthoringStudio({
                             </div>
 
                             <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                              <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5">
+                                <button
+                                  onClick={() => handleReorderLessons(mod.id, "up", lesIdx)}
+                                  disabled={lesIdx === 0}
+                                  className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                                  title="Move Lesson Up"
+                                >
+                                  <MoveUp className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => handleReorderLessons(mod.id, "down", lesIdx)}
+                                  disabled={lesIdx === (mod.lessons?.length || 0) - 1}
+                                  className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                                  title="Move Lesson Down"
+                                >
+                                  <MoveDown className="w-3 h-3" />
+                                </button>
+                              </div>
+
+                              <button
+                                onClick={() => handleDuplicateLesson(les.id)}
+                                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition cursor-pointer"
+                                title="Duplicate Lesson"
+                              >
+                                <RefreshCw className="w-3.5 h-3.5" />
+                              </button>
+
                               <button
                                 onClick={() => handleOpenPracticeTestForLesson(les)}
                                 className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
@@ -1561,173 +2004,925 @@ export function CourseAuthoringStudio({
         {/* TAB 4: REVIEW & PUBLISH                                  */}
         {/* ======================================================== */}
         {activeTab === "publish" && (
-          <div className="max-w-2xl mx-auto bg-white rounded-2xl p-8 border border-slate-200/80 shadow-xs space-y-6 animate-in fade-in duration-200">
-            <div>
-              <h3 className="text-base font-bold text-slate-900">Review & Publish Course</h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Confirm your course curriculum is complete before making it available to enrolled students.
+          <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-200">
+            {/* Header Description */}
+            <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                <span>Course Review & Production Release</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                MRTECHLMS enforces curriculum completeness standards and safe versioning before releasing content to students. Verify readiness and manage lifecycle transitions below.
               </p>
             </div>
 
-            <div className="space-y-3 bg-slate-50 p-5 rounded-xl border border-slate-200/60">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-600 font-medium">Course Title:</span>
-                <strong className="text-slate-900">{courseTitle}</strong>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-600 font-medium">Modules Created:</span>
-                <strong className="text-slate-900">{modules.length} Modules</strong>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-600 font-medium">Lessons Created:</span>
-                <strong className="text-slate-900">{totalLessons} Lessons</strong>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-600 font-medium">Practice Tests & Final Exam:</span>
-                <strong className="text-slate-900">{assessments.length} Tests ({totalQuestions} Questions)</strong>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-600 font-medium">Current Status:</span>
-                <span className={`font-mono font-bold uppercase ${
-                  courseStatus === "published" ? "text-emerald-600" : "text-amber-600"
-                }`}>
-                  {courseStatus}
-                </span>
+            {/* Curriculum Metrics & Lifecycle Status Card */}
+            <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Course Specifications</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/60 flex items-center justify-between">
+                  <span className="text-slate-600 font-medium">Title:</span>
+                  <strong className="text-slate-900 truncate max-w-[180px] text-right" title={courseTitle}>{courseTitle || "Untitled Course"}</strong>
+                </div>
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/60 flex items-center justify-between">
+                  <span className="text-slate-600 font-medium">Version:</span>
+                  <span className="font-mono font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
+                    v{courseVersion}
+                  </span>
+                </div>
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/60 flex items-center justify-between">
+                  <span className="text-slate-600 font-medium">Modules:</span>
+                  <strong className="text-slate-900 font-mono">{modules.length} Modules</strong>
+                </div>
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/60 flex items-center justify-between">
+                  <span className="text-slate-600 font-medium">Published Lessons:</span>
+                  <strong className="text-slate-900 font-mono">{totalLessons} Lessons</strong>
+                </div>
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/60 flex items-center justify-between">
+                  <span className="text-slate-600 font-medium">Assessments / Tests:</span>
+                  <strong className="text-slate-900 font-mono">{assessments.length} Tests ({totalQuestions} Questions)</strong>
+                </div>
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/60 flex items-center justify-between">
+                  <span className="text-slate-600 font-medium">Lifecycle Status:</span>
+                  <span className={`font-mono font-bold uppercase px-2 py-0.5 rounded-md text-[11px] ${
+                    courseStatus === "published"
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      : courseStatus === "review"
+                      ? "bg-purple-50 text-purple-700 border border-purple-200"
+                      : courseStatus === "archived"
+                      ? "bg-slate-100 text-slate-700 border border-slate-300"
+                      : "bg-amber-50 text-amber-700 border border-amber-200"
+                  }`}>
+                    {courseStatus}
+                  </span>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-3 pt-2">
+            {/* Pre-Publish Content Validation Guard */}
+            <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900">Pre-Publish Verification Guard</h4>
+                    <p className="text-xs text-slate-500">Audits metadata, published modules, lessons, and content activity references</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleValidateCourse}
+                  disabled={validating || !currentCourseId}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl transition flex items-center gap-2 cursor-pointer disabled:opacity-50 shrink-0"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${validating ? "animate-spin" : ""}`} />
+                  <span>{validating ? "Checking Readiness..." : "Run Readiness Audit"}</span>
+                </button>
+              </div>
+
+              {/* Validation Results Display */}
+              {validationResults ? (
+                <div className={`p-4 rounded-xl border text-xs space-y-3 ${
+                  validationResults.valid 
+                    ? "bg-emerald-50/70 border-emerald-200 text-emerald-900" 
+                    : "bg-rose-50/70 border-rose-200 text-rose-900"
+                }`}>
+                  <div className="flex items-center gap-2 font-bold text-sm">
+                    {validationResults.valid ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span>Ready for Release (All checks passed)</span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle className="w-4 h-4 text-rose-600" />
+                        <span>Publication Blocked: {validationResults.issues.length} Issue(s) Found</span>
+                      </>
+                    )}
+                  </div>
+
+                  {validationResults.valid ? (
+                    <p className="text-xs text-emerald-800">
+                      This course satisfies all publishing criteria: valid title, descriptions, category, thumbnail, at least 1 published module, and all lessons have required activity links.
+                    </p>
+                  ) : (
+                    <ul className="list-disc pl-5 space-y-1 text-xs text-rose-800 font-medium">
+                      {validationResults.issues.map((issue, idx) => (
+                        <li key={idx}>{issue}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/60 text-xs text-slate-600 flex items-center gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span>Click <strong>"Run Readiness Audit"</strong> above to test whether this course meets publication standards.</span>
+                </div>
+              )}
+            </div>
+
+            {/* Course Lifecycle Actions & Safe Versioning */}
+            <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs space-y-5">
+              <h4 className="text-sm font-bold text-slate-900">Publishing & Lifecycle Controls</h4>
+
+              {/* Version Bump Checkbox */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/60 flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="bumpVersionCheckbox"
+                  checked={bumpVersionOnPublish}
+                  onChange={(e) => setBumpVersionOnPublish(e.target.checked)}
+                  className="mt-0.5 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                />
+                <label htmlFor="bumpVersionCheckbox" className="text-xs text-slate-700 cursor-pointer">
+                  <span className="font-bold text-slate-900">Increment version number upon publishing</span>
+                  <p className="text-slate-500 mt-0.5">
+                    Publishes this course as <strong>v{courseVersion + 1}</strong>. Historical student completions and certificates are safely preserved.
+                  </p>
+                </label>
+              </div>
+
+              {/* Primary Publish Action */}
               <button
-                onClick={() => handleUpdateCourseStatus("published")}
-                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-sm shadow-emerald-500/20 cursor-pointer"
+                type="button"
+                onClick={() => handlePublishCourse(bumpVersionOnPublish)}
+                disabled={saving || validating || !currentCourseId}
+                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-sm shadow-emerald-500/20 cursor-pointer disabled:opacity-50"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                <span>Publish Course (Active Catalog)</span>
+                <span>Publish Course to Active Catalog (Enrolled Students Can Access)</span>
               </button>
 
-              <button
-                onClick={() => handleUpdateCourseStatus("draft")}
-                className="w-full py-3 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <span>Keep as Draft (Hidden from students)</span>
-              </button>
+              {/* Secondary Status Buttons */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleUpdateCourseStatus("review")}
+                  disabled={saving || !currentCourseId}
+                  className="py-2.5 px-3 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-semibold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="Mark course as ready for quality review before publishing"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>Mark as Under Review</span>
+                </button>
 
-              <button
-                onClick={() => setActiveTab("access")}
-                className="w-full py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Users className="w-4 h-4" />
-                <span>Proceed to Student Access Allocation →</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => handleUpdateCourseStatus("draft")}
+                  disabled={saving || !currentCourseId}
+                  className="py-2.5 px-3 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-xs font-semibold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="Hide course completely from students"
+                >
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>Revert to Draft</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleUpdateCourseStatus("archived")}
+                  disabled={saving || !currentCourseId}
+                  className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-semibold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="Archive course: hidden from catalog, read-only for already-enrolled students"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>Archive Course</span>
+                </button>
+              </div>
+
+              {/* Proceed to Student Access Allocation */}
+              <div className="pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("access")}
+                  className="w-full py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Users className="w-4 h-4" />
+                  <span>Proceed to Student Access Allocation →</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
 
         {/* ======================================================== */}
-        {/* TAB 5: STUDENT ACCESS ALLOCATION                         */}
+        {/* TAB 5: STUDENT ACCESS ALLOCATION & ENROLLMENT CONTROL     */}
         {/* ======================================================== */}
         {activeTab === "access" && (
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden animate-in fade-in duration-200">
-            <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* STATS METRIC SUMMARY BAR */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+                <div className="flex items-center justify-between text-slate-500 mb-1">
+                  <span className="text-xs font-semibold">Active Enrolled</span>
                   <Users className="w-4 h-4 text-blue-600" />
-                  <span>Student Access Allocation</span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Grant or revoke student access directly to <strong>{courseTitle}</strong>.
-                </p>
+                </div>
+                <div className="text-xl font-bold text-slate-900">{enrolledCount}</div>
+                <div className="text-[11px] text-slate-400 mt-0.5">Learners with access</div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={studentSearch}
-                  onChange={(e) => setStudentSearch(e.target.value)}
-                  placeholder="Search students by name or email..."
-                  className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs w-64 focus:outline-none focus:bg-white transition"
-                />
-                <button
-                  onClick={loadStudents}
-                  className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200 transition cursor-pointer"
-                  title="Refresh"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </button>
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+                <div className="flex items-center justify-between text-slate-500 mb-1">
+                  <span className="text-xs font-semibold">In Progress</span>
+                  <Clock className="w-4 h-4 text-blue-600" />
+                </div>
+                <div className="text-xl font-bold text-blue-600">{inProgressCount}</div>
+                <div className="text-[11px] text-slate-400 mt-0.5">Actively learning</div>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+                <div className="flex items-center justify-between text-slate-500 mb-1">
+                  <span className="text-xs font-semibold">Completed</span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div className="text-xl font-bold text-emerald-600">{completedCount}</div>
+                <div className="text-[11px] text-slate-400 mt-0.5">100% finished</div>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+                <div className="flex items-center justify-between text-slate-500 mb-1">
+                  <span className="text-xs font-semibold">Overdue</span>
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                </div>
+                <div className="text-xl font-bold text-amber-600">{overdueCount}</div>
+                <div className="text-[11px] text-slate-400 mt-0.5">Past deadline</div>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+                <div className="flex items-center justify-between text-slate-500 mb-1">
+                  <span className="text-xs font-semibold">Mandatory</span>
+                  <ShieldCheck className="w-4 h-4 text-rose-600" />
+                </div>
+                <div className="text-xl font-bold text-rose-600">{mandatoryCount}</div>
+                <div className="text-[11px] text-slate-400 mt-0.5">Required training</div>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+                <div className="flex items-center justify-between text-slate-500 mb-1">
+                  <span className="text-xs font-semibold">Revoked</span>
+                  <UserX className="w-4 h-4 text-slate-500" />
+                </div>
+                <div className="text-xl font-bold text-slate-500">{revokedCount}</div>
+                <div className="text-[11px] text-slate-400 mt-0.5">Blocked historical</div>
               </div>
             </div>
 
-            {accessLoading ? (
-              <div className="py-16 text-center text-slate-400">
-                <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />
-                <p className="text-xs font-medium">Loading students...</p>
+            {/* ACTION & FILTER TOOLBAR */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+              <div className="p-6 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Users className="w-4 h-4 text-blue-600" />
+                    <span>Course Access Control Matrix</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Assign individual learners, cohorts, set completion deadlines, and enforce mandatory compliance for <strong>{courseTitle}</strong>.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedStudentIds([]);
+                      setAssignDueDate("");
+                      setAssignIsMandatory(false);
+                      setShowAssignModal(true);
+                    }}
+                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <UserCheck className="w-3.5 h-3.5" />
+                    <span>Assign Students</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedGroupId(availableGroups[0]?.id || "");
+                      setAssignDueDate("");
+                      setAssignIsMandatory(false);
+                      setShowGroupModal(true);
+                    }}
+                    className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>Assign Group / Cohort</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={loadAccessData}
+                    className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200 transition cursor-pointer"
+                    title="Refresh Access Matrix"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-100 text-xs font-bold text-slate-400 uppercase tracking-wider font-mono bg-slate-50/50">
-                      <th className="py-3 px-6">Student Information</th>
-                      <th className="py-3 px-4">Account Status</th>
-                      <th className="py-3 px-4">Course Access</th>
-                      <th className="py-3 px-6 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-xs">
-                    {students
-                      .filter(s => 
-                        !studentSearch || 
-                        s.name?.toLowerCase().includes(studentSearch.toLowerCase()) || 
-                        s.email?.toLowerCase().includes(studentSearch.toLowerCase())
-                      )
-                      .map((st) => (
-                        <tr key={st.id} className="hover:bg-slate-50/60 transition">
+
+              {/* SEARCH & STATUS FILTER PILLS */}
+              <div className="p-4 bg-slate-50/60 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {[
+                    { id: "all", label: "All Access", count: accessMatrix.length },
+                    { id: "assigned", label: "Assigned", count: accessMatrix.filter(r => r.status === "assigned" || r.status === "not_started").length },
+                    { id: "in_progress", label: "In Progress", count: inProgressCount },
+                    { id: "completed", label: "Completed", count: completedCount },
+                    { id: "overdue", label: "Overdue", count: overdueCount },
+                    { id: "mandatory", label: "Mandatory", count: mandatoryCount },
+                    { id: "revoked", label: "Revoked", count: revokedCount }
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setAccessFilter(tab.id as any)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                        accessFilter === tab.id
+                          ? "bg-slate-900 text-white shadow-xs"
+                          : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                      }`}
+                    >
+                      <span>{tab.label}</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                        accessFilter === tab.id ? "bg-slate-700 text-white" : "bg-slate-100 text-slate-600"
+                      }`}>
+                        {tab.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={studentSearch}
+                    onChange={(e) => setStudentSearch(e.target.value)}
+                    placeholder="Search learners by name or email..."
+                    className="pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs w-64 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* ACCESS MATRIX TABLE */}
+              {accessLoading ? (
+                <div className="py-16 text-center text-slate-400">
+                  <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />
+                  <p className="text-xs font-medium">Loading Access Control Matrix...</p>
+                </div>
+              ) : filteredMatrix.length === 0 ? (
+                <div className="py-16 text-center text-slate-400 space-y-2">
+                  <UserX className="w-8 h-8 mx-auto text-slate-300" />
+                  <p className="text-xs font-medium text-slate-600">No enrollment records matching this filter.</p>
+                  <p className="text-[11px] text-slate-400">Click "Assign Students" or "Assign Group" above to grant access.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-xs font-bold text-slate-400 uppercase tracking-wider font-mono bg-slate-50/50">
+                        <th className="py-3 px-6">Learner</th>
+                        <th className="py-3 px-4">Access State</th>
+                        <th className="py-3 px-4">Source</th>
+                        <th className="py-3 px-4">Due Date</th>
+                        <th className="py-3 px-4">Training Type</th>
+                        <th className="py-3 px-4">Progress</th>
+                        <th className="py-3 px-6 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs">
+                      {filteredMatrix.map((row) => (
+                        <tr key={row.enrollmentId} className="hover:bg-slate-50/60 transition">
+                          {/* LEARNER INFO */}
                           <td className="py-4 px-6">
-                            <div>
-                              <p className="font-bold text-slate-900">{st.name}</p>
-                              <p className="text-slate-400 font-mono text-[11px] mt-0.5">{st.email}</p>
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center">
+                                {row.studentName ? row.studentName.slice(0, 2).toUpperCase() : "ST"}
+                              </div>
+                              <div>
+                                <p className="font-bold text-slate-900">{row.studentName}</p>
+                                <p className="text-slate-400 font-mono text-[11px]">{row.studentEmail}</p>
+                              </div>
                             </div>
                           </td>
+
+                          {/* ACCESS STATE */}
                           <td className="py-4 px-4">
-                            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono ${
-                              st.status === "active" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
-                            }`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${st.status === "active" ? "bg-emerald-500" : "bg-rose-500"}`} />
-                              {st.status}
+                            {row.status === "completed" && (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Completed</span>
+                              </span>
+                            )}
+                            {row.status === "in_progress" && (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                                <Clock className="w-3.5 h-3.5 text-blue-600" />
+                                <span>In Progress</span>
+                              </span>
+                            )}
+                            {(row.status === "assigned" || row.status === "not_started") && (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                <CircleDot className="w-3.5 h-3.5 text-indigo-600" />
+                                <span>Assigned</span>
+                              </span>
+                            )}
+                            {row.status === "expired" && (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                                <span>Expired</span>
+                              </span>
+                            )}
+                            {row.status === "revoked" && (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200" title={row.revocationReason || undefined}>
+                                <UserX className="w-3.5 h-3.5 text-rose-600" />
+                                <span>Revoked</span>
+                              </span>
+                            )}
+                          </td>
+
+                          {/* ASSIGNMENT SOURCE */}
+                          <td className="py-4 px-4">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200/80">
+                              {row.sourceLabel || "Individual"}
                             </span>
                           </td>
+
+                          {/* DUE DATE */}
                           <td className="py-4 px-4">
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${
-                              st.isAssigned
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                : "bg-slate-100 text-slate-500"
-                            }`}>
-                              {st.isAssigned ? (
+                            {row.dueDate ? (
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-1 text-slate-700 font-mono text-[11px]">
+                                  <Calendar className="w-3 h-3 text-slate-400" />
+                                  <span>{new Date(row.dueDate).toLocaleDateString()}</span>
+                                </div>
+                                {row.isOverdue && (
+                                  <span className="inline-block px-1.5 py-0.2 rounded text-[9px] font-bold font-mono bg-rose-100 text-rose-700 uppercase">
+                                    Overdue
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 text-xs italic">No deadline</span>
+                            )}
+                          </td>
+
+                          {/* MANDATORY */}
+                          <td className="py-4 px-4">
+                            {row.isMandatory ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-rose-50 text-rose-700 border border-rose-200">
+                                <ShieldCheck className="w-3 h-3 text-rose-600" />
+                                <span>MANDATORY</span>
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 text-xs">Optional</span>
+                            )}
+                          </td>
+
+                          {/* PROGRESS */}
+                          <td className="py-4 px-4">
+                            <div className="w-28 space-y-1">
+                              <div className="flex justify-between text-[11px] text-slate-600 font-medium">
+                                <span>{row.progressPercentage}%</span>
+                              </div>
+                              <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all duration-300 ${
+                                    row.progressPercentage === 100 ? "bg-emerald-500" : "bg-blue-600"
+                                  }`}
+                                  style={{ width: `${row.progressPercentage}%` }}
+                                />
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* ACTIONS */}
+                          <td className="py-4 px-6 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {row.rawStatus !== "revoked" ? (
                                 <>
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span>Assigned ({new Date(st.assignedDate || Date.now()).toLocaleDateString()})</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingEnrollment(row);
+                                      setEditDueDate(row.dueDate ? row.dueDate.split("T")[0] : "");
+                                      setEditIsMandatory(Boolean(row.isMandatory));
+                                      setShowEditEnrollmentModal(true);
+                                    }}
+                                    className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg border border-slate-200 transition cursor-pointer"
+                                    title="Edit Due Date or Mandatory State"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setRevokingEnrollment(row);
+                                      setRevocationReason("");
+                                      setShowRevokeModal(true);
+                                    }}
+                                    className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition cursor-pointer"
+                                  >
+                                    Revoke
+                                  </button>
                                 </>
                               ) : (
-                                <span>Not Assigned</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRestoreAccess(row.studentId, row.studentName)}
+                                  className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition cursor-pointer"
+                                >
+                                  Restore Access
+                                </button>
                               )}
-                            </span>
-                          </td>
-                          <td className="py-4 px-6 text-right">
-                            <button
-                              onClick={() => handleToggleStudentAccess(st.id, st.isAssigned)}
-                              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition cursor-pointer ${
-                                st.isAssigned
-                                  ? "bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200"
-                                  : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
-                              }`}
-                            >
-                              {st.isAssigned ? "Revoke Access" : "Grant Access"}
-                            </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
-                  </tbody>
-                </table>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* MODAL: ASSIGN STUDENTS (INDIVIDUAL & BULK) */}
+            {showAssignModal && (
+              <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl w-full max-w-lg p-6 border border-slate-200 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <UserCheck className="w-4 h-4 text-emerald-600" />
+                        <span>Assign Course to Learners</span>
+                      </h3>
+                      <p className="text-xs text-slate-500">Select one or multiple students to enroll in {courseTitle}.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowAssignModal(false)}
+                      className="text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* DEADLINE & MANDATORY CONFIG */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Completion Due Date (Optional)
+                      </label>
+                      <input
+                        type="date"
+                        value={assignDueDate}
+                        onChange={(e) => setAssignDueDate(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 pt-4">
+                      <input
+                        type="checkbox"
+                        id="assignMandatory"
+                        checked={assignIsMandatory}
+                        onChange={(e) => setAssignIsMandatory(e.target.checked)}
+                        className="w-4 h-4 rounded text-blue-600 border-slate-300 cursor-pointer"
+                      />
+                      <label htmlFor="assignMandatory" className="text-xs font-semibold text-slate-700 cursor-pointer">
+                        Mandatory Training Requirement
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* STUDENT SEARCH & SELECT */}
+                  <div className="space-y-2 flex-1 overflow-hidden flex flex-col">
+                    <div className="flex items-center justify-between">
+                      <div className="relative flex-1 mr-2">
+                        <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                        <input
+                          type="text"
+                          value={assignSearch}
+                          onChange={(e) => setAssignSearch(e.target.value)}
+                          placeholder="Search learners..."
+                          className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:bg-white"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const matching = allStudents
+                            .filter(s => !assignSearch || s.name.toLowerCase().includes(assignSearch.toLowerCase()) || s.email.toLowerCase().includes(assignSearch.toLowerCase()))
+                            .map(s => s.id);
+                          if (selectedStudentIds.length === matching.length) {
+                            setSelectedStudentIds([]);
+                          } else {
+                            setSelectedStudentIds(matching);
+                          }
+                        }}
+                        className="px-2.5 py-1.5 text-[11px] font-semibold text-blue-600 hover:bg-blue-50 rounded-lg border border-blue-200 cursor-pointer"
+                      >
+                        {selectedStudentIds.length > 0 ? "Deselect All" : "Select All"}
+                      </button>
+                    </div>
+
+                    <div className="overflow-y-auto max-h-60 divide-y divide-slate-100 border border-slate-200 rounded-xl bg-slate-50/30">
+                      {allStudents
+                        .filter(s => 
+                          !assignSearch || 
+                          s.name.toLowerCase().includes(assignSearch.toLowerCase()) || 
+                          s.email.toLowerCase().includes(assignSearch.toLowerCase())
+                        )
+                        .map(st => {
+                          const isAlreadyEnrolled = accessMatrix.some(m => m.studentId === st.id && m.rawStatus !== "revoked");
+                          const isChecked = selectedStudentIds.includes(st.id);
+                          return (
+                            <label
+                              key={st.id}
+                              className={`flex items-center justify-between p-3 cursor-pointer hover:bg-white transition ${
+                                isChecked ? "bg-blue-50/50" : ""
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedStudentIds([...selectedStudentIds, st.id]);
+                                    } else {
+                                      setSelectedStudentIds(selectedStudentIds.filter(id => id !== st.id));
+                                    }
+                                  }}
+                                  className="w-4 h-4 rounded text-blue-600 border-slate-300"
+                                />
+                                <div>
+                                  <p className="font-bold text-slate-800 text-xs">{st.name}</p>
+                                  <p className="text-[11px] font-mono text-slate-400">{st.email}</p>
+                                </div>
+                              </div>
+                              {isAlreadyEnrolled && (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  Already Enrolled
+                                </span>
+                              )}
+                            </label>
+                          );
+                        })}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                    <span className="text-xs text-slate-500 font-medium">
+                      {selectedStudentIds.length} learner(s) selected
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowAssignModal(false)}
+                        className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleAssignStudents}
+                        disabled={selectedStudentIds.length === 0}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition disabled:opacity-50 cursor-pointer"
+                      >
+                        Grant Access ({selectedStudentIds.length})
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* MODAL: ASSIGN GROUP / COHORT */}
+            {showGroupModal && (
+              <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl w-full max-w-md p-6 border border-slate-200 shadow-2xl space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <Layers className="w-4 h-4 text-indigo-600" />
+                        <span>Assign Course to Group / Cohort</span>
+                      </h3>
+                      <p className="text-xs text-slate-500">All current and future members will gain access.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowGroupModal(false)}
+                      className="text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Select Cohort / Group <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={selectedGroupId}
+                      onChange={(e) => setSelectedGroupId(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:bg-white"
+                    >
+                      <option value="">-- Choose a Group --</option>
+                      {availableGroups.map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.name} ({g.memberCount || 0} members)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Completion Due Date (Optional)
+                    </label>
+                    <input
+                      type="date"
+                      value={assignDueDate}
+                      onChange={(e) => setAssignDueDate(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <input
+                      type="checkbox"
+                      id="groupMandatory"
+                      checked={assignIsMandatory}
+                      onChange={(e) => setAssignIsMandatory(e.target.checked)}
+                      className="w-4 h-4 rounded text-blue-600 border-slate-300 cursor-pointer"
+                    />
+                    <label htmlFor="groupMandatory" className="text-xs font-semibold text-slate-700 cursor-pointer">
+                      Mandatory Training for all members
+                    </label>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => setShowGroupModal(false)}
+                      className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAssignGroup}
+                      disabled={!selectedGroupId}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition disabled:opacity-50 cursor-pointer"
+                    >
+                      Assign Group
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* MODAL: REVOKE COURSE ACCESS */}
+            {showRevokeModal && revokingEnrollment && (
+              <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl w-full max-w-md p-6 border border-slate-200 shadow-2xl space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2 text-rose-600 font-bold text-sm">
+                      <UserX className="w-4 h-4" />
+                      <span>Revoke Course Access</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowRevokeModal(false);
+                        setRevokingEnrollment(null);
+                      }}
+                      className="text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                    <p className="font-bold text-slate-900">{revokingEnrollment.studentName}</p>
+                    <p className="text-slate-500 font-mono text-[11px]">{revokingEnrollment.studentEmail}</p>
+                    <p className="text-slate-600 mt-1">Current Progress: <strong>{revokingEnrollment.progressPercentage}%</strong></p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Reason for Revocation (Optional)
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={revocationReason}
+                      onChange={(e) => setRevocationReason(e.target.value)}
+                      placeholder="e.g. Role changed, completed elsewhere, or administrative decision..."
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:bg-white"
+                    />
+                  </div>
+
+                  {/* NON-DESTRUCTIVE REASSURANCE */}
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] leading-relaxed flex items-start gap-2">
+                    <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Non-Destructive Protection:</strong> Revocation stops future access to lessons and quizzes. All past progress, completed activities, quiz scores, and certificate records are safely preserved in audit logs.
+                    </span>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowRevokeModal(false);
+                        setRevokingEnrollment(null);
+                      }}
+                      className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRevokeAccess}
+                      className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer"
+                    >
+                      Confirm Revocation
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* MODAL: EDIT ENROLLMENT (DUE DATE & MANDATORY STATE) */}
+            {showEditEnrollmentModal && editingEnrollment && (
+              <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl w-full max-w-md p-6 border border-slate-200 shadow-2xl space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <Edit3 className="w-4 h-4 text-blue-600" />
+                      <span>Edit Enrollment Parameters</span>
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowEditEnrollmentModal(false);
+                        setEditingEnrollment(null);
+                      }}
+                      className="text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="text-xs text-slate-600">
+                    Editing assignment parameters for <strong>{editingEnrollment.studentName}</strong> ({editingEnrollment.studentEmail}).
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Due Date (Optional)
+                    </label>
+                    <input
+                      type="date"
+                      value={editDueDate}
+                      onChange={(e) => setEditDueDate(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:bg-white"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <input
+                      type="checkbox"
+                      id="editMandatory"
+                      checked={editIsMandatory}
+                      onChange={(e) => setEditIsMandatory(e.target.checked)}
+                      className="w-4 h-4 rounded text-blue-600 border-slate-300 cursor-pointer"
+                    />
+                    <label htmlFor="editMandatory" className="text-xs font-semibold text-slate-700 cursor-pointer">
+                      Mandatory Training Requirement
+                    </label>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowEditEnrollmentModal(false);
+                        setEditingEnrollment(null);
+                      }}
+                      className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleUpdateEnrollment}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer"
+                    >
+                      Save Parameters
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -1862,7 +3057,10 @@ export function CourseAuthoringStudio({
               <div className="flex border-b border-slate-200 bg-slate-50 text-xs font-semibold">
                 <button
                   type="button"
-                  onClick={() => setLessonActiveTab("video")}
+                  onClick={() => {
+                    setLessonActiveTab("video");
+                    setLessonType(LessonType.VIDEO);
+                  }}
                   className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 transition ${
                     lessonActiveTab === "video"
                       ? "bg-white text-purple-700 border-b-2 border-purple-600 font-bold"
@@ -1874,7 +3072,10 @@ export function CourseAuthoringStudio({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setLessonActiveTab("text")}
+                  onClick={() => {
+                    setLessonActiveTab("text");
+                    setLessonType(LessonType.TEXT);
+                  }}
                   className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 transition ${
                     lessonActiveTab === "text"
                       ? "bg-white text-blue-700 border-b-2 border-blue-600 font-bold"
@@ -1886,7 +3087,10 @@ export function CourseAuthoringStudio({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setLessonActiveTab("pdf")}
+                  onClick={() => {
+                    setLessonActiveTab("pdf");
+                    setLessonType(LessonType.PDF);
+                  }}
                   className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 transition ${
                     lessonActiveTab === "pdf"
                       ? "bg-white text-amber-700 border-b-2 border-amber-600 font-bold"

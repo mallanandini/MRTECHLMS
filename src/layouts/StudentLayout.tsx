@@ -5,18 +5,21 @@
 
 import React, { useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { Menu } from "lucide-react";
+import { Menu, Sparkles } from "lucide-react";
 import { Sidebar } from "../components/Sidebar.js";
 import { ThemeQuickControls } from "../components/ThemeQuickControls.js";
+import { NotificationBell } from "../components/NotificationBell.js";
 import { useAuth } from "../context/AuthContext.js";
+import { useTour } from "../context/TourContext.js";
 import { UserRole } from "../types.js";
 
 export function StudentLayout() {
-  const { currentUser, logout } = useAuth();
+  const { studentUser, logoutStudent } = useAuth();
+  const { startTour } = useTour();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const navigate = useNavigate();
 
-  if (!currentUser) return null;
+  if (!studentUser) return null;
 
   return (
     <div 
@@ -26,9 +29,10 @@ export function StudentLayout() {
       {/* Sidebar Navigation */}
       <Sidebar
         userRole={UserRole.STUDENT}
-        userName={currentUser.name}
-        userEmail={currentUser.email}
-        onLogout={logout}
+        userName={studentUser.name}
+        userEmail={studentUser.email}
+        userAvatar={studentUser.profilePhoto}
+        onLogout={logoutStudent}
         isMobileOpen={isMobileSidebarOpen}
         onMobileClose={() => setIsMobileSidebarOpen(false)}
       />
@@ -77,7 +81,19 @@ export function StudentLayout() {
             </div>
           </div>
 
-          <ThemeQuickControls onOpenPreferences={() => navigate("/student/profile")} />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => startTour(true)}
+              title="Take Interactive Tour"
+              aria-label="Take Interactive Tour"
+              className="h-8.5 sm:h-9 w-8.5 sm:w-9 rounded-xl border border-slate-200 dark:border-[#263449] bg-slate-50/80 dark:bg-[#111C30] hover:bg-slate-100 dark:hover:bg-[#16243D] hover:border-slate-300 dark:hover:border-[#384b66] text-amber-500 transition cursor-pointer flex items-center justify-center shadow-2xs"
+            >
+              <Sparkles className="w-4 h-4" />
+            </button>
+            <NotificationBell />
+            <ThemeQuickControls onOpenPreferences={() => navigate("/student/profile")} />
+          </div>
         </div>
 
         {/* Content Outlet */}

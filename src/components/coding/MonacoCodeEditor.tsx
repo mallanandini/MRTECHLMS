@@ -1,10 +1,12 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
+import React, { useRef, useEffect, useState } from "react";
+import Editor, { OnMount, loader } from "@monaco-editor/react";
 
-import React, { useRef, useEffect } from "react";
-import Editor, { OnMount } from "@monaco-editor/react";
+// Point Monaco loader to locally hosted files for high-speed, zero-cost, offline-capable code editing
+loader.config({
+  paths: {
+    vs: "/monaco/vs"
+  }
+});
 
 interface MonacoCodeEditorProps {
   code: string;
@@ -59,9 +61,25 @@ export function MonacoCodeEditor({
   height = "100%"
 }: MonacoCodeEditorProps) {
   const editorRef = useRef<any>(null);
+  const [hasMounted, setHasMounted] = useState(false);
+  const [initFailed, setInitFailed] = useState(false);
+
+  useEffect(() => {
+    // Watchdog timer: If Monaco fails to load or initialize within 7 seconds, switch to fallback editor
+    const timer = setTimeout(() => {
+      if (!hasMounted && !(window as any).monaco) {
+        console.warn("[MonacoCodeEditor] Monaco editor load timeout exceeded, activating fallback editor");
+        setInitFailed(true);
+      }
+    }, 7000);
+
+    return () => clearTimeout(timer);
+  }, [hasMounted]);
 
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+    setHasMounted(true);
+    setInitFailed(false);
 
     // Ctrl+Enter / Cmd+Enter: Run Code shortcut
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
@@ -74,7 +92,47 @@ export function MonacoCodeEditor({
     });
   };
 
+  const handleFallbackKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault();
+      if (onRun) onRun();
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      e.preventDefault();
+      if (onSave) onSave();
+    }
+  };
+
   const monacoLang = getMonacoLanguage(language);
+
+  // If Monaco fails to initialize, provide an accessible code textarea so the student is never blocked
+  if (initFailed) {
+    return (
+      <div className="w-full h-full flex flex-col bg-slate-950 text-slate-100 p-3 font-mono text-sm relative">
+        <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800 text-xs text-amber-400">
+          <span>Standard Code Editor (Monaco fallback mode active)</span>
+          <button
+            onClick={() => {
+              setInitFailed(false);
+              loader.init().then(() => setHasMounted(true)).catch(() => setInitFailed(true));
+            }}
+            className="text-xs text-blue-400 underline hover:text-blue-300"
+          >
+            Retry Monaco
+          </button>
+        </div>
+        <textarea
+          value={code}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={handleFallbackKeyDown}
+          readOnly={readOnly}
+          spellCheck={false}
+          className="flex-1 w-full bg-slate-900 text-slate-100 p-3 rounded font-mono text-sm border border-slate-800 resize-none focus:outline-none focus:border-blue-500"
+          style={{ fontSize: `${fontSize}px` }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-full relative overflow-hidden bg-slate-950">

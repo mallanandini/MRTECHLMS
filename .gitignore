@@ -6,3 +6,15 @@ coverage/
 *.log
 .env*
 !.env.example
+scratch/
+*.sql
+
+# Runtime media & private uploads
+storage/avatars/*
+!storage/avatars/.gitkeep
+storage/videos/*
+!storage/videos/.gitkeep
+storage/course-thumbnails/*
+!storage/course-thumbnails/.gitkeep
+storage/materials/*.pdf
+storage/materials/*.mp4

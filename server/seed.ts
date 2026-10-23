@@ -8,6 +8,7 @@ import path from "path";
 import mysql from "mysql2/promise";
 import { pool } from "./mysql.js";
 import { CODING_CHAPTERS, CODING_TOPICS, CODING_CHALLENGES_EXPANSION } from "./codingSeedData.js";
+import { runMigrations } from "./migrations/runner.js";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 
@@ -77,7 +78,7 @@ export async function initializeDatabase() {
       category VARCHAR(100) NOT NULL,
       requirements JSON NULL,
       skillsCovered JSON NULL,
-      status ENUM('draft', 'published', 'rejected', 'archived') DEFAULT 'draft',
+      status ENUM('draft', 'review', 'published', 'rejected', 'archived') DEFAULT 'draft',
       isFeatured BOOLEAN DEFAULT FALSE,
       rating DECIMAL(3,2) DEFAULT 5.0,
       reviewsCount INT DEFAULT 0,
@@ -196,6 +197,44 @@ export async function initializeDatabase() {
       passed BOOLEAN NOT NULL,
       submittedAt VARCHAR(50) NOT NULL,
       timeTakenSeconds INT NOT NULL,
+      attemptId VARCHAR(36) NULL,
+      attemptNumber INT NULL DEFAULT 1,
+      correctCount INT NOT NULL DEFAULT 0,
+      incorrectCount INT NOT NULL DEFAULT 0,
+      unansweredCount INT NOT NULL DEFAULT 0,
+      percentage DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+      FOREIGN KEY (assessmentId) REFERENCES assessments(id) ON DELETE CASCADE,
+      FOREIGN KEY (studentId) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS assessment_attempts (
+      id VARCHAR(36) PRIMARY KEY,
+      organizationId VARCHAR(36) NOT NULL DEFAULT 'org-default',
+      assessmentId VARCHAR(36) NOT NULL,
+      studentId VARCHAR(36) NOT NULL,
+      attemptNumber INT NOT NULL DEFAULT 1,
+      startedAt VARCHAR(50) NOT NULL,
+      expiresAt VARCHAR(50) NOT NULL,
+      submittedAt VARCHAR(50) NULL,
+      timeTakenSeconds INT NOT NULL DEFAULT 0,
+      status ENUM('in_progress', 'submitted', 'timed_out', 'abandoned') NOT NULL DEFAULT 'in_progress',
+      questionOrder JSON NULL,
+      answers JSON NULL,
+      score INT NULL,
+      totalPoints INT NULL,
+      percentage DECIMAL(5,2) NULL,
+      passed BOOLEAN NULL,
+      correctCount INT NOT NULL DEFAULT 0,
+      incorrectCount INT NOT NULL DEFAULT 0,
+      unansweredCount INT NOT NULL DEFAULT 0,
+      createdAt VARCHAR(50) NOT NULL,
+      updatedAt VARCHAR(50) NOT NULL,
+      deletedAt VARCHAR(50) NULL,
+      INDEX idx_attempts_assessment_student (assessmentId, studentId),
+      INDEX idx_attempts_status (status),
+      INDEX idx_attempts_org (organizationId),
       FOREIGN KEY (assessmentId) REFERENCES assessments(id) ON DELETE CASCADE,
       FOREIGN KEY (studentId) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -465,13 +504,105 @@ export async function initializeDatabase() {
       assignedBy VARCHAR(36) NOT NULL,
       assignedAt VARCHAR(50) NOT NULL,
       dueDate VARCHAR(50) NULL,
-      status ENUM('assigned', 'in_progress', 'completed') DEFAULT 'assigned',
+      status ENUM('assigned', 'not_started', 'in_progress', 'completed', 'expired', 'revoked') DEFAULT 'assigned',
       createdAt VARCHAR(50) NOT NULL,
       updatedAt VARCHAR(50) NOT NULL,
       FOREIGN KEY (assessmentId) REFERENCES assessments(id) ON DELETE CASCADE,
       FOREIGN KEY (studentId) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (assignedBy) REFERENCES users(id) ON DELETE RESTRICT,
       UNIQUE KEY student_assessment_uniq (assessmentId, studentId)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS \`groups\` (
+      id VARCHAR(36) PRIMARY KEY,
+      organizationId VARCHAR(36) NOT NULL DEFAULT 'org-default',
+      name VARCHAR(255) NOT NULL,
+      description TEXT NULL,
+      createdAt VARCHAR(50) NOT NULL,
+      updatedAt VARCHAR(50) NOT NULL,
+      deletedAt VARCHAR(50) NULL,
+      INDEX idx_groups_org (organizationId),
+      INDEX idx_groups_deleted (deletedAt)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS \`group_members\` (
+      id VARCHAR(36) PRIMARY KEY,
+      organizationId VARCHAR(36) NOT NULL DEFAULT 'org-default',
+      groupId VARCHAR(36) NOT NULL,
+      userId VARCHAR(36) NOT NULL,
+      addedAt VARCHAR(50) NOT NULL,
+      INDEX idx_group_members_group (groupId),
+      INDEX idx_group_members_user (userId),
+      UNIQUE KEY group_user_uniq (groupId, userId),
+      FOREIGN KEY (groupId) REFERENCES \`groups\`(id) ON DELETE CASCADE,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS \`certificate_templates\` (
+      id VARCHAR(36) PRIMARY KEY,
+      organizationId VARCHAR(36) NOT NULL DEFAULT 'org-default',
+      name VARCHAR(255) NOT NULL,
+      description TEXT NULL,
+      style ENUM('classic_gold', 'modern_emerald', 'executive_navy', 'tech_violet') NOT NULL DEFAULT 'classic_gold',
+      primaryColor VARCHAR(50) NOT NULL DEFAULT '#1e3a8a',
+      accentColor VARCHAR(50) NOT NULL DEFAULT '#d97706',
+      badgeIcon VARCHAR(50) NOT NULL DEFAULT 'award',
+      borderStyle VARCHAR(50) NOT NULL DEFAULT 'ornate',
+      defaultSignatoryName VARCHAR(255) NOT NULL DEFAULT 'Dr. M. R. Tech',
+      defaultSignatoryTitle VARCHAR(255) NOT NULL DEFAULT 'Director of Academic Affairs',
+      organizationName VARCHAR(255) NOT NULL DEFAULT 'MRTECH Learning Academy',
+      isDefault TINYINT(1) NOT NULL DEFAULT 0,
+      createdAt VARCHAR(50) NOT NULL,
+      updatedAt VARCHAR(50) NOT NULL,
+      deletedAt VARCHAR(50) NULL,
+      INDEX idx_templates_org (organizationId),
+      INDEX idx_templates_deleted (deletedAt)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS \`certificates\` (
+      id VARCHAR(36) PRIMARY KEY,
+      certificateNumber VARCHAR(100) NOT NULL,
+      verificationCode VARCHAR(64) NOT NULL,
+      organizationId VARCHAR(36) NOT NULL DEFAULT 'org-default',
+      studentId VARCHAR(36) NOT NULL,
+      studentName VARCHAR(255) NOT NULL,
+      studentEmail VARCHAR(255) NOT NULL,
+      type ENUM('course', 'learning_path') NOT NULL DEFAULT 'course',
+      courseId VARCHAR(36) NULL,
+      learningPathId VARCHAR(36) NULL,
+      title VARCHAR(255) NOT NULL,
+      certificateTitle VARCHAR(255) NOT NULL DEFAULT 'Certificate of Completion',
+      templateId VARCHAR(36) NULL,
+      templateStyle VARCHAR(50) NOT NULL DEFAULT 'classic_gold',
+      scorePercentage DECIMAL(5,2) NULL,
+      issuedAt VARCHAR(50) NOT NULL,
+      expiresAt VARCHAR(50) NULL,
+      status ENUM('active', 'revoked', 'expired') NOT NULL DEFAULT 'active',
+      signatoryName VARCHAR(255) NOT NULL DEFAULT 'Dr. M. R. Tech',
+      signatoryTitle VARCHAR(255) NOT NULL DEFAULT 'Director of Academic Affairs',
+      organizationName VARCHAR(255) NOT NULL DEFAULT 'MRTECH Learning Academy',
+      revokedAt VARCHAR(50) NULL,
+      revokedBy VARCHAR(36) NULL,
+      revocationReason TEXT NULL,
+      metadata JSON NULL,
+      createdAt VARCHAR(50) NOT NULL,
+      updatedAt VARCHAR(50) NOT NULL,
+      deletedAt VARCHAR(50) NULL,
+      INDEX idx_cert_student (studentId),
+      INDEX idx_cert_org (organizationId),
+      INDEX idx_cert_status (status),
+      INDEX idx_cert_deleted (deletedAt),
+      UNIQUE KEY uniq_cert_number (certificateNumber),
+      UNIQUE KEY uniq_cert_code (verificationCode),
+      FOREIGN KEY (studentId) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
@@ -495,7 +626,7 @@ export async function initializeDatabase() {
   await addColumnIfNotExists("courses", "shortDescription", "TEXT NULL");
   await addColumnIfNotExists("courses", "difficulty", "VARCHAR(50) NOT NULL DEFAULT 'Beginner'");
   try {
-    await pool.query("ALTER TABLE `courses` MODIFY COLUMN `status` ENUM('draft', 'published', 'rejected', 'archived') DEFAULT 'draft'");
+    await pool.query("ALTER TABLE `courses` MODIFY COLUMN `status` ENUM('draft', 'review', 'published', 'rejected', 'archived') DEFAULT 'draft'");
   } catch (err) {
     console.error("[Migration] Could not modify courses.status enum:", err);
   }
@@ -545,7 +676,34 @@ export async function initializeDatabase() {
   await addColumnIfNotExists("coding_challenges", "topicId", "VARCHAR(100) NULL");
   await addColumnIfNotExists("coding_challenges", "orderIndex", "INT NOT NULL DEFAULT 1");
 
-  console.log("MySQL tables and authoring schema configured successfully.");
+  await addColumnIfNotExists("submissions", "correctCount", "INT NOT NULL DEFAULT 0");
+  await addColumnIfNotExists("submissions", "incorrectCount", "INT NOT NULL DEFAULT 0");
+  await addColumnIfNotExists("submissions", "unansweredCount", "INT NOT NULL DEFAULT 0");
+  await addColumnIfNotExists("submissions", "percentage", "DECIMAL(5,2) NOT NULL DEFAULT 0.00");
+
+  // Create Audit Logs foundation table for enterprise security tracking
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id VARCHAR(64) PRIMARY KEY,
+      userId VARCHAR(64) NULL,
+      userEmail VARCHAR(255) NULL,
+      userRole VARCHAR(32) NULL,
+      action VARCHAR(64) NOT NULL,
+      resourceType VARCHAR(64) NOT NULL,
+      resourceId VARCHAR(64) NULL,
+      details JSON NULL,
+      ipAddress VARCHAR(64) NULL,
+      userAgent VARCHAR(255) NULL,
+      status VARCHAR(16) NOT NULL DEFAULT 'success',
+      createdAt VARCHAR(32) NOT NULL,
+      INDEX idx_audit_user (userId),
+      INDEX idx_audit_action (action),
+      INDEX idx_audit_created (createdAt)
+    )
+  `);
+
+  console.log("MySQL tables, audit logs, and authoring schema configured successfully.");
+  await runMigrations(pool);
 
   // 2. Perform Migration of Mock JSON data if tables are empty
   const [usersCountResult]: any = await pool.query("SELECT COUNT(*) as count FROM users");
@@ -555,6 +713,15 @@ export async function initializeDatabase() {
     // Migrate Users
     const jsonUsers = await loadJsonFile<any>("users.json");
     for (const u of jsonUsers) {
+      // Security: Do not seed known-password development admin in production or default setup.
+      // Administrators must be created securely via `npm run create-admin` with a strong password.
+      if (u.role === "admin" || u.email === "admin@lms.com") {
+        const isDev = process.env.NODE_ENV === "development" && process.env.SEED_DEV_ADMIN === "true";
+        if (!isDev) {
+          console.log(`Skipping default known-password admin (${u.email}). Use 'npm run create-admin' to provision administrator accounts.`);
+          continue;
+        }
+      }
       await pool.query(
         "INSERT INTO users (id, name, email, role, profilePhoto, createdAt, status, bookmarkedBlogIds, passwordHash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [u.id, u.name, u.email, u.role, u.profilePhoto || null, u.createdAt, u.status, JSON.stringify(u.bookmarkedBlogIds || []), u.passwordHash]

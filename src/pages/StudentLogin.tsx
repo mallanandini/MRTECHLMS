@@ -14,7 +14,7 @@ export function StudentLogin() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, currentUser, authToken, isAuthenticating } = useAuth();
+  const { login, studentUser, studentToken, isStudentAuthenticating } = useAuth();
 
   const [email, setEmail] = useState(() => searchParams.get("email") || "");
   const [password, setPassword] = useState("");
@@ -23,15 +23,13 @@ export function StudentLogin() {
 
   // If already authenticated as student, redirect to /student/dashboard
   useEffect(() => {
-    if (!isAuthenticating && currentUser && authToken) {
-      if (currentUser.role === UserRole.STUDENT) {
+    if (!isStudentAuthenticating && studentUser && studentToken) {
+      if (studentUser.role === UserRole.STUDENT) {
         const from = (location.state as any)?.from?.pathname || "/student/dashboard";
         navigate(from, { replace: true });
-      } else if (currentUser.role === UserRole.ADMIN) {
-        navigate("/admin/dashboard", { replace: true });
       }
     }
-  }, [currentUser, authToken, isAuthenticating, navigate, location]);
+  }, [studentUser, studentToken, isStudentAuthenticating, navigate, location]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,12 +51,6 @@ export function StudentLogin() {
     }
   };
 
-  const handleQuickFill = () => {
-    setEmail("student@lms.com");
-    setPassword("student123");
-    setErrorMsg("");
-  };
-
   return (
     <div 
       style={{ backgroundColor: "var(--theme-background)", color: "var(--theme-text)" }}
@@ -72,7 +64,7 @@ export function StudentLogin() {
         <Link to="/" className="flex items-center gap-2.5 text-xs font-semibold hover:opacity-80 transition" style={{ color: "var(--theme-text)" }}>
           <ArrowLeft className="w-4 h-4" />
           <img src="/mr-logo-icon.png" alt="MR Logo" className="w-5 h-5 object-contain" />
-          <span>Back to Portals</span>
+          <span>Back to Home</span>
         </Link>
         <ThemeQuickControls />
       </header>
@@ -103,13 +95,6 @@ export function StudentLogin() {
                 <span className="text-base">⚠️</span>
                 <div className="flex-1 leading-relaxed">
                   {errorMsg}
-                  {errorMsg.toLowerCase().includes("admin") && (
-                    <div className="mt-1.5">
-                      <Link to="/admin/login" className="underline font-bold text-rose-900 dark:text-rose-200">
-                        Go to Admin Portal Login &rarr;
-                      </Link>
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -154,8 +139,7 @@ export function StudentLogin() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                style={{ backgroundColor: "var(--theme-primary)" }}
-                className="w-full hover:opacity-90 disabled:opacity-60 text-white font-bold text-xs py-3.5 rounded-xl transition duration-150 shadow-md cursor-pointer flex items-center justify-center gap-2"
+                className="w-full btn-theme-primary hover:opacity-90 disabled:opacity-60 text-black font-bold text-xs py-3.5 rounded-xl transition duration-150 shadow-md cursor-pointer flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (
                   <span>Authenticating...</span>
@@ -168,30 +152,8 @@ export function StudentLogin() {
               </button>
             </form>
 
-            {/* Quick Fill Button */}
-            <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={handleQuickFill}
-                className="w-full p-2.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-center hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer"
-              >
-                <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 font-mono uppercase">
-                  Quick Fill Reviewer Student Credentials
-                </p>
-                <p className="text-[9px] text-slate-500 dark:text-slate-400 mt-0.5 font-mono">
-                  student@lms.com / student123
-                </p>
-              </button>
-            </div>
-
             <div className="text-center pt-2">
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                Are you an administrator?{" "}
-                <Link to="/admin/login" className="font-bold underline" style={{ color: "var(--theme-primary)" }}>
-                  Admin Portal Login &rarr;
-                </Link>
-              </p>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-3">
+              <p className="text-[11px] text-slate-400 dark:text-slate-500">
                 Student accounts are provisioned exclusively by LMS Administrators.
               </p>
             </div>

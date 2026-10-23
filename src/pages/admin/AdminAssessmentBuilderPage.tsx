@@ -4,7 +4,8 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import { ChevronRight } from "lucide-react";
 import { AssessmentBuilder } from "../../components/admin/AssessmentBuilder.js";
 import { useAuth } from "../../context/AuthContext.js";
 import { ThemeQuickControls } from "../../components/ThemeQuickControls.js";
@@ -13,6 +14,8 @@ export function AdminAssessmentBuilderPage() {
   const { assessmentId } = useParams<{ assessmentId: string }>();
   const { authToken } = useAuth();
   const navigate = useNavigate();
+  const isCreateParam = assessmentId === "new" || !assessmentId;
+  const [isCreate] = useState(isCreateParam);
   const [activeId, setActiveId] = useState<string | null>(assessmentId && assessmentId !== "new" ? assessmentId : null);
   const [creating, setCreating] = useState(assessmentId === "new" || !assessmentId);
   const hasCreatedRef = React.useRef(false);
@@ -71,13 +74,37 @@ export function AdminAssessmentBuilderPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-7 xl:p-8 space-y-6 max-w-[1440px] w-full min-w-0 font-sans">
-      <div className="flex justify-end mb-2">
-        <ThemeQuickControls onOpenPreferences={() => navigate("/admin/profile")} />
+      {/* Breadcrumb Navigation & Top bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
+          <Link 
+            to="/admin/dashboard" 
+            className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+          >
+            Admin
+          </Link>
+          <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+          <Link 
+            to="/admin/assessments" 
+            className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+          >
+            Assessments
+          </Link>
+          <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+          <span className="text-slate-900 dark:text-white font-semibold" aria-current="page">
+            {isCreate ? "Create Assessment" : "Edit Assessment"}
+          </span>
+        </nav>
+
+        <div className="flex justify-end">
+          <ThemeQuickControls onOpenPreferences={() => navigate("/admin/profile")} />
+        </div>
       </div>
 
       <AssessmentBuilder
         assessmentId={activeId}
         authToken={authToken}
+        isCreate={isCreate}
         onBack={() => navigate("/admin/assessments")}
         onSaved={() => {}}
       />

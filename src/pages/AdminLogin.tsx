@@ -14,7 +14,7 @@ export function AdminLogin() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, currentUser, authToken, isAuthenticating } = useAuth();
+  const { login, adminUser, adminToken, isAdminAuthenticating } = useAuth();
 
   const [email, setEmail] = useState(() => searchParams.get("email") || "");
   const [password, setPassword] = useState("");
@@ -23,15 +23,15 @@ export function AdminLogin() {
 
   // If already authenticated as admin, redirect to /admin/dashboard
   useEffect(() => {
-    if (!isAuthenticating && currentUser && authToken) {
-      if (currentUser.role === UserRole.ADMIN) {
+    if (!isAdminAuthenticating && adminUser && adminToken) {
+      if (adminUser.role === UserRole.ADMIN || adminUser.role === UserRole.SUPER_ADMIN) {
         const from = (location.state as any)?.from?.pathname || "/admin/dashboard";
         navigate(from, { replace: true });
-      } else if (currentUser.role === UserRole.STUDENT) {
-        navigate("/student/dashboard", { replace: true });
+      } else if (adminUser.role === UserRole.MANAGER) {
+        navigate("/manager/team", { replace: true });
       }
     }
-  }, [currentUser, authToken, isAuthenticating, navigate, location]);
+  }, [adminUser, adminToken, isAdminAuthenticating, navigate, location]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,17 +46,15 @@ export function AdminLogin() {
     setIsSubmitting(false);
 
     if (result.success && result.user) {
-      const from = (location.state as any)?.from?.pathname || "/admin/dashboard";
-      navigate(from, { replace: true });
+      if (result.user.role === UserRole.MANAGER) {
+        navigate("/manager/team", { replace: true });
+      } else {
+        const from = (location.state as any)?.from?.pathname || "/admin/dashboard";
+        navigate(from, { replace: true });
+      }
     } else {
       setErrorMsg(result.error || "Authentication failed. Please check your credentials.");
     }
-  };
-
-  const handleQuickFill = () => {
-    setEmail("admin@lms.com");
-    setPassword("admin123");
-    setErrorMsg("");
   };
 
   return (
@@ -72,7 +70,7 @@ export function AdminLogin() {
         <Link to="/" className="flex items-center gap-2.5 text-xs font-semibold hover:opacity-80 transition" style={{ color: "var(--theme-text)" }}>
           <ArrowLeft className="w-4 h-4" />
           <img src="/mr-logo-icon.png" alt="MR Logo" className="w-5 h-5 object-contain" />
-          <span>Back to Portals</span>
+          <span>Back to Home</span>
         </Link>
         <ThemeQuickControls />
       </header>
@@ -103,13 +101,6 @@ export function AdminLogin() {
                 <span className="text-base">⚠️</span>
                 <div className="flex-1 leading-relaxed">
                   {errorMsg}
-                  {errorMsg.toLowerCase().includes("student") && (
-                    <div className="mt-1.5">
-                      <Link to="/student/login" className="underline font-bold text-rose-900 dark:text-rose-200">
-                        Go to Student Portal Login &rarr;
-                      </Link>
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -166,37 +157,6 @@ export function AdminLogin() {
                 )}
               </button>
             </form>
-
-            {/* Quick Fill Button */}
-            <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={handleQuickFill}
-                className="w-full p-2.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-center hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer"
-              >
-                <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 font-mono uppercase">
-                  Quick Fill Reviewer Admin Credentials
-                </p>
-                <p className="text-[9px] text-slate-500 dark:text-slate-400 mt-0.5 font-mono">
-                  admin@lms.com / admin123
-                </p>
-              </button>
-            </div>
-
-            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2 text-center">
-              <Link
-                to="/admin/register"
-                className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 hover:text-amber-600 dark:hover:text-amber-400 transition"
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                <span>Create New Administrator Account &rarr;</span>
-              </Link>
-              <div>
-                <Link to="/student/login" className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition">
-                  Switch to Student Portal &rarr;
-                </Link>
-              </div>
-            </div>
           </div>
         </div>
       </main>

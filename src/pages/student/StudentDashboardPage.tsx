@@ -7,11 +7,14 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { StudentDashboard } from "../../components/StudentDashboard.js";
 import { useAuth } from "../../context/AuthContext.js";
+import { useToast } from "../../context/NotificationContext.js";
 import { Course } from "../../types.js";
 import { ThemeQuickControls } from "../../components/ThemeQuickControls.js";
+import { NotificationBell } from "../../components/NotificationBell.js";
 
 export function StudentDashboardPage() {
   const { currentUser, authToken } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
 
   const [catalogCourses, setCatalogCourses] = useState<Course[]>([]);
@@ -37,7 +40,7 @@ export function StudentDashboardPage() {
       if (statsRes.ok) {
         const stats = await statsRes.json();
         setMyDashboardStats(stats);
-        const enrolledIds = stats.courseProgress?.map((c: any) => c.courseId) || [];
+        const enrolledIds = stats.assignedCourses?.map((c: any) => c.courseId) || stats.courseProgress?.map((c: any) => c.courseId) || [];
         setEnrolledCourseIds(enrolledIds);
       }
     } catch (e) {
@@ -54,7 +57,7 @@ export function StudentDashboardPage() {
   if (!currentUser || !authToken) return null;
 
   return (
-    <div className="p-4 sm:p-6 lg:p-7 xl:p-8 space-y-6 lg:space-y-8 max-w-[1440px] w-full min-w-0 font-sans">
+    <div className="p-4 sm:p-6 lg:p-7 space-y-6 w-full max-w-[1600px] mx-auto min-w-0 font-sans pb-16">
       {/* Header banner */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200/60 pb-5 min-w-0">
         <div className="min-w-0 flex-1">
@@ -66,7 +69,8 @@ export function StudentDashboardPage() {
           </p>
         </div>
 
-        <div className="hidden lg:flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
+          <NotificationBell />
           <ThemeQuickControls onOpenPreferences={() => navigate("/student/profile")} />
         </div>
       </div>
@@ -78,10 +82,12 @@ export function StudentDashboardPage() {
         catalogCourses={catalogCourses}
         enrolledCourseIds={enrolledCourseIds}
         onResumeCourse={(courseId) => navigate(`/student/course/${courseId}`)}
+        onResumeLearningPath={(pathId) => navigate(`/student/learning-path/${pathId}`)}
         onStartAssessment={(assessmentId) => navigate(`/student/assessment/${assessmentId}`)}
-        onEnrollCourse={() => alert("Self-enrollment is disabled. Course access is assigned by your LMS Administrator.")}
+        onEnrollCourse={() => toast.info("Self-enrollment is disabled. Course access is assigned by your LMS Administrator.")}
         onNavigate={(tab) => {
           if (tab === "courses") navigate("/student/courses");
+          else if (tab === "learning-paths") navigate("/student/learning-paths");
           else if (tab === "practice") navigate("/student/coding-practice");
           else if (tab === "assessments") navigate("/student/assessments");
           else if (tab === "blogs") navigate("/student/blogs");
