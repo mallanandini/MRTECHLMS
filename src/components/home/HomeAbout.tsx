@@ -15,7 +15,7 @@ export function HomeAbout() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-14 sm:mb-18">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 text-xs font-bold uppercase tracking-wider mb-3">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-700/60 text-emerald-800 dark:text-emerald-200 text-xs font-bold uppercase tracking-wider mb-3">
             <Building2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
             <span>The MR Technologies Ecosystem</span>
           </div>
@@ -39,7 +39,7 @@ export function HomeAbout() {
                 <h3 className="text-xl font-bold text-slate-950 dark:text-[#F1F5F9]">
                   MR Technologies
                 </h3>
-                <span className="text-[10px] font-mono uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
+                <span className="text-[10px] font-mono uppercase font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-700/60">
                   Parent Ecosystem
                 </span>
               </div>
@@ -84,7 +84,7 @@ export function HomeAbout() {
                 <h3 className="text-xl font-bold text-slate-950 dark:text-[#F1F5F9]">
                   Medha XL
                 </h3>
-                <span className="text-[10px] font-mono uppercase font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60">
+                <span className="text-[10px] font-mono uppercase font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-700/60">
                   Training Engine
                 </span>
               </div>
@@ -108,8 +108,9 @@ export function HomeAbout() {
               </ul>
             </div>
 
-            <div className="p-3 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 text-center">
-              <span className="text-[11px] font-semibold text-indigo-700 dark:text-indigo-300">
+            <div className="py-2.5 px-3.5 rounded-xl bg-slate-50 dark:bg-[#0B1120] border border-slate-200 dark:border-[#263449] text-center flex items-center justify-center gap-2 shadow-2xs">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
                 Powers all hands-on technical curriculum in MRTECHLMS
               </span>
             </div>
@@ -125,7 +126,7 @@ export function HomeAbout() {
                 <h3 className="text-xl font-bold text-slate-950 dark:text-[#F1F5F9]">
                   RUBIKS
                 </h3>
-                <span className="text-[10px] font-mono uppercase font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60">
+                <span className="text-[10px] font-mono uppercase font-bold px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-700/60">
                   Hiring & Staffing
                 </span>
               </div>

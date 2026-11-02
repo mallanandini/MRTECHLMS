@@ -7,8 +7,9 @@ import express from "express";
 import jwt from "jsonwebtoken";
 import { usersDb } from "../db.js";
 import { UserRole } from "../../src/types.js";
+import { getJwtSecret } from "../jwt-secret.js";
 
-export const JWT_SECRET = process.env.JWT_SECRET || "mrtechlms-prod-jwt-secret-key-32chars-minimum!";
+export const JWT_SECRET = getJwtSecret();
 
 // Extend Express Request interface to include user and tenant
 declare global {
@@ -38,7 +39,7 @@ export async function authenticateToken(req: express.Request, res: express.Respo
 
   try {
     // Explicitly enforce HS256 to reject alg:none, malformed, and tampered tokens
-    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] }) as any;
+    const decoded = jwt.verify(token, getJwtSecret(), { algorithms: ["HS256"] }) as any;
     const userId = decoded.userId || decoded.sub;
 
     if (!userId) {

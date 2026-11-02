@@ -145,7 +145,7 @@ export function AdminLogin() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full bg-slate-900 hover:bg-slate-800 dark:bg-amber-600 dark:hover:bg-amber-500 disabled:opacity-60 text-white font-bold text-xs py-3.5 rounded-xl transition duration-150 shadow-md cursor-pointer flex items-center justify-center gap-2"
+                className="w-full bg-slate-900 hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 text-white font-bold text-xs py-3.5 rounded-xl transition duration-150 shadow-md cursor-pointer flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (
                   <span>Verifying Credentials...</span>

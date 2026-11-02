@@ -474,10 +474,15 @@ export class BatchService {
       throw new Error("Batch name is required.");
     }
 
-    const academicYear = (data.academicYear || data.year || "2026").trim();
-    if (!academicYear) {
-      throw new Error("Academic year is required.");
+    const rawYear = (data.academicYear || data.year || "2026").trim();
+    if (!rawYear) {
+      throw new Error("Batch year (academicYear) is required.");
     }
+    const yearPattern = /^\d{4}(-\d{4})?$/;
+    if (!yearPattern.test(rawYear)) {
+      throw new Error(`Invalid batch year format '${rawYear}'. Please specify a 4-digit year (e.g. 2026) or year span (e.g. 2026-2027).`);
+    }
+    const academicYear = rawYear;
 
     // Resolve institution
     let institutionId = data.institutionId;
@@ -497,6 +502,15 @@ export class BatchService {
     const inst = await institutionsDb.findOne({ id: institutionId, deletedAt: null as any });
     if (!inst) {
       throw new Error("Institution not found.");
+    }
+
+    // Check duplicate batch name + year within this institution / organization
+    const [dupBatchRows]: any = await pool.query(
+      "SELECT id, name, code, academicYear FROM batches WHERE institutionId = ? AND UPPER(name) = UPPER(?) AND academicYear = ? AND deletedAt IS NULL LIMIT 1",
+      [institutionId, name, academicYear]
+    );
+    if (dupBatchRows.length > 0) {
+      throw new Error(`A batch named '${name}' for academic year '${academicYear}' already exists in this institution (Code: ${dupBatchRows[0].code}).`);
     }
 
     // Auto-generate unique batch code if not provided
@@ -643,6 +657,16 @@ export class BatchService {
       throw new Error("Batch not found.");
     }
 
+    // Safety check: Prevent deletion of batch with active student memberships
+    const [activeMembers]: any = await pool.query(
+      "SELECT COUNT(*) AS cnt FROM batch_students WHERE batchId = ? AND status = 'active'",
+      [id]
+    );
+    const memberCount = Number(activeMembers[0]?.cnt) || 0;
+    if (memberCount > 0) {
+      throw new Error(`Cannot delete batch '${existing.name}' because it contains ${memberCount} active enrolled member(s). Please reassign or remove all members first.`);
+    }
+
     const now = new Date().toISOString();
     await batchesDb.update(id, {
       deletedAt: now,
@@ -737,8 +761,8 @@ export class BatchService {
       throw new Error("Batch not found.");
     }
 
-    if (batch.status === "archived") {
-      throw new Error("Cannot add students to an archived batch.");
+    if (batch.status !== "active") {
+      throw new Error(`Cannot add members to batch '${batch.name}' because its status is '${batch.status}'. Only active batches allow membership.`);
     }
 
     // Check capacity if maxStudents is set
@@ -885,10 +909,29 @@ export class BatchService {
    * Only revokes course enrollment if the student has NO other active batch granting that course,
    * AND does not possess an individual direct enrollment grant.
    */
-  static async removeStudentFromBatch(batchId: string, studentId: string, actor: ActorContext): Promise<void> {
+  static async removeStudentFromBatch(
+    batchId: string, 
+    studentId: string, 
+    actor: ActorContext,
+    options: { allowLastBatch?: boolean } = {}
+  ): Promise<void> {
     const membership = await batchStudentsDb.findOne({ batchId, studentId });
     if (!membership) {
       return; // Already not a member
+    }
+
+    // Safety check: Prevent removal of the user's last remaining batch membership
+    if (!options.allowLastBatch) {
+      const [activeBatchRows]: any = await pool.query(`
+        SELECT COUNT(*) AS cnt 
+        FROM batch_students bs
+        JOIN batches b ON bs.batchId = b.id AND b.deletedAt IS NULL
+        WHERE bs.studentId = ? AND bs.status = 'active'
+      `, [studentId]);
+      const activeCount = Number(activeBatchRows[0]?.cnt) || 0;
+      if (activeCount <= 1) {
+        throw new Error("Cannot remove the user's last remaining batch membership. Every user must belong to at least one active batch. Please assign another batch first before removing this one, or suspend the user account.");
+      }
     }
 
     const batch = await batchesDb.findOne({ id: batchId });
@@ -954,6 +997,131 @@ export class BatchService {
       resourceId: batchId,
       details: { studentId, batchName: batch?.name }
     });
+  }
+
+  /**
+   * Get all active batches assigned to a specific user with full details.
+   */
+  static async getUserBatches(userId: string): Promise<any[]> {
+    const [rows]: any = await pool.query(`
+      SELECT 
+        b.id,
+        b.id as batchId,
+        b.name,
+        b.name as batchName,
+        b.code,
+        b.code as batchCode,
+        b.academicYear,
+        b.description,
+        b.status as batchStatus,
+        b.institutionId,
+        i.name as institutionName,
+        i.code as institutionCode,
+        bs.id as membershipId,
+        bs.status as membershipStatus,
+        bs.enrolledAt,
+        bs.createdAt as membershipCreatedAt
+      FROM batch_students bs
+      JOIN batches b ON bs.batchId = b.id AND b.deletedAt IS NULL
+      LEFT JOIN institutions i ON b.institutionId = i.id
+      WHERE bs.studentId = ? AND bs.status = 'active'
+      ORDER BY b.academicYear DESC, b.name ASC
+    `, [userId]);
+
+    return rows;
+  }
+
+  /**
+   * Replace or synchronize a user's batch memberships.
+   * Ensures the user always retains at least one valid batch membership.
+   */
+  static async replaceUserBatches(userId: string, newBatchIds: string[], actor: ActorContext): Promise<any[]> {
+    if (!Array.isArray(newBatchIds) || newBatchIds.length === 0) {
+      throw new Error("At least one batch must be selected. Batch membership is mandatory for every user.");
+    }
+
+    const uniqueBatchIds = Array.from(new Set(newBatchIds.filter(Boolean)));
+    if (uniqueBatchIds.length === 0) {
+      throw new Error("At least one valid batch must be selected.");
+    }
+
+    // Verify all requested batches exist and are active
+    const [validBatches]: any = await pool.query(`
+      SELECT id, name, code, academicYear, status 
+      FROM batches 
+      WHERE id IN (${uniqueBatchIds.map(() => "?").join(",")}) AND deletedAt IS NULL
+    `, uniqueBatchIds);
+
+    if (validBatches.length !== uniqueBatchIds.length) {
+      const foundIds = new Set(validBatches.map((b: any) => b.id));
+      const missing = uniqueBatchIds.filter(id => !foundIds.has(id));
+      throw new Error(`Batch ID(s) not found or deleted: ${missing.join(", ")}`);
+    }
+
+    for (const b of validBatches) {
+      if (b.status !== "active") {
+        throw new Error(`Cannot assign inactive batch '${b.name}' (${b.code}). Only active batches are permitted.`);
+      }
+    }
+
+    // Verify target user exists
+    const user = await usersDb.findOne({ id: userId, deletedAt: null as any });
+    if (!user) {
+      throw new Error("User not found.");
+    }
+
+    // Current active batches
+    const currentBatches = await this.getUserBatches(userId);
+    const currentBatchIds = new Set(currentBatches.map((b: any) => b.id));
+    const targetBatchIds = new Set(uniqueBatchIds);
+
+    const toRemove = currentBatches.filter((b: any) => !targetBatchIds.has(b.id));
+    const toAdd = uniqueBatchIds.filter(id => !currentBatchIds.has(id));
+
+    // Add new batch memberships first
+    for (const bId of toAdd) {
+      await this.addStudentToBatch(bId, userId, actor);
+    }
+
+    // Remove old memberships (allowLastBatch is permitted since we ensured >= 1 target batch exists)
+    for (const b of toRemove) {
+      await this.removeStudentFromBatch(b.id, userId, actor, { allowLastBatch: true });
+    }
+
+    await logAuditEvent({
+      userId: actor.id,
+      userEmail: actor.email,
+      action: "USER_BATCHES_REPLACED",
+      resourceType: "users",
+      resourceId: userId,
+      details: {
+        userEmail: user.email,
+        previousBatches: Array.from(currentBatchIds),
+        newBatches: uniqueBatchIds
+      }
+    });
+
+    return this.getUserBatches(userId);
+  }
+
+  /**
+   * Explicit Move Operation: Move user from one batch to another.
+   */
+  static async moveUserBatch(userId: string, fromBatchId: string, toBatchId: string, actor: ActorContext): Promise<any[]> {
+    if (!fromBatchId || !toBatchId) {
+      throw new Error("Both source batch and destination batch must be specified.");
+    }
+    if (fromBatchId === toBatchId) {
+      throw new Error("Source batch and destination batch cannot be identical.");
+    }
+
+    // Enroll in destination first
+    await this.addStudentToBatch(toBatchId, userId, actor);
+
+    // Remove from source batch
+    await this.removeStudentFromBatch(fromBatchId, userId, actor, { allowLastBatch: false });
+
+    return this.getUserBatches(userId);
   }
 
   /**
@@ -1432,7 +1600,7 @@ export class BatchService {
   // 5. HELPER: SYNC STUDENT BATCH COURSE ACCESS
   // =========================================================================
 
-  private static async syncStudentBatchCourseAccess(studentId: string, batchId: string, actor: ActorContext): Promise<void> {
+  public static async syncStudentBatchCourseAccess(studentId: string, batchId: string, actor: ActorContext): Promise<void> {
     const batch = await batchesDb.findOne({ id: batchId });
     if (!batch) return;
 

@@ -7,7 +7,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, useSearchParams, Link } from "react-router-dom";
 import { 
   ShieldCheck, ShieldAlert, Award, Calendar, CheckCircle2, 
-  Download, Copy, Check, ArrowLeft, Search, Building2, User, ExternalLink, AlertTriangle
+  Download, Copy, Check, ArrowLeft, Search, Building2, User, ExternalLink, AlertTriangle, Printer
 } from "lucide-react";
 import { PublicCertificateVerification } from "../types.js";
 
@@ -206,7 +206,15 @@ export function PublicCertificateVerificationPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2.5 no-print">
+                    <button
+                      onClick={() => window.print()}
+                      className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-700/80 hover:bg-slate-700 text-slate-100 text-xs font-semibold border border-slate-600 transition cursor-pointer shadow-xs"
+                      title="Print Certificate"
+                    >
+                      <Printer className="w-4 h-4 text-amber-400" />
+                      <span>Print</span>
+                    </button>
                     <button
                       onClick={downloadVerifiedPdf}
                       disabled={downloading}
@@ -226,74 +234,87 @@ export function PublicCertificateVerificationPage() {
                   </div>
                 </div>
 
-                {/* Certificate Details Card Preview */}
-                <div className="mt-8 bg-slate-900/90 border-2 border-amber-500/30 rounded-2xl p-6 sm:p-10 relative">
+                {/* DEDICATED INDEPENDENT CERTIFICATE DOCUMENT SURFACE */}
+                {/* Preserved crisp white canvas with dark, high-contrast typography regardless of surrounding portal theme */}
+                <div 
+                  className="certificate-document-surface mt-8 bg-white text-slate-900 rounded-2xl p-6 sm:p-12 relative shadow-2xl overflow-hidden select-text"
+                  style={{
+                    border: "6px double #b45309",
+                    backgroundColor: "#ffffff",
+                    color: "#0f172a"
+                  }}
+                >
                   {/* Ornate corner accents */}
-                  <div className="absolute top-2 left-2 w-6 h-6 border-t-2 border-l-2 border-amber-500/40" />
-                  <div className="absolute top-2 right-2 w-6 h-6 border-t-2 border-r-2 border-amber-500/40" />
-                  <div className="absolute bottom-2 left-2 w-6 h-6 border-b-2 border-l-2 border-amber-500/40" />
-                  <div className="absolute bottom-2 right-2 w-6 h-6 border-b-2 border-r-2 border-amber-500/40" />
+                  <div className="absolute top-2 left-2 w-8 h-8 border-t-2 border-l-2 border-amber-600" />
+                  <div className="absolute top-2 right-2 w-8 h-8 border-t-2 border-r-2 border-amber-600" />
+                  <div className="absolute bottom-2 left-2 w-8 h-8 border-b-2 border-l-2 border-amber-600" />
+                  <div className="absolute bottom-2 right-2 w-8 h-8 border-b-2 border-r-2 border-amber-600" />
 
-                  <div className="text-center space-y-4">
-                    <div className="text-xs font-mono uppercase tracking-widest text-amber-400">
+                  <div className="text-center space-y-4 relative z-10">
+                    <div className="text-xs sm:text-sm font-mono uppercase tracking-widest font-bold text-amber-700">
                       {result.verification.organizationName || "MRTECH LEARNING ACADEMY"}
                     </div>
 
-                    <p className="text-xs italic text-slate-400">
+                    <h2 className="text-2xl sm:text-4xl font-serif font-black tracking-wide uppercase text-amber-900">
+                      {result.verification.certificateTitle || "CERTIFICATE OF ACHIEVEMENT"}
+                    </h2>
+
+                    <p className="text-xs sm:text-sm italic text-slate-600 font-serif">
                       This official credential is hereby verified as awarded to
                     </p>
 
-                    <h3 className="text-2xl sm:text-3xl font-serif font-bold text-white tracking-wide">
-                      {result.verification.recipientName}
-                    </h3>
+                    <div className="py-2">
+                      <h3 className="text-3xl sm:text-4xl font-serif font-bold text-slate-950 tracking-tight">
+                        {result.verification.recipientName}
+                      </h3>
+                      <div className="w-48 sm:w-64 h-1 bg-amber-600 mx-auto mt-2 rounded-full" />
+                    </div>
 
-                    <div className="w-48 h-0.5 bg-gradient-to-r from-transparent via-amber-500 to-transparent mx-auto" />
-
-                    <p className="text-xs text-slate-300 max-w-md mx-auto">
-                      for successfully fulfilling all curricular standards and demonstrating mastery in
+                    <p className="text-xs sm:text-sm text-slate-700 max-w-xl mx-auto leading-relaxed">
+                      for successfully fulfilling all curricular standards and demonstrating verified mastery in
                     </p>
 
-                    <div className="text-lg sm:text-xl font-bold text-amber-200">
+                    <div className="text-xl sm:text-2xl font-bold text-slate-950 px-4 py-1">
                       {result.verification.title}
                     </div>
 
                     {/* Metadata Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-6 mt-6 border-t border-slate-800 text-left">
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 block">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-6 mt-6 border-t-2 border-slate-200 text-left">
+                      <div className="space-y-1 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-slate-600 font-bold block">
                           Certificate ID
                         </span>
-                        <span className="text-xs font-mono font-bold text-slate-200 block">
+                        <span className="text-xs font-mono font-bold text-slate-950 block">
                           {result.verification.certificateNumber}
                         </span>
                       </div>
 
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 block">
+                      <div className="space-y-1 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-slate-600 font-bold block">
                           Date of Issuance
                         </span>
-                        <span className="text-xs font-semibold text-slate-200 block">
+                        <span className="text-xs font-semibold text-slate-950 block">
                           {new Date(result.verification.issuedAt).toLocaleDateString("en-US", {
                             year: "numeric",
                             month: "long",
                             day: "numeric"
                           })}
                         </span>
-                        <span className="text-[10px] text-slate-400 block">
+                        <span className="text-[10px] text-slate-600 block">
                           Validity: {result.verification.expiresAt 
                             ? new Date(result.verification.expiresAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
                             : "Lifetime"}
                         </span>
                       </div>
 
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 block">
+                      <div className="space-y-1 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-slate-600 font-bold block">
                           Authenticated Signatory
                         </span>
-                        <span className="text-xs font-serif font-bold text-slate-200 block">
+                        <span className="text-xs font-serif font-bold text-slate-950 block">
                           {result.verification.signatoryName}
                         </span>
-                        <span className="text-[10px] text-slate-400 block">
+                        <span className="text-[10px] text-slate-600 block">
                           {result.verification.signatoryTitle}
                         </span>
                       </div>
@@ -302,7 +323,7 @@ export function PublicCertificateVerificationPage() {
                 </div>
 
                 {/* Privacy Guarantee Note */}
-                <div className="mt-6 flex items-start gap-3 bg-slate-900/50 rounded-xl p-4 border border-slate-800 text-xs text-slate-400">
+                <div className="mt-6 flex items-start gap-3 bg-slate-900/50 rounded-xl p-4 border border-slate-800 text-xs text-slate-400 no-print">
                   <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
                   <div>
                     <span className="font-semibold text-slate-300 block mb-0.5">Privacy Protected Verification</span>

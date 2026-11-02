@@ -43,21 +43,22 @@ export function CompanyHomePage() {
     return (
       <aside 
         aria-label="Active session"
-        className="bg-emerald-700 dark:bg-[#111C30] text-white text-xs px-4 py-2 border-b border-emerald-800 dark:border-[#263449] shadow-xs"
+        className="bg-slate-900 text-slate-300 dark:bg-slate-950 dark:text-slate-400 text-xs px-4 sm:px-6 lg:px-8 py-1.5 border-b border-slate-800 shadow-2xs"
       >
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <UserCheck className="w-4 h-4 text-emerald-200" />
-            <span>
-              Signed in as <strong>{currentUser.name}</strong> ({currentUser.email})
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+            <span className="truncate text-[11px] sm:text-xs">
+              Signed in as <strong className="text-white font-semibold">{currentUser.name}</strong>
+              <span className="hidden sm:inline text-slate-400 font-mono ml-1.5">({currentUser.email})</span>
             </span>
           </div>
 
           <Link
             to="/student/dashboard"
-            className="inline-flex items-center gap-1.5 font-bold hover:underline bg-emerald-800 dark:bg-emerald-600 px-3 py-1 rounded-lg text-white transition cursor-pointer"
+            className="shrink-0 inline-flex items-center gap-1.5 font-semibold text-emerald-400 hover:text-emerald-300 text-[11px] sm:text-xs transition-colors cursor-pointer"
           >
-            <span>Continue to Student Dashboard</span>
+            <span>Student Dashboard</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         </div>

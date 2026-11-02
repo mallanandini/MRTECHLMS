@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { Menu, Sparkles } from "lucide-react";
 import { Sidebar } from "../components/Sidebar.js";
 import { ThemeQuickControls } from "../components/ThemeQuickControls.js";
@@ -18,8 +18,25 @@ export function StudentLayout() {
   const { startTour } = useTour();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   if (!studentUser) return null;
+
+  // Dedicated Full-Screen Exam Mode: Hide student sidebar, dashboard navigation, search, and portal controls
+  const isDedicatedExamView = location.pathname.startsWith("/student/assessment/");
+
+  if (isDedicatedExamView) {
+    return (
+      <div 
+        style={{ backgroundColor: "var(--theme-background)", color: "var(--theme-text)" }}
+        className="min-h-screen w-full flex flex-col select-text transition-colors duration-200 overflow-hidden"
+      >
+        <main className="flex-1 min-w-0 h-screen w-full flex flex-col overflow-hidden">
+          <Outlet />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div 

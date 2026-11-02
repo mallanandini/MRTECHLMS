@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { 
   Award, ShieldAlert, ShieldCheck, Download, Search, Filter, 
   RotateCcw, AlertTriangle, Eye, CheckCircle2, Clock, 
@@ -11,9 +12,11 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.js";
 import { Certificate, CertificateTemplate } from "../../types.js";
+import { ThemeQuickControls } from "../../components/ThemeQuickControls.js";
 
 export function AdminCertificatesPage() {
   const { authToken } = useAuth();
+  const navigate = useNavigate();
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [stats, setStats] = useState({
@@ -233,6 +236,7 @@ export function AdminCertificatesPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 shrink-0">
+          <ThemeQuickControls onOpenPreferences={() => navigate("/admin/profile")} />
           <button
             type="button"
             onClick={() => setShowTemplatesModal(true)}

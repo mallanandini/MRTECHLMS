@@ -61,7 +61,9 @@ export function AssessmentBuilder({
   const [excelFile, setExcelFile] = useState<File | null>(null);
   const [excelRows, setExcelRows] = useState<any[]>([]);
   const [excelImportLoading, setExcelImportLoading] = useState(false);
+  const [excelPreviewResult, setExcelPreviewResult] = useState<any | null>(null);
   const [excelValidationResult, setExcelValidationResult] = useState<any | null>(null);
+  const [excelError, setExcelError] = useState<string | null>(null);
 
   // Question bank state
   const [bankQuestions, setBankQuestions] = useState<any[]>([]);
@@ -219,20 +221,25 @@ export function AssessmentBuilder({
       return;
     }
 
-    const cleanOptions = qFormOptions.map(o => o.trim());
-    if (cleanOptions.length !== 5 || cleanOptions.some(o => o.length === 0)) {
-      setQuestionModalError("All 5 options (Option 1 through Option 5) are required for MCQ questions");
+    const cleanOptions = qFormOptions.map(o => o.trim()).filter(Boolean);
+    if (cleanOptions.length < 2) {
+      setQuestionModalError("At least 2 non-empty options are required for MCQ questions");
+      return;
+    }
+    const lowerOpts = cleanOptions.map(o => o.toLowerCase());
+    if (new Set(lowerOpts).size !== cleanOptions.length) {
+      setQuestionModalError("Each option must have distinct text");
       return;
     }
 
-    if (qFormCorrect < 0 || qFormCorrect >= 5) {
-      setQuestionModalError("Please select exactly one correct option (positions 1 to 5)");
+    if (qFormCorrect < 0 || qFormCorrect >= qFormOptions.length) {
+      setQuestionModalError("Please select a valid correct option");
       return;
     }
 
-    const correctText = cleanOptions[qFormCorrect];
-    if (!correctText) {
-      setQuestionModalError("The chosen correct option cannot be empty");
+    const correctText = qFormOptions[qFormCorrect]?.trim();
+    if (!correctText || !cleanOptions.includes(correctText)) {
+      setQuestionModalError("The chosen correct option cannot be empty and must match one of the non-empty options");
       return;
     }
 
@@ -385,25 +392,199 @@ export function AssessmentBuilder({
     }
   };
 
-  // Excel file selection & client-side preview
+  // Excel template generator & download
+  const handleDownloadTemplate = () => {
+    try {
+      setExcelError(null);
+      const headers = [
+        "Question",
+        "Option 1",
+        "Option 2",
+        "Option 3",
+        "Option 4",
+        "Option 5",
+        "Correct Option",
+        "Points",
+        "Difficulty",
+        "Explanation"
+      ];
+
+      // Sheet 1: Questions (clean headers ready for data entry)
+      const questionsWs = XLSX.utils.aoa_to_sheet([headers]);
+      questionsWs["!cols"] = [
+        { wch: 45 }, // Question
+        { wch: 25 }, // Option 1
+        { wch: 25 }, // Option 2
+        { wch: 25 }, // Option 3
+        { wch: 25 }, // Option 4
+        { wch: 20 }, // Option 5
+        { wch: 18 }, // Correct Option
+        { wch: 10 }, // Points
+        { wch: 14 }, // Difficulty
+        { wch: 45 }  // Explanation
+      ];
+
+      // Sheet 2: Instructions & Guidelines with documentation and examples
+      const instructions = [
+        ["Assessment Question Import Template - Instructions & Guidelines"],
+        [""],
+        ["Column Name", "Required", "Allowed Format / Values", "Default Value", "Description"],
+        ["Question", "Yes", "Non-empty text string", "-", "The full prompt / text of the MCQ question."],
+        ["Option 1", "Yes", "Non-empty text string", "-", "First multiple choice option."],
+        ["Option 2", "Yes", "Non-empty text string", "-", "Second multiple choice option."],
+        ["Option 3", "No", "Text string", "(empty)", "Third multiple choice option (optional)."],
+        ["Option 4", "No", "Text string", "(empty)", "Fourth multiple choice option (optional)."],
+        ["Option 5", "No", "Text string", "(empty)", "Fifth multiple choice option (optional)."],
+        ["Correct Option", "Yes", "'Option 1' - 'Option 5', or '1' - '5', or exact option text", "-", "Specifies which option is correct."],
+        ["Points", "No", "Positive integer (e.g. 10)", "10", "Score awarded for answering this question correctly."],
+        ["Difficulty", "No", "'easy', 'medium', or 'hard'", "medium", "Question difficulty tier."],
+        ["Explanation", "No", "Text string", "(empty)", "Rationale or feedback shown to students during review."],
+        [""],
+        ["Format Notes:"],
+        ["1. At least 2 options (Option 1 and Option 2) are required for every question."],
+        ["2. The 'Correct Option' can be specified as 'Option 1', 'Option 2', '1', '2', or the exact matching text of the option."],
+        ["3. Example rows starting with '[EXAMPLE]' are ignored by the importer and will not be added as real questions."],
+        [""],
+        ["Example Question Rows (Reference):"],
+        ["Question", "Option 1", "Option 2", "Option 3", "Option 4", "Option 5", "Correct Option", "Points", "Difficulty", "Explanation"],
+        ["What does CPU stand for in computer systems?", "Central Processing Unit", "Central Performance Unit", "Computer Personal Unit", "Control Processing User", "", "Option 1", 10, "easy", "CPU stands for Central Processing Unit and executes instructions."],
+        ["Which data structure operates on a Last In First Out (LIFO) basis?", "Queue", "Stack", "Array", "Linked List", "", "Option 2", 10, "medium", "A Stack works on the LIFO principle where the newest element is removed first."]
+      ];
+
+      const instructionsWs = XLSX.utils.aoa_to_sheet(instructions);
+      instructionsWs["!cols"] = [
+        { wch: 18 },
+        { wch: 12 },
+        { wch: 45 },
+        { wch: 15 },
+        { wch: 55 }
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, questionsWs, "Questions");
+      XLSX.utils.book_append_sheet(wb, instructionsWs, "Instructions");
+
+      const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "assessment_questions_template.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch (e) {}
+      }, 2000);
+    } catch (err: any) {
+      console.error("Error generating assessment template:", err);
+      setExcelError("Failed to generate Excel template. Please try again.");
+    }
+  };
+
+  // Reset Excel modal state
+  const handleResetExcelModal = () => {
+    setExcelFile(null);
+    setExcelRows([]);
+    setExcelPreviewResult(null);
+    setExcelValidationResult(null);
+    setExcelError(null);
+  };
+
+  // Fetch validation preview without modifying database
+  const fetchPreview = async (rows: any[]) => {
+    try {
+      setExcelImportLoading(true);
+      setExcelPreviewResult(null);
+      setExcelValidationResult(null);
+      const res = await fetch(`/api/admin/assessments/${assessmentId}/import-questions?preview=true`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ rows, preview: true })
+      });
+
+      if (res.ok) {
+        const previewData = await res.json();
+        setExcelPreviewResult(previewData);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setExcelError(errData.error || `Failed to validate file: status ${res.status}`);
+        setExcelPreviewResult(null);
+      }
+    } catch (err: any) {
+      console.error("Error generating import preview:", err);
+      setExcelError("Failed to validate file: " + (err.message || "Network error"));
+    } finally {
+      setExcelImportLoading(false);
+    }
+  };
+
+  // Excel file selection & preview
   const handleExcelFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setExcelFile(file);
+    setExcelPreviewResult(null);
     setExcelValidationResult(null);
+    setExcelError(null);
+
+    // Validate file extension
+    if (!file.name.toLowerCase().endsWith(".xlsx") && !file.name.toLowerCase().endsWith(".xls")) {
+      setExcelError("Invalid file type. Please upload a valid Excel (.xlsx) file.");
+      setExcelRows([]);
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = evt => {
       try {
         const bstr = evt.target?.result;
         const wb = XLSX.read(bstr, { type: "binary" });
+        if (!wb.SheetNames || wb.SheetNames.length === 0) {
+          setExcelError("The uploaded workbook contains no sheets.");
+          setExcelRows([]);
+          return;
+        }
         const wsName = wb.SheetNames[0];
         const ws = wb.Sheets[wsName];
-        const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
+        const rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: "" });
+
+        if (rows.length === 0) {
+          setExcelError("The uploaded worksheet contains no question rows. Please enter questions under the headers.");
+          setExcelRows([]);
+          return;
+        }
+
+        // Validate required column headers
+        const firstRow = rows[0];
+        const keys = Object.keys(firstRow);
+        const hasQuestion = keys.some(k => /question/i.test(k));
+        const hasOption1 = keys.some(k => /option\s*1/i.test(k) || /option1/i.test(k) || /option_1/i.test(k));
+        const hasOption2 = keys.some(k => /option\s*2/i.test(k) || /option2/i.test(k) || /option_2/i.test(k));
+        const hasCorrect = keys.some(k => /correct/i.test(k) || /answer/i.test(k));
+
+        if (!hasQuestion || !hasOption1 || !hasOption2 || !hasCorrect) {
+          setExcelError("Invalid template format: Missing required columns (Question, Option 1, Option 2, Correct Option). Please use the official template.");
+          setExcelRows([]);
+          return;
+        }
+
         setExcelRows(rows);
-      } catch (err) {
+        fetchPreview(rows);
+      } catch (err: any) {
         console.error("Error reading excel file", err);
+        setExcelError("Failed to parse Excel file: " + (err.message || "Invalid or corrupt file."));
+        setExcelRows([]);
       }
+    };
+    reader.onerror = () => {
+      setExcelError("Failed to read the selected file from disk.");
+      setExcelRows([]);
     };
     reader.readAsBinaryString(file);
   };
@@ -428,9 +609,13 @@ export function AssessmentBuilder({
         if (result.validCount > 0) {
           await loadData();
         }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setExcelError(errData.error || `Import failed with status ${res.status}`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Excel import error", err);
+      setExcelError("Failed to import questions: " + (err.message || "Network error"));
     } finally {
       setExcelImportLoading(false);
     }
@@ -584,7 +769,7 @@ export function AssessmentBuilder({
                 {assessment.status}
               </span>
             </div>
-            <p className="text-xs text-slate-400 font-medium mt-0.5">
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
               {questions.length} Questions · {assessment.totalPoints || 0} Total Points · {assessment.durationMinutes} Minutes
             </p>
           </div>
@@ -1093,7 +1278,7 @@ export function AssessmentBuilder({
                 onChange={e => setAssessment({ ...assessment, durationMinutes: Number(e.target.value) })}
                 className="w-full px-4 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 font-mono"
               />
-              <p className="text-[11px] text-slate-400">Total time allocated for completing the assessment.</p>
+              <p className="text-[11px] text-slate-500">Total time allocated for completing the assessment.</p>
             </div>
 
             <div className="space-y-1.5">
@@ -1108,7 +1293,7 @@ export function AssessmentBuilder({
                 onChange={e => setAssessment({ ...assessment, passingScore: Number(e.target.value) })}
                 className="w-full px-4 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 font-mono"
               />
-              <p className="text-[11px] text-slate-400">Required percentage of points to achieve a passing status.</p>
+              <p className="text-[11px] text-slate-500">Required percentage of points to achieve a passing status.</p>
             </div>
 
             <div className="space-y-1.5">
@@ -1126,7 +1311,7 @@ export function AssessmentBuilder({
                 <option value={5}>5 Attempts</option>
                 <option value={999}>Unlimited Attempts</option>
               </select>
-              <p className="text-[11px] text-slate-400">Submissions will be blocked once max attempts are reached.</p>
+              <p className="text-[11px] text-slate-500">Submissions will be blocked once max attempts are reached.</p>
             </div>
 
             <div className="space-y-1.5">
@@ -1422,10 +1607,10 @@ export function AssessmentBuilder({
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <label className="text-xs font-bold text-slate-700 uppercase font-mono">
-                    Answer Options (Exactly 5 options required, select 1 correct option radio) *
+                    Answer Options (At least 2 options required, select 1 correct option radio) *
                   </label>
                   <span className="text-[11px] font-bold text-slate-500 font-mono">
-                    5 Options (A - E)
+                    Up to 5 Options (A - E)
                   </span>
                 </div>
 
@@ -1536,75 +1721,225 @@ export function AssessmentBuilder({
       {/* MODAL: EXCEL BULK IMPORT */}
       {showExcelModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs font-sans">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/40">
               <div className="flex items-center gap-2">
-                <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
-                <h3 className="text-base font-bold text-slate-900">Bulk Import Questions from Excel (.xlsx)</h3>
+                <FileSpreadsheet className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Bulk Import Questions from Excel (.xlsx)</h3>
               </div>
               <button
+                type="button"
                 onClick={() => {
                   setShowExcelModal(false);
                   setExcelFile(null);
                   setExcelRows([]);
                   setExcelValidationResult(null);
+                  setExcelError(null);
                 }}
-                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg"
+                className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg cursor-pointer"
+                aria-label="Close modal"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-5">
-              <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                <div>
-                  <h4 className="text-xs font-bold text-slate-800">Download Excel Question Template</h4>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Pre-configured spreadsheet with columns: Question, Option 1-5, Correct Option, Points, Difficulty, Explanation.
-                  </p>
-                </div>
-                <a
-                  href="/api/admin/assessments/template"
-                  download="assessment_questions_template.xlsx"
-                  className="px-3.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition flex items-center gap-1.5 shrink-0 shadow-2xs"
-                >
-                  <Download className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Download .xlsx</span>
-                </a>
-              </div>
-
-              {/* Upload Dropzone */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700 uppercase font-mono">
-                  Select Completed Excel File
-                </label>
-                <input
-                  type="file"
-                  accept=".xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                  onChange={handleExcelFileChange}
-                  className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer border border-dashed border-slate-300 rounded-xl p-3 bg-slate-50"
-                />
-              </div>
-
-              {excelRows.length > 0 && !excelValidationResult && (
-                <div className="p-4 bg-blue-50/60 border border-blue-200 rounded-xl flex items-center justify-between text-xs font-bold text-blue-900">
-                  <span>Detected {excelRows.length} question rows ready for verification.</span>
+            <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-white dark:bg-slate-900">
+              {excelError && (
+                <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 rounded-xl text-xs flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                    <span className="font-medium">{excelError}</span>
+                  </div>
                   <button
-                    onClick={handleImportExcel}
-                    disabled={excelImportLoading}
-                    className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition cursor-pointer"
+                    type="button"
+                    onClick={() => setExcelError(null)}
+                    className="p-1 hover:bg-rose-100 dark:hover:bg-rose-900/60 rounded-lg text-rose-700 dark:text-rose-300 cursor-pointer"
+                    aria-label="Dismiss error"
                   >
-                    {excelImportLoading ? "Validating..." : "Validate & Import"}
+                    <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
               )}
 
-              {/* Validation Result Breakdown */}
+              <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100">Download Excel Question Template</h4>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-300 mt-0.5">
+                    Pre-configured spreadsheet with columns: Question, Option 1-5, Correct Option, Points, Difficulty, Explanation.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadTemplate}
+                  className="px-3.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 active:bg-slate-100 text-slate-800 dark:text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shrink-0 shadow-2xs cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                  aria-label="Download Excel question template"
+                >
+                  <Download className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" />
+                  <span>Download .xlsx</span>
+                </button>
+              </div>
+
+              {/* Upload Dropzone or File Display */}
+              {!excelFile ? (
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase font-mono">
+                    Select Completed Excel File
+                  </label>
+                  <input
+                    type="file"
+                    accept=".xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    onChange={handleExcelFileChange}
+                    className="w-full text-xs text-slate-500 dark:text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 dark:file:bg-blue-950 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 cursor-pointer border border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-3 bg-slate-50 dark:bg-slate-800/60"
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center justify-between p-3.5 bg-emerald-50/60 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs">
+                  <div className="flex items-center gap-2.5 overflow-hidden">
+                    <FileSpreadsheet className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <div className="truncate">
+                      <p className="font-bold text-slate-900 dark:text-white truncate">{excelFile.name}</p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                        {(excelFile.size / 1024).toFixed(1)} KB · {excelRows.length} question rows detected
+                      </p>
+                    </div>
+                  </div>
+                  {!excelValidationResult && (
+                    <button
+                      type="button"
+                      onClick={handleResetExcelModal}
+                      className="text-xs text-slate-600 hover:text-slate-900 underline font-medium cursor-pointer shrink-0 ml-2"
+                    >
+                      Choose Different File
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Loading State */}
+              {excelImportLoading && !excelPreviewResult && !excelValidationResult && (
+                <div className="p-5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-center gap-2.5 text-xs text-slate-600 font-medium">
+                  <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                  <span>Validating spreadsheet rows & checking duplicates...</span>
+                </div>
+              )}
+
+              {/* Import Preview Breakdown (Pre-import validation) */}
+              {excelPreviewResult && !excelValidationResult && (
+                <div className="space-y-4 pt-1">
+                  {/* Summary Chips */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-center">
+                    <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                      <p className="text-[10px] text-slate-600 font-bold uppercase">Total Rows</p>
+                      <p className="text-base font-black text-slate-800 mt-0.5">{excelPreviewResult.totalRows}</p>
+                    </div>
+                    <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl">
+                      <p className="text-[10px] text-emerald-600 font-bold uppercase">Valid to Add</p>
+                      <p className="text-base font-black text-emerald-800 mt-0.5">{excelPreviewResult.validCount}</p>
+                    </div>
+                    <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                      <p className="text-[10px] text-slate-500 font-bold uppercase">Skipped Examples</p>
+                      <p className="text-base font-black text-slate-700 mt-0.5">{excelPreviewResult.exampleCount || 0}</p>
+                    </div>
+                    <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl">
+                      <p className="text-[10px] text-rose-600 font-bold uppercase">Invalid Rows</p>
+                      <p className="text-base font-black text-rose-800 mt-0.5">{excelPreviewResult.invalidCount}</p>
+                    </div>
+                  </div>
+
+                  {/* Row-Level Errors if any */}
+                  {excelPreviewResult.errors?.length > 0 && (
+                    <div className="border border-rose-200 bg-rose-50/70 rounded-xl p-3.5 space-y-2">
+                      <h5 className="text-xs font-bold text-rose-800 flex items-center gap-1.5">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>Issues Detected in File ({excelPreviewResult.errors.length}):</span>
+                      </h5>
+                      <div className="max-h-32 overflow-y-auto space-y-1 text-[11px] text-rose-700 font-mono">
+                        {excelPreviewResult.errors.map((err: any, idx: number) => (
+                          <div key={idx} className="flex gap-2">
+                            <span className="font-bold shrink-0">Row {err.row}:</span>
+                            <span>{err.reason}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Scrollable Questions Preview */}
+                  {excelPreviewResult.previewQuestions?.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-bold text-slate-800 uppercase font-mono tracking-wider">
+                          Questions Preview ({excelPreviewResult.previewQuestions.length})
+                        </h4>
+                        <span className="text-[11px] text-slate-500 font-sans">
+                          Ready to import into assessment
+                        </span>
+                      </div>
+                      <div className="max-h-56 overflow-y-auto space-y-2.5 pr-1">
+                        {excelPreviewResult.previewQuestions.map((q: any, qIdx: number) => (
+                          <div key={qIdx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="font-bold text-slate-900 leading-snug">
+                                {qIdx + 1}. {q.questionText}
+                              </span>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-bold text-[10px] rounded-md uppercase font-mono">
+                                  {q.points} pts
+                                </span>
+                                <span className="px-2 py-0.5 bg-slate-200 text-slate-700 font-bold text-[10px] rounded-md uppercase font-mono">
+                                  {q.difficulty}
+                                </span>
+                              </div>
+                            </div>
+                            {/* Options */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1 text-[11px]">
+                              {q.options.map((opt: string, optIdx: number) => {
+                                const isCorrect = q.correctAnswers && q.correctAnswers.includes(opt);
+                                return (
+                                  <div
+                                    key={optIdx}
+                                    className={`px-2.5 py-1.5 rounded-lg border flex items-center justify-between gap-1.5 ${
+                                      isCorrect
+                                        ? "bg-emerald-50 border-emerald-300 text-emerald-900 font-semibold"
+                                        : "bg-white border-slate-200 text-slate-700"
+                                    }`}
+                                  >
+                                    <span className="truncate">{opt}</span>
+                                    {isCorrect && (
+                                      <span className="text-[10px] font-bold text-emerald-700 font-mono shrink-0">
+                                        ✓ Correct
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            {q.explanation && (
+                              <p className="text-[11px] text-slate-500 italic pt-0.5">
+                                Explanation: {q.explanation}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Validation Result Breakdown (Post-Import Confirmation) */}
               {excelValidationResult && (
-                <div className="space-y-3 pt-2">
+                <div className="space-y-4 pt-1">
+                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2.5 text-xs font-bold text-emerald-900">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                    <span>
+                      Successfully imported {excelValidationResult.importedCount} question{excelValidationResult.importedCount === 1 ? "" : "s"} into this assessment!
+                    </span>
+                  </div>
+
                   <div className="grid grid-cols-3 gap-3 font-mono text-center">
                     <div className="p-3 bg-slate-50 border rounded-xl">
-                      <p className="text-[10px] text-slate-400 font-bold uppercase">Total Rows</p>
+                      <p className="text-[10px] text-slate-600 font-bold uppercase">Total Rows</p>
                       <p className="text-lg font-black text-slate-800 mt-0.5">{excelValidationResult.totalRows}</p>
                     </div>
                     <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
@@ -1621,7 +1956,7 @@ export function AssessmentBuilder({
                     <div className="border border-rose-200 bg-rose-50/60 rounded-xl p-4 space-y-2">
                       <h5 className="text-xs font-bold text-rose-800 flex items-center gap-1.5">
                         <AlertCircle className="w-4 h-4" />
-                        <span>Row-Level Errors (Please fix in Excel and re-import)</span>
+                        <span>Rejected Rows</span>
                       </h5>
                       <div className="max-h-40 overflow-y-auto space-y-1 text-[11px] text-rose-700 font-mono">
                         {excelValidationResult.errors.map((err: any, idx: number) => (
@@ -1637,18 +1972,44 @@ export function AssessmentBuilder({
               )}
             </div>
 
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+            <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <button
+                type="button"
                 onClick={() => {
                   setShowExcelModal(false);
-                  setExcelFile(null);
-                  setExcelRows([]);
-                  setExcelValidationResult(null);
+                  handleResetExcelModal();
                 }}
-                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs rounded-xl transition cursor-pointer"
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl transition cursor-pointer"
               >
-                Close
+                {excelValidationResult ? "Close" : "Cancel"}
               </button>
+
+              {!excelValidationResult && excelPreviewResult && excelPreviewResult.validCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleImportExcel}
+                  disabled={excelImportLoading}
+                  className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl transition cursor-pointer shadow-xs disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {excelImportLoading && <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
+                  <span>
+                    {excelImportLoading ? "Importing..." : `Confirm & Import ${excelPreviewResult.validCount} Question${excelPreviewResult.validCount === 1 ? "" : "s"}`}
+                  </span>
+                </button>
+              )}
+
+              {excelValidationResult && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowExcelModal(false);
+                    handleResetExcelModal();
+                  }}
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition cursor-pointer shadow-xs"
+                >
+                  Done
+                </button>
+              )}
             </div>
           </div>
         </div>

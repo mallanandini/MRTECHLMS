@@ -12,6 +12,7 @@ import {
   FolderTree, List, CheckSquare, Square, ChevronRight, BookCheck
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.js";
+import { ThemeQuickControls } from "../../components/ThemeQuickControls.js";
 import { 
   Institution, Batch, BatchExcelPreviewRow, BatchStudentAssignPreviewRow, Course,
   BatchHierarchyInstitution, BatchHierarchyYear 
@@ -107,6 +108,14 @@ export function AdminBatchesPage() {
     fetchInstitutions();
     fetchCourses();
   }, [authToken]);
+
+  // Support direct action navigation (?action=new)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("action") === "new") {
+      handleOpenAddBatch();
+    }
+  }, [institutions]);
 
   useEffect(() => {
     fetchBatches();
@@ -363,6 +372,10 @@ export function AdminBatchesPage() {
   };
 
   const handleDeleteBatch = async (batch: Batch) => {
+    if (batch.studentCount && batch.studentCount > 0) {
+      setErrorMessage(`Cannot delete or archive cohort batch "${batch.name}" (${batch.code}): The batch contains ${batch.studentCount} active enrolled student(s). Reassign or transfer all members before archiving.`);
+      return;
+    }
     if (!window.confirm(`Are you sure you want to archive batch "${batch.name}" (${batch.code})?`)) return;
     try {
       const res = await fetch(`/api/admin/batches/${batch.id}`, {
@@ -585,23 +598,28 @@ export function AdminBatchesPage() {
 
       {/* Header Banner: Text and description above, action buttons below */}
       <div className="flex flex-col gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
-        {/* Top: Icon, Title, Badge, and Full Description Paragraph */}
-        <div className="flex items-start gap-3.5 min-w-0">
-          <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-xl shrink-0 mt-0.5">
-            <GraduationCap className="w-6 h-6" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight whitespace-nowrap">
-                Batch Management
-              </h1>
-              <span className="px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shrink-0">
-                Academic Cohorts
-              </span>
+        {/* Top: Icon, Title, Badge, Description, and Header Theme Controls */}
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3.5 min-w-0">
+          <div className="flex items-start gap-3.5 min-w-0 flex-1">
+            <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-xl shrink-0 mt-0.5">
+              <GraduationCap className="w-6 h-6" />
             </div>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed max-w-4xl">
-              Organize students into institutional batches, track academic years, and assign courses & assessments with multi-source access protection.
-            </p>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight whitespace-nowrap">
+                  Batch Management
+                </h1>
+                <span className="px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shrink-0">
+                  Academic Cohorts
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed max-w-4xl">
+                Organize students into institutional batches, track academic years, and assign courses & assessments with multi-source access protection.
+              </p>
+            </div>
+          </div>
+          <div className="hidden sm:flex items-center gap-2 shrink-0">
+            <ThemeQuickControls onOpenPreferences={() => navigate("/admin/profile")} />
           </div>
         </div>
 
@@ -1383,192 +1401,204 @@ export function AdminBatchesPage() {
       {/* 1. ADD / EDIT BATCH MODAL */}
       {/* ========================================================================= */}
       {showBatchModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-2xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                  {editingBatch ? "Edit Batch" : "Create New Batch"}
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Configure batch code, institutional affiliation, and academic year
-                </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl w-[min(100%-1rem,760px)] max-h-[calc(100dvh-2rem)] border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col min-h-0 min-w-0 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="shrink-0 p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/40">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-xl border border-indigo-200 dark:border-indigo-800/60">
+                  <GraduationCap className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+                    {editingBatch ? "Edit Batch" : "Create New Batch"}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Configure batch code, institutional affiliation, and academic year
+                  </p>
+                </div>
               </div>
               <button 
+                type="button"
                 onClick={() => setShowBatchModal(false)}
-                className="p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveBatch} className="p-6 space-y-4 overflow-y-auto">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Institution */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Institution *
-                  </label>
-                  <select
-                    value={batchForm.institutionId}
-                    onChange={e => setBatchForm(prev => ({ ...prev, institutionId: e.target.value }))}
-                    className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-                    required
-                  >
-                    {institutions.map(inst => (
-                      <option key={inst.id} value={inst.id}>
-                        {inst.name} ({inst.code})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+            {/* Modal Form */}
+            <form onSubmit={handleSaveBatch} className="flex flex-col min-h-0 flex-1 overflow-hidden">
+              {/* Scrollable Form Body */}
+              <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Institution */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Institution *
+                    </label>
+                    <select
+                      value={batchForm.institutionId}
+                      onChange={e => setBatchForm(prev => ({ ...prev, institutionId: e.target.value }))}
+                      className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      required
+                    >
+                      {institutions.map(inst => (
+                        <option key={inst.id} value={inst.id}>
+                          {inst.name} ({inst.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                {/* Academic Year */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Academic Year *
-                  </label>
-                  <select
-                    value={batchForm.academicYear}
-                    onChange={e => setBatchForm(prev => ({ ...prev, academicYear: e.target.value }))}
-                    className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-                    required
-                  >
-                    {availableAcademicYears.map(year => (
-                      <option key={year} value={year}>{year}</option>
-                    ))}
-                  </select>
-                </div>
+                  {/* Academic Year */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Academic Year *
+                    </label>
+                    <select
+                      value={batchForm.academicYear}
+                      onChange={e => setBatchForm(prev => ({ ...prev, academicYear: e.target.value }))}
+                      className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      required
+                    >
+                      {availableAcademicYears.map(year => (
+                        <option key={year} value={year}>{year}</option>
+                      ))}
+                    </select>
+                  </div>
 
-                {/* Batch Name */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Batch Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={batchForm.name}
-                    onChange={e => setBatchForm(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="e.g. Fullstack Java 2025-A"
-                    className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-                    required
-                  />
-                </div>
+                  {/* Batch Name */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Batch Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={batchForm.name}
+                      onChange={e => setBatchForm(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="e.g. Fullstack Java 2025-A"
+                      className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      required
+                    />
+                  </div>
 
-                {/* Batch Code */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Batch Code *
-                  </label>
-                  <input
-                    type="text"
-                    value={batchForm.code}
-                    onChange={e => setBatchForm(prev => ({ ...prev, code: e.target.value.toUpperCase() }))}
-                    placeholder="e.g. FS-JAVA-2025A"
-                    className="w-full px-3.5 py-2 text-sm font-mono uppercase bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-                    required
-                  />
-                </div>
+                  {/* Batch Code */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Batch Code *
+                    </label>
+                    <input
+                      type="text"
+                      value={batchForm.code}
+                      onChange={e => setBatchForm(prev => ({ ...prev, code: e.target.value.toUpperCase() }))}
+                      placeholder="e.g. FS-JAVA-2025A"
+                      className="w-full px-3.5 py-2 text-sm font-mono uppercase bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      required
+                    />
+                  </div>
 
-                {/* Primary Initial Course */}
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Primary Initial Course (Optional)
-                  </label>
-                  <select
-                    value={batchForm.courseId}
-                    onChange={e => setBatchForm(prev => ({ ...prev, courseId: e.target.value }))}
-                    className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-                  >
-                    <option value="">No primary course (Assign courses later)</option>
-                    {courses.map(c => (
-                      <option key={c.id} value={c.id}>{c.title}</option>
-                    ))}
-                  </select>
-                </div>
+                  {/* Primary Initial Course */}
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Primary Initial Course (Optional)
+                    </label>
+                    <select
+                      value={batchForm.courseId}
+                      onChange={e => setBatchForm(prev => ({ ...prev, courseId: e.target.value }))}
+                      className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    >
+                      <option value="">No primary course (Assign courses later)</option>
+                      {courses.map(c => (
+                        <option key={c.id} value={c.id}>{c.title}</option>
+                      ))}
+                    </select>
+                  </div>
 
-                {/* Dates */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Start Date
-                  </label>
-                  <input
-                    type="date"
-                    value={batchForm.startDate}
-                    onChange={e => setBatchForm(prev => ({ ...prev, startDate: e.target.value }))}
-                    className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-                  />
-                </div>
+                  {/* Dates */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Start Date
+                    </label>
+                    <input
+                      type="date"
+                      value={batchForm.startDate}
+                      onChange={e => setBatchForm(prev => ({ ...prev, startDate: e.target.value }))}
+                      className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    End Date
-                  </label>
-                  <input
-                    type="date"
-                    value={batchForm.endDate}
-                    onChange={e => setBatchForm(prev => ({ ...prev, endDate: e.target.value }))}
-                    className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-                  />
-                </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      End Date
+                    </label>
+                    <input
+                      type="date"
+                      value={batchForm.endDate}
+                      onChange={e => setBatchForm(prev => ({ ...prev, endDate: e.target.value }))}
+                      className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
 
-                {/* Capacity */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Max Student Capacity
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={batchForm.maxStudents}
-                    onChange={e => setBatchForm(prev => ({ ...prev, maxStudents: e.target.value }))}
-                    placeholder="Leave blank for unlimited"
-                    className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-                  />
-                </div>
+                  {/* Capacity */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Max Student Capacity
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={batchForm.maxStudents}
+                      onChange={e => setBatchForm(prev => ({ ...prev, maxStudents: e.target.value }))}
+                      placeholder="Leave blank for unlimited"
+                      className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
 
-                {/* Status */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Status
-                  </label>
-                  <select
-                    value={batchForm.status}
-                    onChange={e => setBatchForm(prev => ({ ...prev, status: e.target.value as any }))}
-                    className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                    <option value="archived">Archived</option>
-                  </select>
-                </div>
+                  {/* Status */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Status
+                    </label>
+                    <select
+                      value={batchForm.status}
+                      onChange={e => setBatchForm(prev => ({ ...prev, status: e.target.value as any }))}
+                      className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    >
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                      <option value="archived">Archived</option>
+                    </select>
+                  </div>
 
-                {/* Description */}
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Description / Notes
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={batchForm.description}
-                    onChange={e => setBatchForm(prev => ({ ...prev, description: e.target.value }))}
-                    placeholder="Provide overview notes, program track, or batch objectives..."
-                    className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-                  />
+                  {/* Description */}
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Description / Notes
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={batchForm.description}
+                      onChange={e => setBatchForm(prev => ({ ...prev, description: e.target.value }))}
+                      placeholder="Provide overview notes, program track, or batch objectives..."
+                      className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
+              {/* Pinned Modal Footer */}
+              <div className="shrink-0 p-3.5 sm:p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/40 flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setShowBatchModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
+                  className="w-full sm:w-auto px-4 py-2.5 text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm"
+                  className="w-full sm:w-auto px-5 py-2.5 text-xs sm:text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm shadow-indigo-500/20 transition cursor-pointer"
                 >
                   {editingBatch ? "Save Changes" : "Create Batch"}
                 </button>

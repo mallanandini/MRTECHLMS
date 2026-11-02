@@ -413,6 +413,78 @@ batchRouter.delete(["/batches/:id/students/:studentId", "/admin/batches/:id/stud
 });
 
 // =========================================================================
+// 5B. USER BATCH MEMBERSHIPS (ADMIN WORKFLOW)
+// =========================================================================
+
+// GET /api/admin/users/:userId/batches & /api/users/:userId/batches
+batchRouter.get(["/admin/users/:userId/batches", "/users/:userId/batches"], authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const batches = await BatchService.getUserBatches(req.params.userId);
+    res.json({ success: true, batches });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/users/:userId/batches & /api/users/:userId/batches
+// Add one or more batches to an existing user
+batchRouter.post(["/admin/users/:userId/batches", "/users/:userId/batches"], authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const rawBatchIds = req.body.batchIds || req.body.batches || (req.body.batchId ? [req.body.batchId] : []);
+    const batchIds: string[] = Array.isArray(rawBatchIds) ? rawBatchIds : [rawBatchIds];
+    if (batchIds.length === 0) {
+      return res.status(400).json({ error: "Please specify at least one batch ID." });
+    }
+
+    const added = [];
+    for (const bId of batchIds) {
+      const record = await BatchService.addStudentToBatch(bId, req.params.userId, req.user!);
+      added.push(record);
+    }
+
+    const allBatches = await BatchService.getUserBatches(req.params.userId);
+    res.status(201).json({ success: true, added, batches: allBatches });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/users/:userId/batches/:batchId & /api/users/:userId/batches/:batchId
+// Remove a batch membership, preventing removal of the user's last remaining batch
+batchRouter.delete(["/admin/users/:userId/batches/:batchId", "/users/:userId/batches/:batchId"], authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    await BatchService.removeStudentFromBatch(req.params.batchId, req.params.userId, req.user!, { allowLastBatch: false });
+    const remaining = await BatchService.getUserBatches(req.params.userId);
+    res.json({ success: true, message: "Batch membership removed successfully", batches: remaining });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// PUT /api/admin/users/:userId/batches & /api/users/:userId/batches
+// Replace or move user batch memberships
+batchRouter.put(["/admin/users/:userId/batches", "/users/:userId/batches"], authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { batchIds, batches, move, fromBatchId, toBatchId } = req.body;
+
+    if (move || (fromBatchId && toBatchId)) {
+      const updated = await BatchService.moveUserBatch(req.params.userId, fromBatchId, toBatchId, req.user!);
+      return res.json({ success: true, message: "User moved to new batch successfully", batches: updated });
+    }
+
+    const targetBatchIds = batchIds || batches;
+    if (!targetBatchIds || !Array.isArray(targetBatchIds)) {
+      return res.status(400).json({ error: "Please provide an array of 'batchIds' to replace memberships." });
+    }
+
+    const updated = await BatchService.replaceUserBatches(req.params.userId, targetBatchIds, req.user!);
+    res.json({ success: true, message: "User batch memberships updated successfully", batches: updated });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// =========================================================================
 // 6. BATCH COURSES & ASSESSMENTS
 // =========================================================================
 

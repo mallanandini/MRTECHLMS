@@ -55,6 +55,8 @@ export interface User {
   assignedCourses?: UserAssignedCourse[];
   assignedAssessmentsCount?: number;
   completedAssessmentsCount?: number;
+  batches?: Array<{ id: string; name: string; code: string; academicYear: string; status: string }>;
+  batchCount?: number;
 }
 
 export interface Course {
@@ -353,6 +355,23 @@ export interface Question {
   deletedAt?: string;
 }
 
+export interface ProctoringConfig {
+  requireFullscreen?: boolean;
+  requireCamera?: boolean;
+  requireMicrophone?: boolean;
+  maxWarnings?: number;
+  autoSubmitOnViolation?: boolean;
+}
+
+export interface ProctoringEvent {
+  id?: string;
+  attemptId: string;
+  eventType: "fullscreen_exit" | "fullscreen_enter" | "tab_hidden" | "tab_visible" | "camera_interrupted" | "camera_restored" | "network_offline" | "network_online" | "devtools_opened";
+  details: string;
+  timestamp: string;
+  severity?: "info" | "warning" | "violation";
+}
+
 export interface Assessment {
   id: string;
   organizationId?: string;
@@ -379,6 +398,7 @@ export interface Assessment {
   randomizeQuestions?: boolean;
   randomizeOptions?: boolean;
   revealAnswers?: boolean;
+  proctoringConfig?: ProctoringConfig;
   authorId?: string;
   authorName?: string;
   createdAt: string;
@@ -449,6 +469,7 @@ export interface Submission {
   incorrectCount?: number;
   unansweredCount?: number;
   percentage?: number;
+  proctoringEvents?: ProctoringEvent[];
 }
 
 export interface AssessmentAttempt {
@@ -464,6 +485,7 @@ export interface AssessmentAttempt {
   status: "in_progress" | "submitted" | "timed_out" | "abandoned";
   questionOrder?: string[];
   answers?: Record<string, string[]>;
+  proctoringEvents?: ProctoringEvent[];
   score?: number | null;
   totalPoints?: number | null;
   percentage?: number | null;

@@ -68,7 +68,7 @@ export function HomeHero({ onExplorePrograms }: HomeHeroProps) {
               <Link
                 to={portalCta.path}
                 id="hero-learning-portal-btn"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold text-sm shadow-lg shadow-emerald-900/20 hover:shadow-xl hover:shadow-emerald-900/30 transition duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 h-12 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-semibold text-sm shadow-md hover:shadow-lg transition duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
               >
                 <GraduationCap className="w-5 h-5 text-emerald-100" />
                 <span>{portalCta.label}</span>
@@ -78,7 +78,7 @@ export function HomeHero({ onExplorePrograms }: HomeHeroProps) {
               <button
                 type="button"
                 onClick={onExplorePrograms}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-white dark:bg-[#111C30] hover:bg-slate-50 dark:hover:bg-[#16243D] text-slate-800 dark:text-[#F1F5F9] font-semibold text-sm border border-slate-200 dark:border-[#263449] shadow-xs hover:shadow-sm transition duration-200 cursor-pointer"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 h-12 rounded-xl bg-white dark:bg-[#111C30] hover:bg-slate-50 dark:hover:bg-[#16243D] text-slate-800 dark:text-[#F1F5F9] font-semibold text-sm border border-slate-200 dark:border-[#263449] shadow-xs hover:shadow-sm transition duration-200 cursor-pointer"
               >
                 <Code2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 <span>Explore Our Programs</span>
@@ -107,13 +107,10 @@ export function HomeHero({ onExplorePrograms }: HomeHeroProps) {
           </div>
 
           {/* Right Column: Visual Learning Environment Showcase */}
-          <div className="lg:col-span-5 relative">
+          <div className="lg:col-span-5 relative py-2">
             <div className="relative mx-auto max-w-md lg:max-w-none">
-              {/* Outer decorative glow */}
-              <div className="absolute -inset-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-3xl blur-lg opacity-15 dark:opacity-25" />
-
               {/* Main Visual Terminal / Code Window */}
-              <div className="relative bg-[#070D18] border border-[#263449] rounded-2xl shadow-2xl overflow-hidden text-slate-200">
+              <div className="relative bg-[#070D18] border border-[#263449] rounded-2xl shadow-xl overflow-hidden text-slate-200">
                 {/* Window title bar */}
                 <div className="bg-[#0B1120] px-4 py-3 border-b border-[#263449] flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -264,9 +261,9 @@ export function HomeHero({ onExplorePrograms }: HomeHeroProps) {
               </div>
 
               {/* Floating feature badge 1 */}
-              <div className="hidden sm:flex absolute -bottom-6 -left-6 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 shadow-xl items-center gap-3 animate-in fade-in duration-300">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
-                  <ShieldCheck className="w-5 h-5" />
+              <div className="hidden sm:flex absolute -bottom-3 left-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 shadow-lg items-center gap-2.5 z-20">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+                  <ShieldCheck className="w-4 h-4" />
                 </div>
                 <div>
                   <span className="text-xs font-bold text-slate-900 dark:text-white block">Cryptographic Certs</span>
@@ -275,9 +272,9 @@ export function HomeHero({ onExplorePrograms }: HomeHeroProps) {
               </div>
 
               {/* Floating feature badge 2 */}
-              <div className="hidden sm:flex absolute -top-5 -right-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 shadow-xl items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
-                  <Code2 className="w-4 h-4" />
+              <div className="hidden sm:flex absolute -top-3 right-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 shadow-lg items-center gap-2 z-20">
+                <div className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                  <Code2 className="w-3.5 h-3.5" />
                 </div>
                 <div>
                   <span className="text-[11px] font-bold text-slate-900 dark:text-white block">Built-In Code Lab</span>

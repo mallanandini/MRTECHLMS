@@ -46,13 +46,13 @@ export function HomeNavbar({ onScrollTo }: HomeNavbarProps) {
   }, []);
 
   const navItems = [
-    { label: "Home", sectionId: "hero" },
-    { label: "About Us", sectionId: "about" },
-    { label: "Training Programs", sectionId: "programs" },
-    { label: "Our Services", sectionId: "services" },
-    { label: "Learning Journey", sectionId: "journey" },
-    { label: "Career Support", sectionId: "careers" },
-    { label: "Contact Us", sectionId: "contact" }
+    { label: "Home", shortLabel: "Home", sectionId: "hero" },
+    { label: "About Us", shortLabel: "About", sectionId: "about" },
+    { label: "Training Programs", shortLabel: "Programs", sectionId: "programs" },
+    { label: "Our Services", shortLabel: "Services", sectionId: "services" },
+    { label: "Learning Journey", shortLabel: "Journey", sectionId: "journey" },
+    { label: "Career Support", shortLabel: "Careers", sectionId: "careers" },
+    { label: "Contact Us", shortLabel: "Contact", sectionId: "contact" }
   ];
 
   const handleNavClick = (sectionId: string) => {
@@ -65,7 +65,7 @@ export function HomeNavbar({ onScrollTo }: HomeNavbarProps) {
   const getDashboardTarget = () => {
     if (!currentUser || !authToken) return null;
     if (currentUser.role === UserRole.STUDENT) {
-      return { path: "/student/dashboard", label: "Student Dashboard" };
+      return { path: "/student/dashboard", label: "Student Dashboard", shortLabel: "Dashboard" };
     }
     return null;
   };
@@ -76,39 +76,40 @@ export function HomeNavbar({ onScrollTo }: HomeNavbarProps) {
     <header 
       className={`sticky top-0 z-50 transition-all duration-200 border-b ${
         scrolled 
-          ? "bg-white/95 dark:bg-[#0B1120]/95 backdrop-blur-md shadow-xs border-slate-200/80 dark:border-[#263449]/80 py-2 sm:py-2.5" 
-          : "bg-white dark:bg-[#0B1120] border-slate-100 dark:border-[#263449] py-2.5 sm:py-3"
+          ? "bg-white/95 dark:bg-[#0B1120]/95 backdrop-blur-md shadow-xs border-slate-200/80 dark:border-[#263449]/80 py-2" 
+          : "bg-white dark:bg-[#0B1120] border-slate-200/60 dark:border-[#263449] py-2.5"
       }`}
     >
-      <div className="w-full max-w-[1440px] mx-auto px-3.5 sm:px-5 lg:px-6 2xl:px-8">
-        <div className="flex items-center justify-between gap-2 xl:gap-3 2xl:gap-4 h-12 sm:h-13 min-w-0">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between gap-3 2xl:gap-4 h-11 sm:h-12 min-w-0">
           {/* Brand Logo & Identification */}
           <Link 
             to="/" 
-            className="flex items-center gap-2 sm:gap-2.5 xl:gap-3 shrink-0 group focus:outline-none focus:ring-2 focus:ring-emerald-500 rounded-xl p-1"
+            className="flex items-center gap-2 sm:gap-2.5 2xl:gap-3 shrink-0 group focus:outline-none focus:ring-2 focus:ring-emerald-500 rounded-lg p-1"
             aria-label="MR Technologies Home"
           >
             <div className="relative">
               <img 
                 src="/mr-logo-icon.png" 
                 alt="MR Technologies Logo" 
-                className="w-8.5 h-8.5 sm:w-9 sm:h-9 2xl:w-10 2xl:h-10 object-contain shrink-0 transition-transform duration-200 group-hover:scale-105" 
+                className="w-8 h-8 sm:w-8.5 sm:h-8.5 2xl:w-9 2xl:h-9 object-contain shrink-0 transition-transform duration-200 group-hover:scale-105" 
               />
             </div>
             <div className="flex flex-col">
-              <span className="font-extrabold text-[14.5px] sm:text-[15.5px] 2xl:text-lg tracking-tight text-slate-900 dark:text-[#F1F5F9] leading-tight">
+              <span className="font-extrabold text-[14px] 2xl:text-[15.5px] tracking-tight text-slate-900 dark:text-[#F1F5F9] leading-tight">
                 MR TECHNOLOGIES
               </span>
-              <span className="text-[8.5px] sm:text-[9.5px] 2xl:text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block mt-0.5">
-                Medha XL • RUBIKS Ecosystem
+              <span className="text-[8.5px] 2xl:text-[9.5px] font-mono font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 block mt-0.5">
+                <span className="hidden 2xl:inline">Medha XL • RUBIKS Ecosystem</span>
+                <span className="2xl:hidden">Medha XL • RUBIKS</span>
               </span>
             </div>
           </Link>
 
-          {/* Desktop Navigation Links — Centered, Evenly Spaced & Subtle Emerald Styling */}
+          {/* Desktop Navigation Links — Centered, Evenly Spaced & Clean Baseline Styling */}
           <nav 
             aria-label="Main Navigation"
-            className="hidden xl:flex items-center gap-0.5 2xl:gap-1 text-[12px] 2xl:text-[12.5px] font-medium"
+            className="hidden xl:flex items-center gap-0.5 2xl:gap-1.5 text-[12.5px] 2xl:text-[13.5px] font-medium"
           >
             {navItems.map((item) => {
               const isActive = activeSection === item.sectionId;
@@ -116,22 +117,26 @@ export function HomeNavbar({ onScrollTo }: HomeNavbarProps) {
                 <button
                   key={item.sectionId}
                   onClick={() => handleNavClick(item.sectionId)}
-                  className={`nav-link-btn px-2 2xl:px-2.5 py-1.5 rounded-lg whitespace-nowrap cursor-pointer flex items-center justify-center leading-none ${
-                    isActive ? "nav-link-active font-semibold" : "font-medium"
+                  className={`relative px-2 2xl:px-2.5 py-1.5 rounded-md transition-colors cursor-pointer whitespace-nowrap leading-none ${
+                    isActive 
+                      ? "text-emerald-700 dark:text-emerald-400 font-semibold after:absolute after:bottom-0 after:left-2 after:right-2 after:h-[2px] after:bg-emerald-600 dark:after:bg-emerald-400 after:rounded-full" 
+                      : "text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white"
                   }`}
                 >
-                  {item.label}
+                  <span className="hidden 2xl:inline">{item.label}</span>
+                  <span className="2xl:hidden">{item.shortLabel}</span>
                 </button>
               );
             })}
 
             <Link
               to="/verify-certificate"
-              className="nav-verify-btn px-2 2xl:px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 whitespace-nowrap font-medium leading-none"
+              className="inline-flex items-center gap-1.5 px-2 2xl:px-2.5 py-1.5 rounded-md text-slate-600 hover:text-emerald-700 dark:text-slate-300 dark:hover:text-emerald-400 transition-colors whitespace-nowrap leading-none font-medium"
               title="Official Public Credential Verification"
             >
-              <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-              <span>Verify Credential</span>
+              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span className="hidden 2xl:inline">Verify Credential</span>
+              <span className="2xl:hidden">Verify</span>
             </Link>
           </nav>
 
@@ -143,21 +148,23 @@ export function HomeNavbar({ onScrollTo }: HomeNavbarProps) {
               <Link
                 to={dashboardTarget.path}
                 id="header-student-dashboard-btn"
-                className="group inline-flex items-center justify-center gap-1.5 2xl:gap-2 px-3.5 2xl:px-4 h-8.5 2xl:h-9 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs 2xl:text-sm font-semibold shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                className="inline-flex items-center justify-center gap-1.5 px-3 2xl:px-3.5 h-8.5 2xl:h-9 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs 2xl:text-sm font-semibold shadow-xs hover:shadow transition duration-150 cursor-pointer whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
               >
                 <UserCheck className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 shrink-0" />
-                <span>{dashboardTarget.label}</span>
-                <ArrowRight className="w-3.5 h-3.5 shrink-0 group-hover:translate-x-0.5 transition-transform duration-200" />
+                <span className="hidden 2xl:inline">{dashboardTarget.label}</span>
+                <span className="2xl:hidden">{dashboardTarget.shortLabel}</span>
+                <ArrowRight className="w-3.5 h-3.5 shrink-0" />
               </Link>
             ) : (
               <Link
                 to="/student/login"
                 id="header-student-login-btn"
-                className="group inline-flex items-center justify-center gap-1.5 2xl:gap-2 px-3.5 2xl:px-4 h-8.5 2xl:h-9 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs 2xl:text-sm font-semibold shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                className="inline-flex items-center justify-center gap-1.5 px-3 2xl:px-3.5 h-8.5 2xl:h-9 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs 2xl:text-sm font-semibold shadow-xs hover:shadow transition duration-150 cursor-pointer whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
               >
                 <GraduationCap className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-emerald-100 shrink-0" />
-                <span>Student Login</span>
-                <ArrowRight className="w-3.5 h-3.5 shrink-0 group-hover:translate-x-0.5 transition-transform duration-200" />
+                <span className="hidden 2xl:inline">Student Login</span>
+                <span className="2xl:hidden">Login</span>
+                <ArrowRight className="w-3.5 h-3.5 shrink-0" />
               </Link>
             )}
           </div>

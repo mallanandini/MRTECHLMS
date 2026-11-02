@@ -23,6 +23,7 @@ import { migration015 } from "./015_ai_learning_layer.js";
 import { migration016 } from "./016_batch_management.js";
 import { migration017 } from "./017_user_phone_and_location.js";
 import { migration018 } from "./018_batch_learning_paths_and_denials.js";
+import { migration019 } from "./019_proctoring_and_answer_persistence.js";
 
 export const ALL_MIGRATIONS: Migration[] = [
   migration001,
@@ -42,7 +43,8 @@ export const ALL_MIGRATIONS: Migration[] = [
   migration015,
   migration016,
   migration017,
-  migration018
+  migration018,
+  migration019
 ];
 
 export async function ensureMigrationTable(pool: Pool): Promise<void> {

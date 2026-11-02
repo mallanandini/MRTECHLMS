@@ -4,6 +4,7 @@
  */
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import { 
   Sparkles, X, ChevronRight, ChevronLeft, CheckCircle2, ArrowRight, Compass 
 } from "lucide-react";
@@ -19,6 +20,7 @@ interface TargetRect {
 }
 
 export function ProductTour() {
+  const location = useLocation();
   const {
     isTourActive,
     currentStepIndex,
@@ -36,6 +38,11 @@ export function ProductTour() {
 
   const [targetRect, setTargetRect] = useState<TargetRect | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+
+  // Suppress tour modals and overlays completely during full-screen exams
+  if (location.pathname.startsWith("/student/assessment/")) {
+    return null;
+  }
 
   // Measure target element position
   const updateTargetRect = useCallback(() => {

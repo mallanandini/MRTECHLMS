@@ -10,31 +10,78 @@ import {
   ExternalLink, Clock, HelpCircle, X, ChevronDown, ChevronRight, 
   MoveUp, MoveDown, File, Play, Sparkles, Check, CheckSquare, 
   Square, CircleDot, Circle, RefreshCw, Download, FileSpreadsheet,
-  ShieldCheck, AlertTriangle, Code, Calendar, UserCheck, UserX, Search, Filter
+  ShieldCheck, AlertTriangle, Code, Calendar, UserCheck, UserX, Search, Filter, Loader2
 } from "lucide-react";
 import { Course, Module, Lesson, LessonType, Assessment, Question, QuestionType, User, UserRole } from "../../types.js";
 import { useToast, useConfirm } from "../../context/NotificationContext.js";
+import { AssessmentExcelImportModal } from "./AssessmentExcelImportModal.js";
+import { useSearchParams } from "react-router-dom";
+
+export type StudioStep = "info" | "curriculum" | "assessments" | "publish" | "access";
 
 interface CourseAuthoringStudioProps {
   courseId: string | null; // null or "new" for brand new course
   authToken: string;
   onBack: () => void;
   onCourseSaved?: (course: Course) => void;
+  backButtonLabel?: string;
 }
 
 export function CourseAuthoringStudio({ 
   courseId: initialCourseId, 
   authToken, 
   onBack, 
-  onCourseSaved 
+  onCourseSaved,
+  backButtonLabel
 }: CourseAuthoringStudioProps) {
   const toast = useToast();
   const confirm = useConfirm();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [currentCourseId, setCurrentCourseId] = useState<string | null>(
     initialCourseId && initialCourseId !== "new" ? initialCourseId : null
   );
 
-  const [activeTab, setActiveTab] = useState<"info" | "curriculum" | "assessments" | "publish" | "access">("info");
+  const getValidStep = (stepParam: string | null): StudioStep => {
+    if (stepParam === "curriculum" || stepParam === "assessments" || stepParam === "publish" || stepParam === "access") {
+      return stepParam;
+    }
+    return "info";
+  };
+
+  const initialStepFromUrl = getValidStep(searchParams.get("step"));
+  const [activeTab, setActiveTabState] = useState<StudioStep>(initialStepFromUrl);
+
+  const setActiveTab = (tab: StudioStep) => {
+    setActiveTabState(tab);
+    const action = searchParams.get("action");
+    const newParams: Record<string, string> = { step: tab };
+    if (action) {
+      newParams.action = action;
+    }
+    if (currentCourseId) {
+      newParams.courseId = currentCourseId;
+    }
+    setSearchParams(newParams, { replace: true });
+  };
+
+  // Sync initialCourseId prop changes
+  useEffect(() => {
+    if (initialCourseId && initialCourseId !== "new" && initialCourseId !== currentCourseId) {
+      setCurrentCourseId(initialCourseId);
+    }
+  }, [initialCourseId]);
+
+  // Sync searchParams step changes (e.g. browser back/forward)
+  useEffect(() => {
+    const stepParam = searchParams.get("step");
+    if (stepParam && (stepParam === "info" || stepParam === "curriculum" || stepParam === "assessments" || stepParam === "publish" || stepParam === "access")) {
+      if (stepParam !== activeTab) {
+        setActiveTabState(stepParam);
+      }
+    }
+  }, [searchParams]);
+
   const [loading, setLoading] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -103,15 +150,18 @@ export function CourseAuthoringStudio({
   // Assessment & Questions Builder State
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
   const [showQuestionModal, setShowQuestionModal] = useState(false);
+  const [showExcelImportModal, setShowExcelImportModal] = useState(false);
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [questionText, setQuestionText] = useState("");
   const [questionType, setQuestionType] = useState<QuestionType>(QuestionType.MCQ_SINGLE);
-  const [questionOptions, setQuestionOptions] = useState<string[]>(["Option A", "Option B", "Option C", "Option D"]);
-  const [correctAnswers, setCorrectAnswers] = useState<string[]>(["Option A"]);
+  const [questionOptions, setQuestionOptions] = useState<string[]>(["", "", "", ""]);
+  const [correctAnswers, setCorrectAnswers] = useState<string[]>([]);
+  const [correctOptionIndices, setCorrectOptionIndices] = useState<number[]>([0]);
   const [questionPoints, setQuestionPoints] = useState<number>(10);
   const [questionNegativePoints, setQuestionNegativePoints] = useState<number>(0);
   const [questionExplanation, setQuestionExplanation] = useState("");
   const [questionDifficulty, setQuestionDifficulty] = useState<"easy" | "medium" | "hard">("medium");
+  const [isSavingQuestion, setIsSavingQuestion] = useState(false);
 
   // Student Access & Enrollment State
   const [accessMatrix, setAccessMatrix] = useState<any[]>([]);
@@ -243,10 +293,10 @@ export function CourseAuthoringStudio({
   }, [activeTab, currentCourseId]);
 
   // Handle Save Course Info (creates if new, updates if exists)
-  const handleSaveCourseInfo = async () => {
+  const handleSaveCourseInfo = async (nextTab?: StudioStep | null): Promise<string | null> => {
     if (!courseTitle.trim()) {
-      showToast("Please enter a course title", "error");
-      return;
+      showToast("Please enter a course title to save the course.", "error");
+      return null;
     }
 
     setSaving(true);
@@ -279,16 +329,29 @@ export function CourseAuthoringStudio({
           body: JSON.stringify(payload)
         });
         if (!res.ok) {
-          const err = await res.json();
+          const err = await res.json().catch(() => ({}));
           throw new Error(err.error || "Failed to create course");
         }
         const created: Course = await res.json();
         setCurrentCourseId(created.id);
         showToast("Course created successfully as Draft! Now build your curriculum.", "success");
         if (onCourseSaved) onCourseSaved(created);
-        setActiveTab("curriculum");
+
+        const targetStep = nextTab !== undefined ? nextTab : "curriculum";
+        const action = searchParams.get("action") || (initialCourseId === "new" ? "new" : null);
+        const newParams: Record<string, string> = { courseId: created.id, step: targetStep || "info" };
+        if (action) {
+          newParams.action = action;
+        }
+        if (targetStep) {
+          setActiveTabState(targetStep);
+          setSearchParams(newParams, { replace: true });
+        } else {
+          setSearchParams(newParams, { replace: true });
+        }
+        return created.id;
       } else {
-        // Update existing
+        // Update existing course
         const res = await fetch(`/api/admin/courses/${currentCourseId}`, {
           method: "PUT",
           headers: {
@@ -298,19 +361,78 @@ export function CourseAuthoringStudio({
           body: JSON.stringify(payload)
         });
         if (!res.ok) {
-          const err = await res.json();
+          const err = await res.json().catch(() => ({}));
           throw new Error(err.error || "Failed to update course");
         }
         const updated: Course = await res.json();
         showToast("Course settings updated successfully", "success");
         if (onCourseSaved) onCourseSaved(updated);
+
+        if (nextTab) {
+          setActiveTab(nextTab);
+        }
+        return currentCourseId;
       }
     } catch (err: any) {
       showToast(err.message || "Error saving course", "error");
+      return null;
     } finally {
       setSaving(false);
     }
   };
+
+  const getStepTitle = (step: StudioStep): string => {
+    switch (step) {
+      case "info": return "Course Information";
+      case "curriculum": return "Curriculum & Content Builder";
+      case "assessments": return "Practice Tests & Exam Studio";
+      case "publish": return "Review & Publish";
+      case "access": return "Student Access Allocation";
+    }
+  };
+
+  const isStepComplete = (step: StudioStep): boolean => {
+    switch (step) {
+      case "info":
+        return Boolean(currentCourseId && courseTitle.trim().length > 0);
+      case "curriculum":
+        return Boolean(modules.length > 0 && totalLessons > 0);
+      case "assessments":
+        return Boolean(assessments.length > 0);
+      case "publish":
+        return Boolean(courseStatus === "published");
+      case "access":
+        return Boolean(enrolledStudentsCount > 0 || accessMatrix.length > 0);
+    }
+  };
+
+  const handleStepClick = async (targetStep: StudioStep) => {
+    if (targetStep === activeTab) return;
+
+    // If course is not yet created in the backend
+    if (!currentCourseId) {
+      if (!courseTitle.trim()) {
+        showToast(`Please enter a Course Title in Step 1 to create the course before proceeding to ${getStepTitle(targetStep)}.`, "error");
+        return;
+      }
+
+      // Automatically save Step 1 to create the course before advancing
+      const createdId = await handleSaveCourseInfo(targetStep);
+      if (!createdId) return; // Save failed, remain on Step 1 with error displayed
+      return;
+    }
+
+    // Existing course: navigate directly
+    setActiveTab(targetStep);
+  };
+
+  const STEPS: { id: StudioStep; number: number; title: string; shortTitle: string; icon: any }[] = [
+    { id: "info", number: 1, title: "1. Course Information", shortTitle: "Info", icon: BookOpen },
+    { id: "curriculum", number: 2, title: "2. Curriculum & Content Builder", shortTitle: "Curriculum", icon: Layers },
+    { id: "assessments", number: 3, title: "3. Practice Tests & Exam Studio", shortTitle: "Practice Tests", icon: Award },
+    { id: "publish", number: 4, title: "4. Review & Publish", shortTitle: "Review & Publish", icon: CheckCircle2 },
+    { id: "access", number: 5, title: "5. Student Access Allocation", shortTitle: "Access", icon: Users }
+  ];
 
   // Upload Physical Asset
   const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>, target: "thumbnail" | "video" | "material") => {
@@ -669,6 +791,12 @@ export function CourseAuthoringStudio({
     }
   };
 
+  useEffect(() => {
+    if (activeTab === "publish" && currentCourseId && !validationResults && !validating) {
+      handleValidateCourse();
+    }
+  }, [activeTab, currentCourseId]);
+
   // Publish Course with Verification Guard
   const handlePublishCourse = async (incrementVersion = false) => {
     if (!currentCourseId) return;
@@ -781,8 +909,9 @@ export function CourseAuthoringStudio({
     setEditingQuestionId(null);
     setQuestionText("");
     setQuestionType(QuestionType.MCQ_SINGLE);
-    setQuestionOptions(["Option A", "Option B", "Option C", "Option D"]);
-    setCorrectAnswers(["Option A"]);
+    setQuestionOptions(["", "", "", ""]);
+    setCorrectAnswers([]);
+    setCorrectOptionIndices([0]);
     setQuestionPoints(10);
     setQuestionNegativePoints(0);
     setQuestionExplanation("");
@@ -790,12 +919,32 @@ export function CourseAuthoringStudio({
     setShowQuestionModal(true);
   };
 
+  const handleCloseQuestionModal = () => {
+    setShowQuestionModal(false);
+    setEditingQuestionId(null);
+    setQuestionText("");
+    setQuestionType(QuestionType.MCQ_SINGLE);
+    setQuestionOptions(["", "", "", ""]);
+    setCorrectAnswers([]);
+    setCorrectOptionIndices([0]);
+    setQuestionPoints(10);
+    setQuestionNegativePoints(0);
+    setQuestionExplanation("");
+    setQuestionDifficulty("medium");
+  };
+
   const handleOpenEditQuestion = (q: Question) => {
     setEditingQuestionId(q.id);
     setQuestionText(q.questionText);
     setQuestionType(q.type || QuestionType.MCQ_SINGLE);
-    setQuestionOptions(q.options && q.options.length > 0 ? q.options : ["Option A", "Option B"]);
-    setCorrectAnswers(q.correctAnswers || []);
+    const opts = q.options && q.options.length > 0 ? [...q.options] : ["", ""];
+    setQuestionOptions(opts);
+    const answers = q.correctAnswers || [];
+    setCorrectAnswers(answers);
+    const matchedIndices = answers
+      .map(ans => opts.indexOf(ans))
+      .filter(idx => idx !== -1);
+    setCorrectOptionIndices(matchedIndices.length > 0 ? matchedIndices : [0]);
     setQuestionPoints(q.points || 10);
     setQuestionNegativePoints(q.negativePoints || 0);
     setQuestionExplanation(q.explanation || "");
@@ -804,6 +953,8 @@ export function CourseAuthoringStudio({
   };
 
   const handleSaveQuestion = async () => {
+    if (isSavingQuestion) return;
+
     if (!questionText.trim()) {
       showToast("Question text is required", "error");
       return;
@@ -813,18 +964,39 @@ export function CourseAuthoringStudio({
       showToast("Provide at least 2 valid answer options", "error");
       return;
     }
-    if (correctAnswers.length === 0) {
-      showToast("Select at least 1 correct answer option", "error");
+
+    // Check duplicate options in UI
+    const lowerOpts = cleanOptions.map(o => o.toLowerCase());
+    if (new Set(lowerOpts).size !== cleanOptions.length) {
+      showToast("Each option must have distinct text", "error");
+      return;
+    }
+
+    // Determine correct answers from correctOptionIndices
+    const selectedCorrectTexts = Array.from(new Set(
+      correctOptionIndices
+        .map(idx => questionOptions[idx]?.trim())
+        .filter(Boolean)
+    ));
+    // Also include any non-empty correctAnswers matching cleanOptions
+    const validCorrect = Array.from(new Set([
+      ...selectedCorrectTexts,
+      ...correctAnswers.map(c => c.trim()).filter(c => cleanOptions.includes(c))
+    ]));
+
+    if (validCorrect.length === 0) {
+      showToast("Select at least 1 valid correct answer option", "error");
       return;
     }
     if (!selectedAssessmentId || !currentCourseId) return;
 
+    setIsSavingQuestion(true);
     try {
       const payload = {
         questionText: questionText.trim(),
         type: questionType,
         options: cleanOptions,
-        correctAnswers,
+        correctAnswers: validCorrect,
         points: Number(questionPoints) || 10,
         negativePoints: Number(questionNegativePoints) || 0,
         explanation: questionExplanation.trim(),
@@ -840,8 +1012,11 @@ export function CourseAuthoringStudio({
           },
           body: JSON.stringify(payload)
         });
-        if (!res.ok) throw new Error("Failed to update question");
-        showToast("Question updated");
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || errData.message || "Failed to update question");
+        }
+        showToast("Question updated", "success");
       } else {
         const res = await fetch(`/api/admin/assessments/${selectedAssessmentId}/questions`, {
           method: "POST",
@@ -851,14 +1026,19 @@ export function CourseAuthoringStudio({
           },
           body: JSON.stringify(payload)
         });
-        if (!res.ok) throw new Error("Failed to add question");
-        showToast("Question added to assessment");
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || errData.message || "Failed to add question");
+        }
+        showToast("Question added to assessment", "success");
       }
 
-      setShowQuestionModal(false);
-      loadCourse(currentCourseId);
+      handleCloseQuestionModal();
+      await loadCourse(currentCourseId);
     } catch (err: any) {
       showToast(err.message || "Error saving question", "error");
+    } finally {
+      setIsSavingQuestion(false);
     }
   };
 
@@ -1088,53 +1268,58 @@ export function CourseAuthoringStudio({
       )}
 
       {/* Top Authoring Header */}
-      <div className="bg-white border-b border-slate-200/80 sticky top-0 z-40 px-6 py-4 shadow-xs">
-        <div className="max-w-[1440px] mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 sticky top-0 z-40 px-4 sm:px-6 py-3.5 sm:py-4 shadow-xs">
+        <div className="max-w-[1600px] w-full mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <button
               onClick={onBack}
-              className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition cursor-pointer"
-              title="Return to courses list"
+              className="px-3 py-1.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl transition cursor-pointer shrink-0 flex items-center gap-1.5 text-xs font-semibold"
+              title={backButtonLabel || (searchParams.get("action") === "content" ? "Return to course selection" : "Return to courses list")}
+              aria-label={backButtonLabel || (searchParams.get("action") === "content" ? "Return to course selection" : "Return to courses list")}
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-4 h-4 shrink-0" />
+              <span className="hidden sm:inline">{backButtonLabel || (searchParams.get("action") === "content" ? "Back to Course Selection" : "Back to Courses")}</span>
             </button>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg font-bold text-slate-900 truncate">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2 min-w-0">
+                <h1 
+                  className="text-base sm:text-lg font-bold text-slate-900 dark:text-white truncate max-w-xl xl:max-w-2xl"
+                  title={courseTitle ? courseTitle : "New Course Authoring Studio"}
+                >
                   {courseTitle ? courseTitle : "New Course Authoring Studio"}
                 </h1>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono uppercase tracking-wider ${
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono uppercase tracking-wider shrink-0 ${
                   courseStatus === "published"
-                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                    ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
                     : courseStatus === "draft"
-                    ? "bg-amber-50 text-amber-700 border border-amber-200"
-                    : "bg-slate-100 text-slate-600 border border-slate-200"
+                    ? "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
                 }`}>
                   {courseStatus}
                 </span>
               </div>
-              <p className="text-xs text-slate-400 font-medium">
+              <p className="text-xs text-slate-400 dark:text-slate-500 font-medium truncate">
                 Admin Course Authoring & Learning Path Builder
               </p>
             </div>
           </div>
 
           {/* Quick Metrics & Actions */}
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 shrink-0 w-full md:w-auto justify-start md:justify-end">
             {currentCourseId && (
-              <div className="hidden sm:flex items-center gap-3 text-xs font-mono text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200/60">
-                <span className="flex items-center gap-1 font-semibold text-slate-700">
-                  <Layers className="w-3.5 h-3.5 text-blue-600" />
+              <div className="hidden lg:flex items-center gap-3 text-xs font-mono text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-200/60 dark:border-slate-700/60 whitespace-nowrap">
+                <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-200">
+                  <Layers className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                   {modules.length} Modules
                 </span>
-                <span className="text-slate-300">|</span>
-                <span className="flex items-center gap-1 font-semibold text-slate-700">
-                  <Video className="w-3.5 h-3.5 text-purple-600" />
+                <span className="text-slate-300 dark:text-slate-600">|</span>
+                <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-200">
+                  <Video className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
                   {totalLessons} Lessons
                 </span>
-                <span className="text-slate-300">|</span>
-                <span className="flex items-center gap-1 font-semibold text-slate-700">
-                  <Award className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="text-slate-300 dark:text-slate-600">|</span>
+                <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-200">
+                  <Award className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                   {assessments.length} Tests ({totalQuestions} Qs)
                 </span>
               </div>
@@ -1143,133 +1328,138 @@ export function CourseAuthoringStudio({
             {currentCourseId && (
               <button
                 onClick={() => handleUpdateCourseStatus(courseStatus === "published" ? "draft" : "published")}
-                className={`px-3 py-2 text-xs font-bold rounded-xl border transition flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3 py-2 text-xs font-bold rounded-xl border transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                   courseStatus === "published"
-                    ? "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
+                    ? "bg-amber-50 dark:bg-amber-950/50 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 hover:bg-amber-100"
                     : "bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
                 }`}
               >
-                <CheckCircle2 className="w-3.5 h-3.5" />
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                 <span>{courseStatus === "published" ? "Unpublish to Draft" : "Publish Course"}</span>
               </button>
             )}
 
             <button
-              onClick={handleSaveCourseInfo}
+              onClick={() => handleSaveCourseInfo(null)}
               disabled={saving}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-blue-500/10 cursor-pointer disabled:opacity-50"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-blue-500/10 cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
             >
-              <Save className="w-3.5 h-3.5" />
+              <Save className="w-3.5 h-3.5 shrink-0" />
               <span>{saving ? "Saving..." : currentCourseId ? "Save Changes" : "Create Course"}</span>
             </button>
           </div>
         </div>
 
-        {/* Studio Navigation Tabs */}
-        <div className="max-w-[1440px] mx-auto mt-4 flex items-center gap-1 border-t border-slate-100 pt-2 overflow-x-auto">
-          <button
-            onClick={() => setActiveTab("info")}
-            className={`px-4 py-2 text-xs font-bold rounded-xl border transition flex items-center gap-2 cursor-pointer ${
-              activeTab === "info"
-                ? "bg-slate-900 border-slate-900 text-white shadow-xs"
-                : "bg-transparent border-transparent text-slate-600 hover:bg-slate-100"
-            }`}
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>1. Course Information</span>
-          </button>
+        {/* Studio Navigation Stepper (5-Step Workflow) */}
+        <div className="max-w-[1600px] w-full mx-auto mt-3 sm:mt-4 border-t border-slate-100 dark:border-slate-800 pt-3">
+          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pb-1 min-w-0">
+            {STEPS.map((s, idx) => {
+              const isActive = activeTab === s.id;
+              const isCompleted = isStepComplete(s.id);
+              const isPrereqPending = !currentCourseId && s.id !== "info" && !courseTitle.trim();
+              const StepIcon = s.icon;
 
-          <button
-            onClick={() => {
-              if (!currentCourseId) {
-                showToast("Please save course information first", "error");
-                return;
-              }
-              setActiveTab("curriculum");
-            }}
-            className={`px-4 py-2 text-xs font-bold rounded-xl border transition flex items-center gap-2 cursor-pointer ${
-              activeTab === "curriculum"
-                ? "bg-slate-900 border-slate-900 text-white shadow-xs"
-                : "bg-transparent border-transparent text-slate-600 hover:bg-slate-100"
-            } ${!currentCourseId ? "opacity-40 cursor-not-allowed" : ""}`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>2. Curriculum & Content Builder</span>
-            {modules.length > 0 && (
-              <span className="ml-1 px-1.5 py-0.2 bg-blue-500/20 text-blue-600 rounded-md text-[10px]">
-                {modules.length}
-              </span>
-            )}
-          </button>
+              return (
+                <React.Fragment key={s.id}>
+                  <button
+                    type="button"
+                    onClick={() => handleStepClick(s.id)}
+                    aria-current={isActive ? "step" : undefined}
+                    className={`group px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-2 sm:gap-2.5 shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 select-none ${
+                      isActive
+                        ? "bg-blue-600 border-blue-600 text-white shadow-sm ring-2 ring-blue-500/30"
+                        : isCompleted
+                        ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-100/70 dark:hover:bg-emerald-900/50"
+                        : isPrereqPending
+                        ? "bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-2xs"
+                    }`}
+                    title={
+                      isPrereqPending
+                        ? "Enter course title in Step 1 to unlock"
+                        : `Navigate to ${s.title}`
+                    }
+                  >
+                    {/* Step Number / Completed Check Badge */}
+                    <span
+                      className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 transition-colors ${
+                        isActive
+                          ? "bg-white text-blue-600"
+                          : isCompleted
+                          ? "bg-emerald-600 text-white"
+                          : isPrereqPending
+                          ? "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 group-hover:bg-slate-200 dark:group-hover:bg-slate-700"
+                      }`}
+                    >
+                      {isCompleted && !isActive ? (
+                        <Check className="w-3 h-3 stroke-[3]" />
+                      ) : (
+                        s.number
+                      )}
+                    </span>
 
-          <button
-            onClick={() => {
-              if (!currentCourseId) {
-                showToast("Please save course information first", "error");
-                return;
-              }
-              setActiveTab("assessments");
-            }}
-            className={`px-4 py-2 text-xs font-bold rounded-xl border transition flex items-center gap-2 cursor-pointer ${
-              activeTab === "assessments"
-                ? "bg-slate-900 border-slate-900 text-white shadow-xs"
-                : "bg-transparent border-transparent text-slate-600 hover:bg-slate-100"
-            } ${!currentCourseId ? "opacity-40 cursor-not-allowed" : ""}`}
-          >
-            <Award className="w-3.5 h-3.5" />
-            <span>3. Practice Tests & Exam Studio</span>
-            {assessments.length > 0 && (
-              <span className="ml-1 px-1.5 py-0.2 bg-emerald-500/20 text-emerald-600 rounded-md text-[10px]">
-                {assessments.length}
-              </span>
-            )}
-          </button>
+                    {/* Step Icon */}
+                    <StepIcon className={`w-3.5 h-3.5 shrink-0 ${
+                      isActive ? "text-white" : isCompleted ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500 dark:text-slate-400"
+                    }`} />
 
-          <button
-            onClick={() => {
-              if (!currentCourseId) {
-                showToast("Please save course information first", "error");
-                return;
-              }
-              setActiveTab("publish");
-            }}
-            className={`px-4 py-2 text-xs font-bold rounded-xl border transition flex items-center gap-2 cursor-pointer ${
-              activeTab === "publish"
-                ? "bg-slate-900 border-slate-900 text-white shadow-xs"
-                : "bg-transparent border-transparent text-slate-600 hover:bg-slate-100"
-            } ${!currentCourseId ? "opacity-40 cursor-not-allowed" : ""}`}
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>4. Review & Publish</span>
-          </button>
+                    {/* Step Title */}
+                    <span className="whitespace-nowrap font-semibold">
+                      {s.title}
+                    </span>
 
-          <button
-            onClick={() => {
-              if (!currentCourseId) {
-                showToast("Please save course information first", "error");
-                return;
-              }
-              setActiveTab("access");
-            }}
-            className={`px-4 py-2 text-xs font-bold rounded-xl border transition flex items-center gap-2 cursor-pointer ${
-              activeTab === "access"
-                ? "bg-slate-900 border-slate-900 text-white shadow-xs"
-                : "bg-transparent border-transparent text-slate-600 hover:bg-slate-100"
-            } ${!currentCourseId ? "opacity-40 cursor-not-allowed" : ""}`}
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>5. Student Access Allocation</span>
-            {enrolledStudentsCount > 0 && (
-              <span className="ml-1 px-1.5 py-0.2 bg-purple-500/20 text-purple-600 rounded-md text-[10px]">
-                {enrolledStudentsCount}
-              </span>
-            )}
-          </button>
+                    {/* Step Metric Pill / Badge */}
+                    {s.id === "curriculum" && modules.length > 0 && (
+                      <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono shrink-0 ${
+                        isActive ? "bg-white/20 text-white" : "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300"
+                      }`}>
+                        {modules.length}m
+                      </span>
+                    )}
+
+                    {s.id === "assessments" && assessments.length > 0 && (
+                      <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono shrink-0 ${
+                        isActive ? "bg-white/20 text-white" : "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300"
+                      }`}>
+                        {assessments.length}t
+                      </span>
+                    )}
+
+                    {s.id === "publish" && (
+                      <span className={`px-1.5 py-0.2 rounded-md text-[9.5px] uppercase font-mono shrink-0 ${
+                        isActive
+                          ? "bg-white/20 text-white"
+                          : courseStatus === "published"
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
+                          : "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"
+                      }`}>
+                        {courseStatus}
+                      </span>
+                    )}
+
+                    {s.id === "access" && enrolledStudentsCount > 0 && (
+                      <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono shrink-0 ${
+                        isActive ? "bg-white/20 text-white" : "bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300"
+                      }`}>
+                        {enrolledStudentsCount}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Step Connector Chevron */}
+                  {idx < STEPS.length - 1 && (
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-700 shrink-0 hidden xl:block" />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
         </div>
       </div>
 
       {/* Main Studio Body */}
-      <div className="max-w-[1440px] mx-auto px-6 pt-6">
+      <div className="max-w-[1600px] w-full mx-auto px-4 sm:px-6 pt-6">
 
         {/* ======================================================== */}
         {/* TAB 1: COURSE INFORMATION                                 */}
@@ -1285,10 +1475,11 @@ export function CourseAuthoringStudio({
                 </h3>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  <label htmlFor="courseTitleInput" className="block text-xs font-semibold text-slate-700 mb-1.5">
                     Course Title <span className="text-rose-500">*</span>
                   </label>
                   <input
+                    id="courseTitleInput"
                     type="text"
                     value={courseTitle}
                     onChange={(e) => setCourseTitle(e.target.value)}
@@ -1298,10 +1489,11 @@ export function CourseAuthoringStudio({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  <label htmlFor="courseShortDescInput" className="block text-xs font-semibold text-slate-700 mb-1.5">
                     Short Summary (Shown in Course Catalog Cards)
                   </label>
                   <input
+                    id="courseShortDescInput"
                     type="text"
                     value={courseShortDesc}
                     onChange={(e) => setCourseShortDesc(e.target.value)}
@@ -1311,10 +1503,11 @@ export function CourseAuthoringStudio({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  <label htmlFor="courseDescriptionInput" className="block text-xs font-semibold text-slate-700 mb-1.5">
                     Full Description (Markdown or Rich Text)
                   </label>
                   <textarea
+                    id="courseDescriptionInput"
                     rows={6}
                     value={courseDescription}
                     onChange={(e) => setCourseDescription(e.target.value)}
@@ -1546,7 +1739,8 @@ export function CourseAuthoringStudio({
 
                 <div className="pt-4">
                   <button
-                    onClick={handleSaveCourseInfo}
+                    type="button"
+                    onClick={() => handleSaveCourseInfo(null)}
                     disabled={saving}
                     className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-sm shadow-blue-500/20 cursor-pointer disabled:opacity-50"
                   >
@@ -1554,6 +1748,40 @@ export function CourseAuthoringStudio({
                     <span>{saving ? "Saving Changes..." : "Save Course Information"}</span>
                   </button>
                 </div>
+              </div>
+            </div>
+
+            {/* Step 1 Bottom Navigation Bar */}
+            <div className="lg:col-span-3 mt-4 pt-5 border-t border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+              <button
+                type="button"
+                onClick={onBack}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shrink-0"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>{backButtonLabel || (searchParams.get("action") === "content" ? "Back to Course Selection" : "Back to Course Catalog")}</span>
+              </button>
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleSaveCourseInfo(null)}
+                  disabled={saving}
+                  className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  <span>{saving ? "Saving..." : currentCourseId ? "Save Changes" : "Save as Draft"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSaveCourseInfo("curriculum")}
+                  disabled={saving}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-sm shadow-blue-500/20 cursor-pointer disabled:opacity-50"
+                >
+                  <span>{currentCourseId ? "Continue to Curriculum" : "Save & Continue to Curriculum"}</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
             </div>
           </div>
@@ -1580,7 +1808,7 @@ export function CourseAuthoringStudio({
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-blue-500/10 cursor-pointer shrink-0"
               >
                 <Plus className="w-4 h-4" />
-                <span>+ Add Module</span>
+                <span>Add Module</span>
               </button>
             </div>
 
@@ -1799,6 +2027,33 @@ export function CourseAuthoringStudio({
                 ))}
               </div>
             )}
+
+            {/* Step 2 Bottom Navigation Bar */}
+            <div className="mt-8 pt-5 border-t border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+              <button
+                type="button"
+                onClick={() => setActiveTab("info")}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shrink-0"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>← Back to Step 1: Course Information</span>
+              </button>
+
+              <div className="flex items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
+                <span className="font-semibold text-slate-700 dark:text-slate-200">{modules.length} Modules</span>
+                <span>•</span>
+                <span className="font-semibold text-slate-700 dark:text-slate-200">{totalLessons} Lessons published</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("assessments")}
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-sm shadow-blue-500/20 cursor-pointer"
+              >
+                <span>Continue to Step 3: Practice Tests & Exams</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )}
 
@@ -1856,7 +2111,7 @@ export function CourseAuthoringStudio({
                   className="w-full py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Award className="w-3.5 h-3.5" />
-                  <span>+ Course Final Assessment</span>
+                  <span>Course Final Assessment</span>
                 </button>
               </div>
             </div>
@@ -1864,34 +2119,94 @@ export function CourseAuthoringStudio({
             {/* Right Question Studio Column */}
             <div className="lg:col-span-3 space-y-6">
               {activeAssessment ? (
-                <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs space-y-6">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6 min-w-0">
                   {/* Active Assessment Info Banner */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded font-bold ${
-                          activeAssessment.type === "course_final" ? "bg-purple-100 text-purple-700" : "bg-emerald-100 text-emerald-700"
-                        }`}>
-                          {activeAssessment.type === "course_final" ? "Course Final Exam" : "Lesson Practice Test"}
-                        </span>
-                        <h3 className="text-base font-bold text-slate-900">{activeAssessment.title}</h3>
+                  <div className="space-y-4 pb-5 border-b border-slate-100 dark:border-slate-800 min-w-0">
+                    {/* Header Row: Title, Badge, Description & Actions */}
+                    <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4 min-w-0">
+                      {/* Left: Title, Badge & Description */}
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`text-[10px] font-mono uppercase px-2.5 py-0.5 rounded-full font-bold border tracking-wider shrink-0 ${
+                            activeAssessment.type === "course_final" 
+                              ? "bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800" 
+                              : "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
+                          }`}>
+                            {activeAssessment.type === "course_final" ? "Course Final Exam" : "Lesson Practice Test"}
+                          </span>
+                          <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white break-words">
+                            {activeAssessment.title}
+                          </h3>
+                        </div>
+                        {activeAssessment.description ? (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-3xl">
+                            {activeAssessment.description}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-slate-400 italic">No description provided for this assessment.</p>
+                        )}
                       </div>
-                      <p className="text-xs text-slate-500 mt-1">{activeAssessment.description}</p>
-                      <div className="flex items-center gap-4 mt-2 text-xs font-mono text-slate-400">
-                        <span>Duration: <strong>{activeAssessment.durationMinutes}m</strong></span>
-                        <span>Passing: <strong>{activeAssessment.passingScore}%</strong></span>
-                        <span>Total Points: <strong>{activeAssessment.totalPoints} pts</strong></span>
-                        <span>Questions: <strong>{activeAssessment.questions?.length || 0}</strong></span>
+
+                      {/* Right: Actions Container */}
+                      <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 shrink-0 min-w-0 w-full xl:w-auto">
+                        <button
+                          type="button"
+                          onClick={() => setShowExcelImportModal(true)}
+                          className="w-full sm:w-auto px-3.5 py-2.5 bg-white hover:bg-slate-50 active:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-2xs cursor-pointer whitespace-nowrap min-w-0"
+                          title="Bulk import questions from Excel (.xlsx, .xls)"
+                        >
+                          <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <span>Import Questions from Excel</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleOpenAddQuestion}
+                          className="w-full sm:w-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-500/10 cursor-pointer whitespace-nowrap shrink-0 min-w-0"
+                        >
+                          <Plus className="w-4 h-4 shrink-0" />
+                          <span>Add MCQ Question</span>
+                        </button>
                       </div>
                     </div>
 
-                    <button
-                      onClick={handleOpenAddQuestion}
-                      className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-emerald-500/10 cursor-pointer shrink-0"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>+ Add MCQ Question</span>
-                    </button>
+                    {/* Statistics Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                      <div className="p-3 bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 rounded-xl">
+                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider font-mono block">
+                          Duration
+                        </span>
+                        <span className="text-sm font-bold text-slate-800 dark:text-slate-100 font-mono mt-0.5 block whitespace-nowrap">
+                          {activeAssessment.durationMinutes} min
+                        </span>
+                      </div>
+
+                      <div className="p-3 bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 rounded-xl">
+                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider font-mono block">
+                          Passing Score
+                        </span>
+                        <span className="text-sm font-bold text-slate-800 dark:text-slate-100 font-mono mt-0.5 block whitespace-nowrap">
+                          {activeAssessment.passingScore}%
+                        </span>
+                      </div>
+
+                      <div className="p-3 bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 rounded-xl">
+                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider font-mono block">
+                          Total Points
+                        </span>
+                        <span className="text-sm font-bold text-slate-800 dark:text-slate-100 font-mono mt-0.5 block whitespace-nowrap">
+                          {activeAssessment.totalPoints} pts
+                        </span>
+                      </div>
+
+                      <div className="p-3 bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 rounded-xl">
+                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider font-mono block">
+                          Questions
+                        </span>
+                        <span className="text-sm font-bold text-slate-800 dark:text-slate-100 font-mono mt-0.5 block whitespace-nowrap">
+                          {activeAssessment.questions?.length || 0}
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Questions List */}
@@ -1900,38 +2215,49 @@ export function CourseAuthoringStudio({
                       <div className="py-12 text-center text-slate-400 space-y-3">
                         <HelpCircle className="w-8 h-8 mx-auto text-slate-300" />
                         <p className="text-xs font-medium">No questions in this assessment yet.</p>
-                        <button
-                          onClick={handleOpenAddQuestion}
-                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition cursor-pointer"
-                        >
-                          + Add First Question
-                        </button>
+                        <div className="flex flex-wrap items-center justify-center gap-2.5">
+                          <button
+                            type="button"
+                            onClick={handleOpenAddQuestion}
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition cursor-pointer"
+                          >
+                            Add First Question
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowExcelImportModal(true)}
+                            className="px-4 py-2 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                            <span>Import Questions from Excel</span>
+                          </button>
+                        </div>
                       </div>
                     ) : (
                       activeAssessment.questions.map((q, qIdx) => (
                         <div
                           key={q.id}
-                          className="p-5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-3"
+                          className="p-4 sm:p-5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-xl space-y-3"
                         >
                           <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-start gap-3">
-                              <span className="w-6 h-6 bg-slate-200 text-slate-700 rounded-md flex items-center justify-center text-xs font-bold font-mono shrink-0">
+                            <div className="flex items-start gap-3 min-w-0 flex-1">
+                              <span className="w-6 h-6 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md flex items-center justify-center text-xs font-bold font-mono shrink-0">
                                 {qIdx + 1}
                               </span>
-                              <div>
-                                <h5 className="text-xs font-bold text-slate-900 leading-relaxed">
+                              <div className="min-w-0 flex-1">
+                                <h5 className="text-xs font-bold text-slate-900 dark:text-slate-100 leading-relaxed break-words">
                                   {q.questionText}
                                 </h5>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold">
+                                <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                                  <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded font-bold border border-emerald-200 dark:border-emerald-800/50">
                                     {q.points} Points
                                   </span>
                                   {q.negativePoints ? (
-                                    <span className="text-[10px] font-mono text-rose-700 bg-rose-50 px-2 py-0.5 rounded font-bold">
+                                    <span className="text-[10px] font-mono text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded font-bold border border-rose-200 dark:border-rose-800/50">
                                       -{q.negativePoints} Negative
                                     </span>
                                   ) : null}
-                                  <span className="text-[10px] font-mono text-slate-400 uppercase">
+                                  <span className="text-[10px] font-mono text-slate-400 dark:text-slate-400 uppercase">
                                     {q.difficulty || "medium"}
                                   </span>
                                 </div>
@@ -1940,15 +2266,17 @@ export function CourseAuthoringStudio({
 
                             <div className="flex items-center gap-1.5 shrink-0">
                               <button
+                                type="button"
                                 onClick={() => handleOpenEditQuestion(q)}
-                                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-lg transition cursor-pointer"
+                                className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition cursor-pointer"
                                 title="Edit Question"
                               >
                                 <Edit3 className="w-3.5 h-3.5" />
                               </button>
                               <button
+                                type="button"
                                 onClick={() => handleDeleteQuestion(q.id)}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition cursor-pointer"
                                 title="Delete Question"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -1963,26 +2291,26 @@ export function CourseAuthoringStudio({
                               return (
                                 <div
                                   key={optIdx}
-                                  className={`p-2.5 rounded-lg text-xs flex items-center gap-2 border ${
+                                  className={`p-2.5 rounded-lg text-xs flex items-center gap-2 border min-w-0 ${
                                     isCorrect 
-                                      ? "bg-emerald-50/70 border-emerald-200 text-emerald-900 font-semibold" 
-                                      : "bg-white border-slate-200/60 text-slate-700"
+                                      ? "bg-emerald-50/70 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-200 font-semibold" 
+                                      : "bg-white dark:bg-slate-800 border-slate-200/60 dark:border-slate-700/60 text-slate-700 dark:text-slate-300"
                                   }`}
                                 >
                                   {isCorrect ? (
-                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                                   ) : (
-                                    <Circle className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                                    <Circle className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 shrink-0" />
                                   )}
-                                  <span className="truncate">{opt}</span>
+                                  <span className="break-words min-w-0 flex-1">{opt}</span>
                                 </div>
                               );
                             })}
                           </div>
 
                           {q.explanation && (
-                            <div className="text-[11px] text-slate-500 bg-white p-2.5 rounded-lg border border-slate-100">
-                              <span className="font-semibold text-slate-700">Explanation: </span>
+                            <div className="text-[11px] text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800/80 p-2.5 rounded-lg border border-slate-200/60 dark:border-slate-700/60 break-words">
+                              <span className="font-semibold text-slate-700 dark:text-slate-200">Explanation: </span>
                               {q.explanation}
                             </div>
                           )}
@@ -1996,6 +2324,33 @@ export function CourseAuthoringStudio({
                   Select an assessment from the left panel to manage questions.
                 </div>
               )}
+            </div>
+
+            {/* Step 3 Bottom Navigation Bar */}
+            <div className="col-span-1 lg:col-span-4 mt-8 pt-5 border-t border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+              <button
+                type="button"
+                onClick={() => setActiveTab("curriculum")}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shrink-0"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>← Back to Step 2: Curriculum Builder</span>
+              </button>
+
+              <div className="flex items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
+                <span className="font-semibold text-slate-700 dark:text-slate-200">{assessments.length} Practice Tests</span>
+                <span>•</span>
+                <span className="font-semibold text-slate-700 dark:text-slate-200">{totalQuestions} Questions total</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("publish")}
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-sm shadow-blue-500/20 cursor-pointer"
+              >
+                <span>Continue to Step 4: Review & Publish</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
         )}
@@ -2192,15 +2547,24 @@ export function CourseAuthoringStudio({
                 </button>
               </div>
 
-              {/* Proceed to Student Access Allocation */}
-              <div className="pt-2 border-t border-slate-100">
+              {/* Step 4 Bottom Navigation Bar */}
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("assessments")}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>← Back to Step 3: Practice Tests</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setActiveTab("access")}
-                  className="w-full py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-sm shadow-blue-500/20 cursor-pointer"
                 >
-                  <Users className="w-4 h-4" />
-                  <span>Proceed to Student Access Allocation →</span>
+                  <span>Proceed to Step 5: Student Access Allocation</span>
+                  <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -2925,6 +3289,33 @@ export function CourseAuthoringStudio({
                 </div>
               </div>
             )}
+
+            {/* Step 5 Bottom Navigation Bar */}
+            <div className="mt-8 pt-5 border-t border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+              <button
+                type="button"
+                onClick={() => setActiveTab("publish")}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shrink-0"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>← Back to Step 4: Review & Publish</span>
+              </button>
+
+              <div className="flex items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
+                <span className="font-semibold text-slate-700 dark:text-slate-200">{enrolledCount} Active Learners Assigned</span>
+                <span>•</span>
+                <span>{accessMatrix.length} total roster records</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={onBack}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-sm shadow-emerald-500/20 cursor-pointer"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Finish & Return to Course Catalog</span>
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -3231,21 +3622,23 @@ export function CourseAuthoringStudio({
       {/* ======================================================== */}
       {showQuestionModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl w-full max-w-xl p-6 border border-slate-200 shadow-2xl space-y-4 my-8">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-sm font-bold text-slate-900">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-xl p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                 {editingQuestionId ? "Edit Question" : "Add MCQ Question"}
               </h3>
               <button
-                onClick={() => setShowQuestionModal(false)}
-                className="text-slate-400 hover:text-slate-600"
+                type="button"
+                onClick={handleCloseQuestionModal}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
+                title="Close Modal"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Question Text <span className="text-rose-500">*</span>
               </label>
               <textarea
@@ -3253,13 +3646,13 @@ export function CourseAuthoringStudio({
                 value={questionText}
                 onChange={(e) => setQuestionText(e.target.value)}
                 placeholder="What is the primary function of...?"
-                className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:bg-white"
+                className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:bg-white dark:focus:bg-slate-900"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   Marks / Points
                 </label>
                 <input
@@ -3267,18 +3660,18 @@ export function CourseAuthoringStudio({
                   min="1"
                   value={questionPoints}
                   onChange={(e) => setQuestionPoints(Number(e.target.value))}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:bg-white"
+                  className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:bg-white dark:focus:bg-slate-900"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   Difficulty
                 </label>
                 <select
                   value={questionDifficulty}
                   onChange={(e) => setQuestionDifficulty(e.target.value as any)}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:bg-white cursor-pointer"
+                  className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:bg-white dark:focus:bg-slate-900 cursor-pointer"
                 >
                   <option value="easy">Easy</option>
                   <option value="medium">Medium</option>
@@ -3290,13 +3683,13 @@ export function CourseAuthoringStudio({
             {/* Answer Options */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="block text-xs font-semibold text-slate-700">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                   Options (Select radio/checkbox to mark correct answer)
                 </label>
                 <button
                   type="button"
-                  onClick={() => setQuestionOptions([...questionOptions, `Option ${String.fromCharCode(65 + questionOptions.length)}`])}
-                  className="text-[11px] font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
+                  onClick={() => setQuestionOptions([...questionOptions, ""])}
+                  className="text-[11px] font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 cursor-pointer"
                 >
                   + Add Option
                 </button>
@@ -3304,26 +3697,26 @@ export function CourseAuthoringStudio({
 
               <div className="space-y-2">
                 {questionOptions.map((opt, i) => {
-                  const isCorrect = correctAnswers.includes(opt);
+                  const isCorrect = correctOptionIndices.includes(i);
                   return (
                     <div key={i} className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => {
                           if (questionType === QuestionType.MCQ_SINGLE) {
-                            setCorrectAnswers([opt]);
+                            setCorrectOptionIndices([i]);
                           } else {
                             if (isCorrect) {
-                              setCorrectAnswers(correctAnswers.filter(a => a !== opt));
+                              setCorrectOptionIndices(correctOptionIndices.filter(idx => idx !== i));
                             } else {
-                              setCorrectAnswers([...correctAnswers, opt]);
+                              setCorrectOptionIndices([...correctOptionIndices, i]);
                             }
                           }
                         }}
                         className={`w-6 h-6 rounded-md flex items-center justify-center border transition cursor-pointer shrink-0 ${
                           isCorrect 
                             ? "bg-emerald-600 border-emerald-600 text-white" 
-                            : "border-slate-300 hover:border-slate-400 bg-white"
+                            : "border-slate-300 hover:border-slate-400 bg-white dark:bg-slate-800 dark:border-slate-700"
                         }`}
                         title={isCorrect ? "Correct answer" : "Click to mark as correct answer"}
                       >
@@ -3335,15 +3728,11 @@ export function CourseAuthoringStudio({
                         value={opt}
                         onChange={(e) => {
                           const updated = [...questionOptions];
-                          const oldVal = updated[i];
                           updated[i] = e.target.value;
                           setQuestionOptions(updated);
-                          if (correctAnswers.includes(oldVal)) {
-                            setCorrectAnswers(correctAnswers.map(c => c === oldVal ? e.target.value : c));
-                          }
                         }}
-                        placeholder={`Option ${String.fromCharCode(65 + i)}`}
-                        className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:bg-white"
+                        placeholder={`Enter option ${String.fromCharCode(65 + i)}`}
+                        className="flex-1 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:bg-white dark:focus:bg-slate-900"
                       />
 
                       {questionOptions.length > 2 && (
@@ -3352,9 +3741,15 @@ export function CourseAuthoringStudio({
                           onClick={() => {
                             const updated = questionOptions.filter((_, idx) => idx !== i);
                             setQuestionOptions(updated);
-                            setCorrectAnswers(correctAnswers.filter(a => a !== opt));
+                            setCorrectOptionIndices(prev => {
+                              const filtered = prev
+                                .filter(idx => idx !== i)
+                                .map(idx => (idx > i ? idx - 1 : idx));
+                              return filtered.length > 0 ? filtered : [0];
+                            });
                           }}
-                          className="text-slate-400 hover:text-rose-500 transition"
+                          className="text-slate-400 hover:text-rose-500 transition cursor-pointer"
+                          title="Remove Option"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -3366,7 +3761,7 @@ export function CourseAuthoringStudio({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Answer Explanation (Optional, revealed to student)
               </label>
               <textarea
@@ -3374,28 +3769,51 @@ export function CourseAuthoringStudio({
                 value={questionExplanation}
                 onChange={(e) => setQuestionExplanation(e.target.value)}
                 placeholder="Explain why this answer is correct..."
-                className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:bg-white"
+                className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:bg-white dark:focus:bg-slate-900"
               />
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
-                onClick={() => setShowQuestionModal(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                onClick={handleCloseQuestionModal}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
+                disabled={isSavingQuestion}
                 onClick={handleSaveQuestion}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer"
               >
-                {editingQuestionId ? "Update Question" : "Save Question"}
+                {isSavingQuestion && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>
+                  {isSavingQuestion 
+                    ? (editingQuestionId ? "Updating..." : "Saving...") 
+                    : (editingQuestionId ? "Update Question" : "Save Question")}
+                </span>
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Assessment Excel Bulk Import Modal */}
+      {showExcelImportModal && activeAssessment && (
+        <AssessmentExcelImportModal
+          isOpen={showExcelImportModal}
+          onClose={() => setShowExcelImportModal(false)}
+          assessmentId={activeAssessment.id}
+          assessmentTitle={activeAssessment.title}
+          authToken={authToken}
+          onSuccess={async () => {
+            if (currentCourseId) {
+              await loadCourse(currentCourseId);
+              showToast("Questions successfully imported into assessment", "success");
+            }
+          }}
+        />
       )}
     </div>
   );

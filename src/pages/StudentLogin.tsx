@@ -139,7 +139,7 @@ export function StudentLogin() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full btn-theme-primary hover:opacity-90 disabled:opacity-60 text-black font-bold text-xs py-3.5 rounded-xl transition duration-150 shadow-md cursor-pointer flex items-center justify-center gap-2"
+                className="w-full btn-theme-primary hover:opacity-90 disabled:opacity-60 text-white font-bold text-xs py-3.5 rounded-xl transition duration-150 shadow-md cursor-pointer flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (
                   <span>Authenticating...</span>

@@ -204,12 +204,12 @@ export function StudentDashboard({
       <div className="relative overflow-hidden hero-gradient text-black rounded-3xl p-5 sm:p-6 md:p-8 shadow-md min-w-0">
         <div className="relative z-10 space-y-4 max-w-3xl min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/60 text-black text-[10px] font-bold tracking-wider uppercase font-mono backdrop-blur-xs border border-blue-200">
-              <Calendar className="w-3 h-3 shrink-0 text-blue-600" />
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/75 dark:bg-slate-900/80 text-slate-800 dark:text-slate-200 text-[10px] font-bold tracking-wider uppercase font-mono backdrop-blur-xs border border-blue-200 dark:border-slate-700">
+              <Calendar className="w-3 h-3 shrink-0 text-blue-600 dark:text-blue-400" />
               <span>{formattedDate}</span>
             </div>
             {progress.learningStreakDays > 0 && (
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-black border border-amber-300 text-[10px] font-bold tracking-wider uppercase font-mono backdrop-blur-xs">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700/60 text-[10px] font-bold tracking-wider uppercase font-mono backdrop-blur-xs">
                 <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
                 <span>{progress.learningStreakDays}-Day Streak</span>
               </div>
@@ -217,37 +217,37 @@ export function StudentDashboard({
           </div>
 
           <div className="space-y-1.5 min-w-0">
-            <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-black flex flex-wrap items-center gap-2">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-slate-950 dark:text-white flex flex-wrap items-center gap-2">
               <span>Welcome Back, {currentUser.name}!</span> <span>👋</span>
             </h2>
-            <p className="text-black text-xs sm:text-sm leading-relaxed max-w-2xl font-medium">
+            <p className="text-slate-800 dark:text-slate-200 text-xs sm:text-sm leading-relaxed max-w-2xl font-medium">
               Keep your momentum moving forward today. Track assigned courses, tackle upcoming assessments, or consult your personal AI Mentor.
             </p>
           </div>
 
           {/* Quick Metrics Pills */}
           <div className="flex flex-wrap gap-2.5 sm:gap-4 pt-2">
-            <div className="bg-white/60 rounded-xl px-3.5 py-2 border border-blue-200 backdrop-blur-xs">
-              <span className="text-[10px] font-semibold text-black block uppercase tracking-wider font-mono">
+            <div className="bg-white/75 dark:bg-slate-900/80 rounded-xl px-3.5 py-2 border border-blue-200 dark:border-slate-700 backdrop-blur-xs shadow-2xs">
+              <span className="text-[10px] font-semibold text-slate-800 dark:text-slate-300 block uppercase tracking-wider font-mono">
                 Completion Rate
               </span>
-              <span className="text-base sm:text-lg font-bold font-mono text-black">
+              <span className="text-base sm:text-lg font-bold font-mono text-slate-950 dark:text-white">
                 {progress.overallCompletionRate}%
               </span>
             </div>
-            <div className="bg-white/60 rounded-xl px-3.5 py-2 border border-blue-200 backdrop-blur-xs">
-              <span className="text-[10px] font-semibold text-black block uppercase tracking-wider font-mono">
+            <div className="bg-white/75 dark:bg-slate-900/80 rounded-xl px-3.5 py-2 border border-blue-200 dark:border-slate-700 backdrop-blur-xs shadow-2xs">
+              <span className="text-[10px] font-semibold text-slate-800 dark:text-slate-300 block uppercase tracking-wider font-mono">
                 Courses In Progress
               </span>
-              <span className="text-base sm:text-lg font-bold font-mono text-black">
+              <span className="text-base sm:text-lg font-bold font-mono text-slate-950 dark:text-white">
                 {progress.inProgressCourses || (progress.totalAssignedCourses - progress.completedCourses)}
               </span>
             </div>
-            <div className="bg-white/60 rounded-xl px-3.5 py-2 border border-blue-200 backdrop-blur-xs">
-              <span className="text-[10px] font-semibold text-black block uppercase tracking-wider font-mono">
+            <div className="bg-white/75 dark:bg-slate-900/80 rounded-xl px-3.5 py-2 border border-blue-200 dark:border-slate-700 backdrop-blur-xs shadow-2xs">
+              <span className="text-[10px] font-semibold text-slate-800 dark:text-slate-300 block uppercase tracking-wider font-mono">
                 Certificates Earned
               </span>
-              <span className="text-base sm:text-lg font-bold font-mono text-black">
+              <span className="text-base sm:text-lg font-bold font-mono text-slate-950 dark:text-white">
                 {progress.totalCertificates || certificates.length}
               </span>
             </div>
@@ -424,57 +424,57 @@ export function StudentDashboard({
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
         
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 shadow-2xs">
-          <span className="text-[10px] font-bold text-slate-400 uppercase font-mono block">Enrolled Courses</span>
+          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase font-mono block">Enrolled Courses</span>
           <p className="text-xl font-extrabold text-slate-900 dark:text-white mt-1">
             {progress.totalAssignedCourses}
           </p>
-          <span className="text-[10px] text-slate-400 mt-0.5 block">{progress.completedCourses} graduated</span>
+          <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 block">{progress.completedCourses} graduated</span>
         </div>
 
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 shadow-2xs">
-          <span className="text-[10px] font-bold text-slate-400 uppercase font-mono block">Completion Rate</span>
+          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase font-mono block">Completion Rate</span>
           <p className="text-xl font-extrabold text-blue-600 dark:text-blue-400 mt-1">
             {progress.overallCompletionRate}%
           </p>
-          <span className="text-[10px] text-slate-400 mt-0.5 block">Overall syllabus</span>
+          <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 block">Overall syllabus</span>
         </div>
 
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 shadow-2xs">
-          <span className="text-[10px] font-bold text-slate-400 uppercase font-mono block">Exams Passed</span>
+          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase font-mono block">Exams Passed</span>
           <p className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
             {progress.passedAssessments}
           </p>
-          <span className="text-[10px] text-slate-400 mt-0.5 block">Avg {progress.averageAssessmentScore}%</span>
+          <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 block">Avg {progress.averageAssessmentScore}%</span>
         </div>
 
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 shadow-2xs">
-          <span className="text-[10px] font-bold text-slate-400 uppercase font-mono block">Learning Hours</span>
+          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase font-mono block">Learning Hours</span>
           <p className="text-xl font-extrabold text-purple-600 dark:text-purple-400 mt-1">
             {progress.estimatedLearningHours}h
           </p>
-          <span className="text-[10px] text-slate-400 mt-0.5 block">{progress.totalLessonsCompleted} lessons</span>
+          <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 block">{progress.totalLessonsCompleted} lessons</span>
         </div>
 
         <div 
           onClick={() => onNavigate("practice")}
           className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 shadow-2xs cursor-pointer hover:border-amber-400 transition group"
         >
-          <span className="text-[10px] font-bold text-slate-400 uppercase font-mono block group-hover:text-amber-500">Coding Solved</span>
+          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase font-mono block group-hover:text-amber-500">Coding Solved</span>
           <p className="text-xl font-extrabold text-amber-600 dark:text-amber-400 mt-1">
             {progress.codingChallengesSolved}
           </p>
-          <span className="text-[10px] text-slate-400 mt-0.5 block">Algorithms</span>
+          <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 block">Algorithms</span>
         </div>
 
         <div 
           onClick={() => onNavigate("certificates")}
           className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 shadow-2xs cursor-pointer hover:border-indigo-400 transition group"
         >
-          <span className="text-[10px] font-bold text-slate-400 uppercase font-mono block group-hover:text-indigo-500">Certificates</span>
+          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase font-mono block group-hover:text-indigo-500">Certificates</span>
           <p className="text-xl font-extrabold text-indigo-600 dark:text-indigo-400 mt-1">
             {progress.totalCertificates || certificates.length}
           </p>
-          <span className="text-[10px] text-slate-400 mt-0.5 block">Official credentials</span>
+          <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 block">Official credentials</span>
         </div>
 
       </div>

@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { 
   BarChart3, TrendingUp, Users, BookOpen, Award, Medal, Clock, 
   AlertTriangle, Calendar, Download, Search, Filter, ArrowUpRight, 
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.js";
 import { UserRole } from "../../types.js";
+import { ThemeQuickControls } from "../../components/ThemeQuickControls.js";
 
 interface AdminAnalyticsPageProps {
   isManagerView?: boolean;
@@ -20,6 +22,7 @@ interface AdminAnalyticsPageProps {
 
 export function AdminAnalyticsPage({ isManagerView = false }: AdminAnalyticsPageProps) {
   const { authToken, currentUser } = useAuth();
+  const navigate = useNavigate();
 
   // Tab state: "overview" | "courses" | "assessments" | "learners" | "export"
   const [activeTab, setActiveTab] = useState<"overview" | "courses" | "assessments" | "learners" | "export">("overview");
@@ -369,6 +372,8 @@ export function AdminAnalyticsPage({ isManagerView = false }: AdminAnalyticsPage
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
+
+          <ThemeQuickControls onOpenPreferences={() => navigate(isManagerView ? "/manager/profile" : "/admin/profile")} />
         </div>
       </div>
 

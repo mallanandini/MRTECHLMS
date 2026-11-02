@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import "./server/env.js";
 import express from "express";
 import path from "path";
 import crypto from "crypto";
@@ -32,6 +33,7 @@ import { initializeDatabase } from "./server/seed.js";
 import { detectAvailableRuntimes, executeProgram, evaluateTestCases } from "./server/codeExecution.js";
 import { CodingExecutionService } from "./server/services/coding/coding-execution.service.js";
 import { validateStrongPassword } from "./server/create-admin.js";
+import { getJwtSecret } from "./server/jwt-secret.js";
 
 import { pool } from "./server/mysql.js";
 import { createRateLimiter, getClientIp } from "./server/rateLimiter.js";
@@ -160,7 +162,7 @@ if (fs.existsSync(monacoVsDir)) {
 const ALLOWED_UPLOAD_EXTENSIONS: Record<string, string[]> = {
   thumbnail: [".jpg", ".jpeg", ".png", ".webp"],
   video: [".mp4", ".webm", ".ogg", ".mov"],
-  materials: [".pdf", ".doc", ".docx", ".ppt", ".pptx", ".txt", ".zip"],
+  materials: [".pdf", ".doc", ".docx", ".ppt", ".pptx", ".txt", ".zip", ".xlsx", ".xls", ".csv"],
   avatar: [".jpg", ".jpeg", ".png", ".webp"]
 };
 
@@ -173,6 +175,9 @@ const ALLOWED_UPLOAD_MIME_TYPES: Record<string, string[]> = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.ms-powerpoint",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+    "text/csv",
     "text/plain",
     "application/zip",
     "application/x-zip-compressed"
@@ -320,12 +325,15 @@ if (process.env.NODE_ENV === "production" && (!process.env.JWT_SECRET || process
 if (!process.env.JWT_SECRET) {
   console.warn("⚠️  SECURITY WARNING: JWT_SECRET environment variable is not set. Using local development fallback secret.");
 }
-const JWT_SECRET = process.env.JWT_SECRET || "mrtechlms-dev-jwt-fallback-key-32chars-min!!";
+
+function isPlatformAdmin(role: UserRole | string | undefined): boolean {
+  return role === UserRole.ADMIN || role === UserRole.SUPER_ADMIN;
+}
 
 function generateToken(user: { id: string; role: string; email: string }) {
   return jwt.sign(
     { sub: user.id, userId: user.id },
-    JWT_SECRET,
+    getJwtSecret(),
     { algorithm: "HS256", expiresIn: "24h" }
   );
 }
@@ -341,7 +349,7 @@ async function authenticateToken(req: express.Request, res: express.Response, ne
 
   try {
     // Explicitly enforce HS256 to reject alg:none, malformed, and tampered tokens
-    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] }) as any;
+    const decoded = jwt.verify(token, getJwtSecret(), { algorithms: ["HS256"] }) as any;
     const userId = decoded.userId || decoded.sub;
 
     if (!userId) {
@@ -1511,12 +1519,123 @@ app.get("/api/admin/dashboard", authenticateToken, async (req, res) => {
     const orgId = req.user!.organizationId || "org-default";
     const analytics = await AnalyticsService.getAdminOverviewAnalytics({ organizationId: orgId });
 
+    // 1. Assessment statistics
+    const [assessmentStatsRows]: any = await pool.query(
+      `SELECT 
+        COUNT(id) AS total,
+        SUM(CASE WHEN status = 'published' THEN 1 ELSE 0 END) AS published,
+        SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) AS draft
+       FROM assessments 
+       WHERE (organizationId = ? OR organizationId IS NULL) AND deletedAt IS NULL`,
+      [orgId]
+    );
+    const assessmentStats = {
+      total: Number(assessmentStatsRows[0]?.total) || 0,
+      published: Number(assessmentStatsRows[0]?.published) || 0,
+      draft: Number(assessmentStatsRows[0]?.draft) || 0
+    };
+
+    // 2. Recent Courses (Top 5)
+    const [recentCourses]: any = await pool.query(
+      `SELECT c.id, c.title, c.category, c.status, c.updatedAt, c.createdAt,
+              COUNT(e.id) AS enrollmentsCount
+       FROM courses c
+       LEFT JOIN enrollments e ON c.id = e.courseId AND e.deletedAt IS NULL AND e.status != 'revoked'
+       WHERE (c.organizationId = ? OR c.organizationId IS NULL) AND c.deletedAt IS NULL
+       GROUP BY c.id
+       ORDER BY COALESCE(c.updatedAt, c.createdAt) DESC
+       LIMIT 5`,
+      [orgId]
+    );
+
+    // 3. Recent Assessments (Top 5)
+    const [recentAssessments]: any = await pool.query(
+      `SELECT a.id, a.title, a.category, a.status, a.passingScore, a.updatedAt, a.createdAt,
+              COUNT(DISTINCT s.id) AS submissionsCount,
+              COUNT(DISTINCT q.id) AS questionsCount
+       FROM assessments a
+       LEFT JOIN submissions s ON a.id = s.assessmentId
+       LEFT JOIN questions q ON a.id = q.assessmentId AND q.deletedAt IS NULL
+       WHERE (a.organizationId = ? OR a.organizationId IS NULL) AND a.deletedAt IS NULL
+       GROUP BY a.id
+       ORDER BY COALESCE(a.updatedAt, a.createdAt) DESC
+       LIMIT 5`,
+      [orgId]
+    );
+
+    // 4. Unified Real Recent Activity Stream (Top 10)
+    const [recentActivity]: any = await pool.query(
+      `SELECT * FROM (
+        SELECT 
+          s.id,
+          'submission' AS activityType,
+          u.name AS actorName,
+          u.email AS actorEmail,
+          a.title AS targetTitle,
+          CONCAT(s.score, ' pts (', s.percentage, '%) • ', CASE WHEN s.passed = 1 THEN 'Passed' ELSE 'Failed' END) AS detail,
+          s.submittedAt AS timestamp
+        FROM submissions s
+        JOIN users u ON s.studentId = u.id
+        JOIN assessments a ON s.assessmentId = a.id
+        WHERE (s.organizationId = ? OR s.organizationId IS NULL)
+
+        UNION ALL
+
+        SELECT 
+          e.id,
+          'enrollment' AS activityType,
+          u.name AS actorName,
+          u.email AS actorEmail,
+          c.title AS targetTitle,
+          CONCAT('Assigned via ', COALESCE(e.assignmentSource, 'direct')) AS detail,
+          e.enrolledAt AS timestamp
+        FROM enrollments e
+        JOIN users u ON e.studentId = u.id
+        JOIN courses c ON e.courseId = c.id
+        WHERE (e.organizationId = ? OR e.organizationId IS NULL) AND e.deletedAt IS NULL AND e.status != 'revoked'
+
+        UNION ALL
+
+        SELECT 
+          u.id,
+          'user_onboarded' AS activityType,
+          u.name AS actorName,
+          u.email AS actorEmail,
+          'Student Account' AS targetTitle,
+          CONCAT('Role: Student • ', COALESCE(u.status, 'active')) AS detail,
+          u.createdAt AS timestamp
+        FROM users u
+        WHERE (u.organizationId = ? OR u.organizationId IS NULL) AND u.role = 'student' AND u.deletedAt IS NULL
+      ) AS recent_stream
+      ORDER BY timestamp DESC
+      LIMIT 10`,
+      [orgId, orgId, orgId]
+    );
+
+    // 5. Active & Total Batch counts
+    const [batchCountRows]: any = await pool.query(
+      `SELECT 
+        COUNT(id) AS total,
+        SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active
+       FROM batches 
+       WHERE (organizationId = ? OR organizationId IS NULL) AND deletedAt IS NULL`,
+      [orgId]
+    );
+    const batchesCount = Number(batchCountRows[0]?.total) || 0;
+    const activeBatchesCount = Number(batchCountRows[0]?.active) || 0;
+
     res.json({
       studentsCount: analytics.totalLearners,
       trainersCount: 0,
       coursesCount: analytics.courses.total,
       enrollmentsCount: analytics.enrollments.total,
       submissionsCount: analytics.assessmentStats.totalAttempts,
+      assessments: assessmentStats,
+      recentCourses,
+      recentAssessments,
+      recentActivity,
+      batchesCount,
+      activeBatchesCount,
       ...analytics
     });
   } catch (err: any) {
@@ -1525,7 +1644,7 @@ app.get("/api/admin/dashboard", authenticateToken, async (req, res) => {
 });
 
 app.get("/api/admin/users", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -1601,6 +1720,33 @@ app.get("/api/admin/users", authenticateToken, async (req, res) => {
     }
   }
 
+  // Query active batch memberships per user
+  const [userBatchRows]: any = await pool.query(`
+    SELECT bs.studentId, b.id as batchId, b.name as batchName, b.code as batchCode, b.academicYear, bs.status as membershipStatus, bs.enrolledAt
+    FROM batch_students bs
+    JOIN batches b ON bs.batchId = b.id AND b.deletedAt IS NULL
+    WHERE bs.status = 'active'
+    ORDER BY b.academicYear DESC, b.name ASC
+  `);
+
+  const userBatchesMap = new Map<string, any[]>();
+  for (const r of userBatchRows) {
+    if (!userBatchesMap.has(r.studentId)) {
+      userBatchesMap.set(r.studentId, []);
+    }
+    userBatchesMap.get(r.studentId)!.push({
+      id: r.batchId,
+      batchId: r.batchId,
+      name: r.batchName,
+      batchName: r.batchName,
+      code: r.batchCode,
+      batchCode: r.batchCode,
+      academicYear: r.academicYear,
+      status: r.membershipStatus,
+      enrolledAt: r.enrolledAt
+    });
+  }
+
   const sanitizedUsers = allUsers.map(({ passwordHash: _, ...u }) => {
     const studentCourseMap = userEffectiveCoursesMap.get(u.id);
     const assignedCourses: UserAssignedCourseItem[] = studentCourseMap
@@ -1610,9 +1756,12 @@ app.get("/api/admin/users", authenticateToken, async (req, res) => {
     const effectiveCourseIds = new Set(assignedCourses.map(c => c.id));
     const assignedAssessmentsCount = allAssessments.filter(a => effectiveCourseIds.has(a.courseId)).length;
     const completedAssessmentsCount = allSubmissions.filter(s => s.studentId === u.id && s.passed).length;
+    const userBatches = userBatchesMap.get(u.id) || [];
 
     return {
       ...u,
+      batches: userBatches,
+      batchCount: userBatches.length,
       assignedCourses,
       assignedCoursesCount,
       assignedAssessmentsCount,
@@ -1654,11 +1803,11 @@ export function isValidLocation(loc: string): { valid: boolean; reason?: string 
 
 // Admin Single User Creation
 app.post("/api/admin/users", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
-  const { name, email, password, role, status, phoneNumber, location } = req.body;
+  const { name, email, password, role, status, phoneNumber, location, batchIds: reqBatchIds, batches: reqBatches, batchId: reqBatchId } = req.body;
   if (!name || !email || !password) {
     return res.status(400).json({ error: "Name, email, and password are required" });
   }
@@ -1671,6 +1820,35 @@ app.post("/api/admin/users", authenticateToken, async (req, res) => {
   }
 
   const targetRole = role && Object.values(UserRole).includes(role) ? role : UserRole.STUDENT;
+
+  // Extract and validate mandatory batch memberships
+  const rawBatchList = reqBatchIds || reqBatches || (reqBatchId ? [reqBatchId] : []);
+  const batchIdArray: string[] = Array.isArray(rawBatchList)
+    ? rawBatchList.map((b: any) => typeof b === "string" ? b.trim() : (b?.id || b?.batchId || "").trim()).filter(Boolean)
+    : (typeof rawBatchList === "string" && rawBatchList.trim() ? [rawBatchList.trim()] : []);
+  const uniqueBatchIds = Array.from(new Set(batchIdArray));
+
+  if (uniqueBatchIds.length === 0) {
+    return res.status(400).json({ error: "At least one batch must be selected. Batch membership is mandatory for every user." });
+  }
+
+  // Verify all provided batch IDs exist, are active, and are not deleted
+  const [batchRecords]: any = await pool.query(
+    `SELECT id, name, code, academicYear, status FROM batches WHERE id IN (${uniqueBatchIds.map(() => "?").join(",")}) AND deletedAt IS NULL`,
+    uniqueBatchIds
+  );
+
+  if (batchRecords.length !== uniqueBatchIds.length) {
+    const foundIds = new Set(batchRecords.map((b: any) => b.id));
+    const missing = uniqueBatchIds.filter(id => !foundIds.has(id));
+    return res.status(400).json({ error: `Batch ID '${missing[0]}' does not exist or has been deleted.` });
+  }
+
+  for (const b of batchRecords) {
+    if (b.status !== "active") {
+      return res.status(400).json({ error: `Batch '${b.name}' (${b.code}) is '${b.status}'. Users may only be assigned to active batches.` });
+    }
+  }
 
   // Contact details validation
   const trimmedPhone = phoneNumber !== undefined && phoneNumber !== null ? String(phoneNumber).trim() : "";
@@ -1726,40 +1904,118 @@ app.post("/api/admin/users", authenticateToken, async (req, res) => {
 
   const targetStatus = status === "suspended" ? "suspended" : "active";
   const passwordHash = await bcrypt.hash(String(password), 12);
+  const newUserId = "user-" + Date.now() + "-" + crypto.randomBytes(4).toString("hex");
+  const now = new Date().toISOString();
 
-  const newUser = await usersDb.insert({
-    name: trimmedName,
-    email: trimmedEmail,
-    role: targetRole,
-    passwordHash,
-    createdAt: new Date().toISOString(),
-    status: targetStatus,
-    phoneNumber: trimmedPhone || null,
-    location: trimmedLocation || null
-  });
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
 
-  logAuditEvent({
-    userId: req.user!.id,
-    userEmail: req.user!.email,
-    userRole: req.user!.role,
-    action: "create_user",
-    resourceType: "user",
-    resourceId: newUser.id,
-    details: { targetRole, targetStatus, userEmail: trimmedEmail, hasPhone: Boolean(trimmedPhone), hasLocation: Boolean(trimmedLocation) },
-    ipAddress: getClientIp(req),
-    userAgent: req.headers["user-agent"],
-    status: "success"
-  });
+    await connection.query(`
+      INSERT INTO users (id, name, email, role, passwordHash, createdAt, status, phoneNumber, location, organizationId)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      newUserId,
+      trimmedName,
+      trimmedEmail,
+      targetRole,
+      passwordHash,
+      now,
+      targetStatus,
+      trimmedPhone || null,
+      trimmedLocation || null,
+      req.user!.organizationId || "org-default"
+    ]);
 
-  const { passwordHash: _, ...userWithoutPassword } = newUser;
-  res.status(201).json(userWithoutPassword);
+    for (const b of batchRecords) {
+      const bsId = "bs-" + Date.now() + "-" + crypto.randomBytes(4).toString("hex");
+      await connection.query(`
+        INSERT INTO batch_students (id, organizationId, batchId, studentId, enrolledAt, status, createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
+      `, [
+        bsId,
+        req.user!.organizationId || "org-default",
+        b.id,
+        newUserId,
+        now,
+        now,
+        now
+      ]);
+    }
+
+    await connection.commit();
+
+    // Synchronize courses for each assigned batch
+    for (const b of batchRecords) {
+      try {
+        await BatchService.syncStudentBatchCourseAccess(newUserId, b.id, req.user!);
+      } catch (syncErr) {
+        console.warn(`[BatchCourseSync] Sync warning for batch ${b.id}:`, syncErr);
+      }
+    }
+
+    logAuditEvent({
+      userId: req.user!.id,
+      userEmail: req.user!.email,
+      userRole: req.user!.role,
+      action: "create_user",
+      resourceType: "user",
+      resourceId: newUserId,
+      details: {
+        targetRole,
+        targetStatus,
+        userEmail: trimmedEmail,
+        hasPhone: Boolean(trimmedPhone),
+        hasLocation: Boolean(trimmedLocation),
+        batchIds: uniqueBatchIds,
+        batches: batchRecords.map((b: any) => ({ id: b.id, name: b.name, code: b.code, academicYear: b.academicYear }))
+      },
+      ipAddress: getClientIp(req),
+      userAgent: req.headers["user-agent"],
+      status: "success"
+    });
+
+    res.status(201).json({
+      id: newUserId,
+      name: trimmedName,
+      email: trimmedEmail,
+      role: targetRole,
+      status: targetStatus,
+      phoneNumber: trimmedPhone || null,
+      location: trimmedLocation || null,
+      createdAt: now,
+      batches: batchRecords.map((b: any) => ({
+        id: b.id,
+        batchId: b.id,
+        name: b.name,
+        batchName: b.name,
+        code: b.code,
+        batchCode: b.code,
+        academicYear: b.academicYear,
+        status: "active"
+      })),
+      batchCount: batchRecords.length
+    });
+
+  } catch (txErr: any) {
+    await connection.rollback();
+    throw txErr;
+  } finally {
+    connection.release();
+  }
 });
 
 // Admin Download Excel Template for Bulk Student Import
 app.get("/api/admin/users/template", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
+
+  // Fetch real active batch codes for reference in the template
+  const [activeBatches]: any = await pool.query(
+    "SELECT code FROM batches WHERE status = 'active' AND deletedAt IS NULL LIMIT 2"
+  );
+  const sampleCodes = activeBatches.map((b: any) => b.code).join(", ") || "AIPY-2026-COHORT";
 
   const templateData = [
     {
@@ -1768,7 +2024,8 @@ app.get("/api/admin/users/template", authenticateToken, async (req, res) => {
       "Phone Number": "+1 555-0199",
       "Location": "New York, NY, USA",
       "Password": "StudentPass123!",
-      "Status": "active"
+      "Status": "active",
+      "Batch Codes": sampleCodes
     },
     {
       "Full Name": "Bob Smith",
@@ -1776,7 +2033,8 @@ app.get("/api/admin/users/template", authenticateToken, async (req, res) => {
       "Phone Number": "+91 9876543210",
       "Location": "Bengaluru, Karnataka, India",
       "Password": "StudentPass123!",
-      "Status": "active"
+      "Status": "active",
+      "Batch Codes": sampleCodes
     }
   ];
 
@@ -1787,7 +2045,8 @@ app.get("/api/admin/users/template", authenticateToken, async (req, res) => {
     { wch: 20 },
     { wch: 28 },
     { wch: 18 },
-    { wch: 12 }
+    { wch: 12 },
+    { wch: 30 }
   ];
 
   const workbook = XLSX.utils.book_new();
@@ -1802,13 +2061,24 @@ app.get("/api/admin/users/template", authenticateToken, async (req, res) => {
 
 // Admin Bulk Validate Excel Rows
 app.post("/api/admin/users/bulk-validate", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
   const rawRows: any[] = Array.isArray(req.body?.rows) ? req.body.rows : [];
   const existingUsers = await usersDb.find();
   const existingEmails = new Set(existingUsers.map(u => u.email.toLowerCase()));
+
+  // Load all active batches into lookup maps by code and by name
+  const [activeBatches]: any = await pool.query(
+    "SELECT id, name, code, academicYear, status FROM batches WHERE status = 'active' AND deletedAt IS NULL"
+  );
+  const batchLookup = new Map<string, any>();
+  for (const b of activeBatches) {
+    batchLookup.set(b.code.toUpperCase().trim(), b);
+    batchLookup.set(b.name.toUpperCase().trim(), b);
+    batchLookup.set(b.id, b);
+  }
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const seenInFileEmails = new Set<string>();
@@ -1826,6 +2096,11 @@ app.post("/api/admin/users/bulk-validate", authenticateToken, async (req, res) =
     const password = String(raw.password || raw["Password"] || "").trim();
     const rawStatus = String(raw.status || raw["Status"] || "active").trim().toLowerCase();
     const status = rawStatus === "suspended" ? "suspended" : "active";
+
+    // Batch assignment resolution
+    const rawBatchField = String(
+      raw["Batch Codes"] || raw["Batch Code"] || raw["Batches"] || raw["Batch"] || raw.batchCodes || raw.batches || raw.batch || ""
+    ).trim();
 
     const errors: string[] = [];
 
@@ -1869,6 +2144,28 @@ app.post("/api/admin/users/bulk-validate", authenticateToken, async (req, res) =
       errors.push("Password must be at least 6 characters");
     }
 
+    // Validate batch membership (Mandatory)
+    const resolvedBatchRecords: any[] = [];
+    if (!rawBatchField) {
+      errors.push("At least one batch code is required (e.g. AIPY-2026-COHORT)");
+    } else {
+      const tokens = rawBatchField.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+      if (tokens.length === 0) {
+        errors.push("At least one batch code is required");
+      } else {
+        const seenTokens = new Set<string>();
+        for (const token of tokens) {
+          const matched = batchLookup.get(token.toUpperCase()) || batchLookup.get(token);
+          if (!matched) {
+            errors.push(`Batch '${token}' does not exist or is inactive`);
+          } else if (!seenTokens.has(matched.id)) {
+            seenTokens.add(matched.id);
+            resolvedBatchRecords.push(matched);
+          }
+        }
+      }
+    }
+
     const isValid = errors.length === 0;
     if (isValid) {
       validCount++;
@@ -1885,6 +2182,8 @@ app.post("/api/admin/users/bulk-validate", authenticateToken, async (req, res) =
       password: password ? "••••••••" : "",
       rawPassword: password,
       status,
+      batchCodes: resolvedBatchRecords.map(b => b.code).join(", "),
+      batchRecords: resolvedBatchRecords,
       isValid,
       errors
     };
@@ -1901,7 +2200,7 @@ app.post("/api/admin/users/bulk-validate", authenticateToken, async (req, res) =
 
 // Admin Bulk Import Validated Students
 app.post("/api/admin/users/bulk-import", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -1909,6 +2208,17 @@ app.post("/api/admin/users/bulk-import", authenticateToken, async (req, res) => 
   const existingUsers = await usersDb.find();
   const existingEmails = new Set(existingUsers.map(u => u.email.toLowerCase()));
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  // Active batches map
+  const [activeBatches]: any = await pool.query(
+    "SELECT id, name, code, academicYear, status FROM batches WHERE status = 'active' AND deletedAt IS NULL"
+  );
+  const batchLookup = new Map<string, any>();
+  for (const b of activeBatches) {
+    batchLookup.set(b.code.toUpperCase().trim(), b);
+    batchLookup.set(b.name.toUpperCase().trim(), b);
+    batchLookup.set(b.id, b);
+  }
 
   const importedUsers = [];
   let failedCount = 0;
@@ -1922,26 +2232,93 @@ app.post("/api/admin/users/bulk-import", authenticateToken, async (req, res) => 
     const rawStatus = String(raw.status || raw["Status"] || "active").trim().toLowerCase();
     const status = rawStatus === "suspended" ? "suspended" : "active";
 
-    if (!fullName || !email || !password || password.length < 6 || !emailRegex.test(email) || existingEmails.has(email)) {
+    // Resolve batches
+    let targetBatches: any[] = Array.isArray(raw.batchRecords) && raw.batchRecords.length > 0 ? raw.batchRecords : [];
+    if (targetBatches.length === 0) {
+      const rawBatchStr = String(raw["Batch Codes"] || raw["Batch Code"] || raw["Batches"] || raw.batchCodes || raw.batches || raw.batch || "");
+      const tokens = rawBatchStr.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+      for (const t of tokens) {
+        const matched = batchLookup.get(t.toUpperCase()) || batchLookup.get(t);
+        if (matched && !targetBatches.some(b => b.id === matched.id)) {
+          targetBatches.push(matched);
+        }
+      }
+    }
+
+    if (!fullName || !email || !password || password.length < 6 || !emailRegex.test(email) || existingEmails.has(email) || targetBatches.length === 0) {
       failedCount++;
       continue;
     }
 
     existingEmails.add(email);
     const passwordHash = await bcrypt.hash(password, 10);
-    const newUser = await usersDb.insert({
-      name: fullName,
-      email,
-      role: UserRole.STUDENT,
-      passwordHash,
-      createdAt: new Date().toISOString(),
-      status,
-      phoneNumber: phoneNumber || null,
-      location: location || null
-    });
+    const newUserId = "user-" + Date.now() + "-" + crypto.randomBytes(4).toString("hex");
+    const now = new Date().toISOString();
 
-    const { passwordHash: _, ...sanitized } = newUser;
-    importedUsers.push(sanitized);
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      await connection.query(`
+        INSERT INTO users (id, name, email, role, passwordHash, createdAt, status, phoneNumber, location, organizationId)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        newUserId,
+        fullName,
+        email,
+        UserRole.STUDENT,
+        passwordHash,
+        now,
+        status,
+        phoneNumber || null,
+        location || null,
+        req.user!.organizationId || "org-default"
+      ]);
+
+      for (const b of targetBatches) {
+        const bsId = "bs-" + Date.now() + "-" + crypto.randomBytes(4).toString("hex");
+        await connection.query(`
+          INSERT INTO batch_students (id, organizationId, batchId, studentId, enrolledAt, status, createdAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
+        `, [
+          bsId,
+          req.user!.organizationId || "org-default",
+          b.id,
+          newUserId,
+          now,
+          now,
+          now
+        ]);
+      }
+
+      await connection.commit();
+
+      for (const b of targetBatches) {
+        try {
+          await BatchService.syncStudentBatchCourseAccess(newUserId, b.id, req.user!);
+        } catch (syncErr) {
+          // Non-blocking sync warning
+        }
+      }
+
+      importedUsers.push({
+        id: newUserId,
+        name: fullName,
+        email,
+        role: UserRole.STUDENT,
+        status,
+        phoneNumber: phoneNumber || null,
+        location: location || null,
+        createdAt: now,
+        batches: targetBatches.map(b => ({ id: b.id, name: b.name, code: b.code, academicYear: b.academicYear }))
+      });
+
+    } catch (err) {
+      await connection.rollback();
+      failedCount++;
+    } finally {
+      connection.release();
+    }
   }
 
   res.json({
@@ -1953,7 +2330,7 @@ app.post("/api/admin/users/bulk-import", authenticateToken, async (req, res) => 
 
 // Admin Course Access: Get Student Enrollments
 app.get("/api/admin/users/:studentId/enrollments", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -1971,7 +2348,7 @@ app.get("/api/admin/users/:studentId/enrollments", authenticateToken, async (req
 
 // Admin Course Access: Grant Access to Student (Single or Multiple Courses)
 app.post("/api/admin/users/:studentId/enrollments", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -2039,7 +2416,7 @@ app.post("/api/admin/users/:studentId/enrollments", authenticateToken, async (re
 
 // Admin Course Access: Revoke Access or Remove Direct Grant
 app.delete("/api/admin/users/:studentId/enrollments/:courseId", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -2074,7 +2451,7 @@ app.delete("/api/admin/users/:studentId/enrollments/:courseId", authenticateToke
 
 // Admin Course Access: Restore Access (clears explicit denial, restoring batch/direct grant)
 app.post("/api/admin/users/:studentId/enrollments/:courseId/restore", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -2095,7 +2472,7 @@ app.post("/api/admin/users/:studentId/enrollments/:courseId/restore", authentica
 
 // Admin Course Access: Explicit Revoke All Access / Block
 app.post("/api/admin/users/:studentId/enrollments/:courseId/revoke-all", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -2122,7 +2499,7 @@ app.post("/api/admin/users/:studentId/enrollments/:courseId/revoke-all", authent
 
 // 1. Get Comprehensive Access Roster across all students and courses
 app.get("/api/admin/access/roster", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
   try {
@@ -2135,7 +2512,7 @@ app.get("/api/admin/access/roster", authenticateToken, async (req, res) => {
 
 // 2. Grant Access: Multi-Course, Multi-Student, Multi-Batch in one workflow
 app.post("/api/admin/access/grant", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -2202,7 +2579,7 @@ app.post("/api/admin/access/grant", authenticateToken, async (req, res) => {
 
 // 3. Revoke Access: Supports explicit override (blocks all) or direct_only removal
 app.post("/api/admin/access/revoke", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -2226,7 +2603,7 @@ app.post("/api/admin/access/revoke", authenticateToken, async (req, res) => {
 
 // 4. Restore Access: Clears explicit denial or reactivates direct grant
 app.post("/api/admin/access/restore", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -2245,7 +2622,7 @@ app.post("/api/admin/access/restore", authenticateToken, async (req, res) => {
 
 // Admin Course Access: Bulk Enrollment
 app.post("/api/admin/enrollments/bulk", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
   const { courseId, studentIds, dueDate, isMandatory } = req.body;
@@ -2265,7 +2642,7 @@ app.post("/api/admin/enrollments/bulk", authenticateToken, async (req, res) => {
 
 // Admin Course Access: Group Enrollment
 app.post("/api/admin/enrollments/group", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
   const { courseId, groupId, dueDate, isMandatory } = req.body;
@@ -2285,7 +2662,7 @@ app.post("/api/admin/enrollments/group", authenticateToken, async (req, res) => 
 
 // Admin Course Access: Revoke Access (POST endpoint)
 app.post("/api/admin/enrollments/revoke", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
   const { courseId, studentId, reason } = req.body;
@@ -2302,7 +2679,7 @@ app.post("/api/admin/enrollments/revoke", authenticateToken, async (req, res) =>
 
 // Admin Course Access: Update Enrollment parameters (Due Date, Mandatory status)
 app.put("/api/admin/enrollments/:enrollmentId", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
   const { enrollmentId } = req.params;
@@ -2317,7 +2694,7 @@ app.put("/api/admin/enrollments/:enrollmentId", authenticateToken, async (req, r
 
 // Admin Course Access: Full Access Inspection Matrix
 app.get("/api/admin/courses/:id/access", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
   try {
@@ -2332,7 +2709,7 @@ app.get("/api/admin/courses/:id/access", authenticateToken, async (req, res) => 
 // GROUPS & COHORTS API
 // ==========================================
 app.get("/api/admin/groups", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
   try {
@@ -2344,7 +2721,7 @@ app.get("/api/admin/groups", authenticateToken, async (req, res) => {
 });
 
 app.post("/api/admin/groups", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
   const { name, description, type, departmentId, cohortId, managerId } = req.body;
@@ -2366,7 +2743,7 @@ app.post("/api/admin/groups", authenticateToken, async (req, res) => {
 });
 
 app.get("/api/admin/groups/:id", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
   try {
@@ -2379,7 +2756,7 @@ app.get("/api/admin/groups/:id", authenticateToken, async (req, res) => {
 });
 
 app.put("/api/admin/groups/:id", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
   try {
@@ -2391,7 +2768,7 @@ app.put("/api/admin/groups/:id", authenticateToken, async (req, res) => {
 });
 
 app.delete("/api/admin/groups/:id", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
   try {
@@ -2403,7 +2780,7 @@ app.delete("/api/admin/groups/:id", authenticateToken, async (req, res) => {
 });
 
 app.post("/api/admin/groups/:id/members", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
   const { userIds } = req.body;
@@ -2419,7 +2796,7 @@ app.post("/api/admin/groups/:id/members", authenticateToken, async (req, res) =>
 });
 
 app.delete("/api/admin/groups/:id/members/:userId", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
   try {
@@ -2432,7 +2809,7 @@ app.delete("/api/admin/groups/:id/members/:userId", authenticateToken, async (re
 
 // Admin Security & Audit Log Inspection API
 app.get("/api/admin/audit-logs", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
   const { action, resourceType, limit = 100 } = req.query;
@@ -2459,7 +2836,7 @@ app.get("/api/admin/audit-logs", authenticateToken, async (req, res) => {
 
 // Admin Student Access: Get comprehensive course & assessment access state
 app.get("/api/admin/users/:studentId/access", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -2556,7 +2933,7 @@ app.get("/api/admin/users/:studentId/access", authenticateToken, async (req, res
 
 // Admin Assessment Access: Grant Access to Assessment (via Course Enrollment)
 app.post("/api/admin/users/:studentId/assessment-access/:assessmentId", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -2583,7 +2960,7 @@ app.post("/api/admin/users/:studentId/assessment-access/:assessmentId", authenti
 
 // Admin Assessment Access: Revoke Access from Assessment (via Course Enrollment)
 app.delete("/api/admin/users/:studentId/assessment-access/:assessmentId", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -2602,7 +2979,7 @@ app.delete("/api/admin/users/:studentId/assessment-access/:assessmentId", authen
 
 // Admin Student Access: Grant Direct Learning Path Access
 app.post("/api/admin/users/:studentId/learning-paths/:learningPathId", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
   const { studentId, learningPathId } = req.params;
@@ -2634,7 +3011,7 @@ app.post("/api/admin/users/:studentId/learning-paths/:learningPathId", authentic
 
 // Admin Student Access: Remove Direct Learning Path Assignment (preserves batch access if present)
 app.delete("/api/admin/users/:studentId/learning-paths/:learningPathId", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
   const { studentId, learningPathId } = req.params;
@@ -2649,7 +3026,7 @@ app.delete("/api/admin/users/:studentId/learning-paths/:learningPathId", authent
 
 // Admin Student Access: Revoke All Access / Block (explicit denial overriding batch membership)
 app.post("/api/admin/users/:studentId/learning-paths/:learningPathId/revoke-all", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
   const { studentId, learningPathId } = req.params;
@@ -2665,7 +3042,7 @@ app.post("/api/admin/users/:studentId/learning-paths/:learningPathId/revoke-all"
 
 // Admin Student Access: Restore Access (clears explicit denial)
 app.post("/api/admin/users/:studentId/learning-paths/:learningPathId/restore", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
   const { studentId, learningPathId } = req.params;
@@ -2679,7 +3056,7 @@ app.post("/api/admin/users/:studentId/learning-paths/:learningPathId/restore", a
 });
 
 app.put("/api/admin/users/:id/status", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -2717,7 +3094,7 @@ app.put("/api/admin/users/:id/status", authenticateToken, async (req, res) => {
 
 // Admin Password Reset for Student Accounts
 app.post("/api/admin/users/:id/reset-password", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -2774,7 +3151,7 @@ app.post("/api/admin/users/:id/reset-password", authenticateToken, async (req, r
 
 // Admin Update User Details (Name, Phone Number, Location, Status)
 app.put("/api/admin/users/:id", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -2866,7 +3243,7 @@ app.put("/api/admin/users/:id", authenticateToken, async (req, res) => {
 });
 
 app.put("/api/admin/courses/:id/status", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -3041,7 +3418,7 @@ app.delete("/api/upload", authenticateToken, async (req, res) => {
 
 // 1. List all courses with metadata counts
 app.get("/api/admin/courses", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -3072,7 +3449,7 @@ app.get("/api/admin/courses", authenticateToken, async (req, res) => {
 
 // 2. Create course (default draft)
 app.post("/api/admin/courses", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -3143,7 +3520,7 @@ app.post("/api/admin/courses", authenticateToken, async (req, res) => {
 
 // 3. Get full course tree for authoring studio
 app.get("/api/admin/courses/:id", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -3201,7 +3578,7 @@ app.get("/api/admin/courses/:id", authenticateToken, async (req, res) => {
 
 // 4. Update course metadata / status
 app.put("/api/admin/courses/:id", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -3271,7 +3648,7 @@ app.put("/api/admin/courses/:id", authenticateToken, async (req, res) => {
 
 // 4b. Pre-publish Content Validation Check
 app.get("/api/admin/courses/:id/validate", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -3281,7 +3658,7 @@ app.get("/api/admin/courses/:id/validate", authenticateToken, async (req, res) =
 
 // 4c. Publish Course with Verification Guard & Safe Versioning
 app.post("/api/admin/courses/:id/publish", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -3311,7 +3688,7 @@ app.post("/api/admin/courses/:id/publish", authenticateToken, async (req, res) =
 
 // 5. Delete course and all cascaded entities
 app.delete("/api/admin/courses/:id", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -3363,7 +3740,7 @@ app.delete("/api/admin/courses/:id", authenticateToken, async (req, res) => {
 
 // 6. Module CRUD
 app.post("/api/admin/courses/:courseId/modules", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -3392,7 +3769,7 @@ app.post("/api/admin/courses/:courseId/modules", authenticateToken, async (req, 
 
 // Reorder modules within course
 app.put("/api/admin/courses/:courseId/modules/reorder", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
   const { moduleIds } = req.body;
@@ -3404,7 +3781,7 @@ app.put("/api/admin/courses/:courseId/modules/reorder", authenticateToken, async
 });
 
 app.put("/api/admin/modules/:id", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -3422,7 +3799,7 @@ app.put("/api/admin/modules/:id", authenticateToken, async (req, res) => {
 });
 
 app.delete("/api/admin/modules/:id", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -3435,7 +3812,7 @@ app.delete("/api/admin/modules/:id", authenticateToken, async (req, res) => {
 
 // 7. Lesson CRUD
 app.post("/api/admin/modules/:moduleId/lessons", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -3489,7 +3866,7 @@ app.post("/api/admin/modules/:moduleId/lessons", authenticateToken, async (req, 
 
 // Reorder lessons within module
 app.put("/api/admin/modules/:moduleId/lessons/reorder", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
   const { lessonIds } = req.body;
@@ -3502,7 +3879,7 @@ app.put("/api/admin/modules/:moduleId/lessons/reorder", authenticateToken, async
 
 // Duplicate lesson
 app.post("/api/admin/lessons/:lessonId/duplicate", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
   try {
@@ -3514,7 +3891,7 @@ app.post("/api/admin/lessons/:lessonId/duplicate", authenticateToken, async (req
 });
 
 app.put("/api/admin/lessons/:id", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -3559,7 +3936,7 @@ app.put("/api/admin/lessons/:id", authenticateToken, async (req, res) => {
 });
 
 app.delete("/api/admin/lessons/:id", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -3572,7 +3949,7 @@ app.delete("/api/admin/lessons/:id", authenticateToken, async (req, res) => {
 
 // 8. Practice Tests & Course Final Assessments CRUD
 app.get("/api/admin/lessons/:lessonId/practice-test", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -3587,7 +3964,7 @@ app.get("/api/admin/lessons/:lessonId/practice-test", authenticateToken, async (
 });
 
 app.post("/api/admin/lessons/:lessonId/practice-test", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -3627,7 +4004,7 @@ app.post("/api/admin/lessons/:lessonId/practice-test", authenticateToken, async 
 });
 
 app.post("/api/admin/courses/:courseId/final-assessment", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -3673,7 +4050,7 @@ app.post("/api/admin/courses/:courseId/final-assessment", authenticateToken, asy
 
 // Get distinct assessment categories
 app.get("/api/admin/assessments/categories", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -3703,7 +4080,7 @@ app.get("/api/admin/assessments/categories", authenticateToken, async (req, res)
 
 // List all Admin Assessments with stats & filtering
 app.get("/api/admin/assessments", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -3759,7 +4136,7 @@ app.get("/api/admin/assessments", authenticateToken, async (req, res) => {
 
 // Create new standalone assessment (draft)
 app.post("/api/admin/assessments", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -3822,54 +4199,75 @@ app.post("/api/admin/assessments", authenticateToken, async (req, res) => {
 });
 
 // Download assessment questions Excel template (MUST be defined before /:id)
-app.get("/api/admin/assessments/template", authenticateToken, (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+app.get("/api/admin/assessments/template", authenticateToken, async (req, res) => {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
-
-  const sampleData = [
-    {
-      "Question": "What does CPU stand for in computer systems?",
-      "Option 1": "Central Processing Unit",
-      "Option 2": "Central Performance Unit",
-      "Option 3": "Computer Personal Unit",
-      "Option 4": "Control Processing User",
-      "Option 5": "",
-      "Correct Option": "Option 1",
-      "Points": 10,
-      "Difficulty": "easy",
-      "Explanation": "CPU stands for Central Processing Unit and executes instructions."
-    },
-    {
-      "Question": "Which data structure operates on a Last In First Out (LIFO) basis?",
-      "Option 1": "Queue",
-      "Option 2": "Stack",
-      "Option 3": "Array",
-      "Option 4": "Linked List",
-      "Option 5": "",
-      "Correct Option": "Option 2",
-      "Points": 10,
-      "Difficulty": "medium",
-      "Explanation": "A Stack works on the LIFO principle where the newest element is removed first."
-    }
+  const headers = [
+    "Question",
+    "Option 1",
+    "Option 2",
+    "Option 3",
+    "Option 4",
+    "Option 5",
+    "Correct Option",
+    "Points",
+    "Difficulty",
+    "Explanation"
   ];
 
-  const worksheet = XLSX.utils.json_to_sheet(sampleData);
-  worksheet["!cols"] = [
+  const questionsWs = XLSX.utils.aoa_to_sheet([headers]);
+  questionsWs["!cols"] = [
     { wch: 45 },
     { wch: 25 },
     { wch: 25 },
     { wch: 25 },
     { wch: 25 },
     { wch: 20 },
-    { wch: 16 },
+    { wch: 18 },
     { wch: 10 },
+    { wch: 14 },
+    { wch: 45 }
+  ];
+
+  const instructions = [
+    ["Assessment Question Import Template - Instructions & Guidelines"],
+    [""],
+    ["Column Name", "Required", "Allowed Format / Values", "Default Value", "Description"],
+    ["Question", "Yes", "Non-empty text string", "-", "The full prompt / text of the MCQ question."],
+    ["Option 1", "Yes", "Non-empty text string", "-", "First multiple choice option."],
+    ["Option 2", "Yes", "Non-empty text string", "-", "Second multiple choice option."],
+    ["Option 3", "No", "Text string", "(empty)", "Third multiple choice option (optional)."],
+    ["Option 4", "No", "Text string", "(empty)", "Fourth multiple choice option (optional)."],
+    ["Option 5", "No", "Text string", "(empty)", "Fifth multiple choice option (optional)."],
+    ["Correct Option", "Yes", "'Option 1' - 'Option 5', or '1' - '5', or exact option text", "-", "Specifies which option is correct."],
+    ["Points", "No", "Positive integer (e.g. 10)", "10", "Score awarded for answering this question correctly."],
+    ["Difficulty", "No", "'easy', 'medium', or 'hard'", "medium", "Question difficulty tier."],
+    ["Explanation", "No", "Text string", "(empty)", "Rationale or feedback shown to students during review."],
+    [""],
+    ["Format Notes:"],
+    ["1. At least 2 options (Option 1 and Option 2) are required for every question."],
+    ["2. The 'Correct Option' can be specified as 'Option 1', 'Option 2', '1', '2', or the exact matching text of the option."],
+    ["3. Example rows starting with '[EXAMPLE]' are ignored by the importer and will not be added as real questions."],
+    [""],
+    ["Example Question Rows (Reference):"],
+    ["Question", "Option 1", "Option 2", "Option 3", "Option 4", "Option 5", "Correct Option", "Points", "Difficulty", "Explanation"],
+    ["What does CPU stand for in computer systems?", "Central Processing Unit", "Central Performance Unit", "Computer Personal Unit", "Control Processing User", "", "Option 1", 10, "easy", "CPU stands for Central Processing Unit and executes instructions."],
+    ["Which data structure operates on a Last In First Out (LIFO) basis?", "Queue", "Stack", "Array", "Linked List", "", "Option 2", 10, "medium", "A Stack works on the LIFO principle where the newest element is removed first."]
+  ];
+
+  const instructionsWs = XLSX.utils.aoa_to_sheet(instructions);
+  instructionsWs["!cols"] = [
+    { wch: 18 },
     { wch: 12 },
-    { wch: 40 }
+    { wch: 45 },
+    { wch: 15 },
+    { wch: 55 }
   ];
 
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Questions");
+  XLSX.utils.book_append_sheet(workbook, questionsWs, "Questions");
+  XLSX.utils.book_append_sheet(workbook, instructionsWs, "Instructions");
   const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 
   res.setHeader("Content-Disposition", 'attachment; filename="assessment_questions_template.xlsx"');
@@ -3879,7 +4277,7 @@ app.get("/api/admin/assessments/template", authenticateToken, (req, res) => {
 
 // Get single assessment details with questions
 app.get("/api/admin/assessments/:id", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -3908,7 +4306,7 @@ app.get("/api/admin/assessments/:id", authenticateToken, async (req, res) => {
 
 // Update assessment details & settings
 app.put("/api/admin/assessments/:id", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -3983,7 +4381,7 @@ app.put("/api/admin/assessments/:id", authenticateToken, async (req, res) => {
 
 // Safe Delete Assessment (rejects if submissions exist unless forced)
 app.delete("/api/admin/assessments/:id", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -4014,7 +4412,7 @@ app.delete("/api/admin/assessments/:id", authenticateToken, async (req, res) => 
 
 // Publish validation checklist
 app.post("/api/admin/assessments/:id/publish", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -4084,7 +4482,7 @@ app.post("/api/admin/assessments/:id/publish", authenticateToken, async (req, re
 
 // Archive assessment
 app.post("/api/admin/assessments/:id/archive", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -4115,7 +4513,7 @@ app.post("/api/admin/assessments/:id/archive", authenticateToken, async (req, re
 
 // 9. Questions CRUD & Reordering
 app.post("/api/admin/assessments/:assessmentId/questions", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -4150,40 +4548,129 @@ app.post("/api/admin/assessments/:assessmentId/questions", authenticateToken, as
       return res.status(400).json({ error: `Invalid question type '${type}'. Supported types: ${validQuestionTypes.join(", ")}` });
     }
 
-    if (qType === QuestionType.MCQ_SINGLE || qType === "mcq_single") {
+    // Check for duplicate question text in this assessment
+    const existingQuestions = await questionsDb.find({ assessmentId });
+    const normalizedQuestion = questionText.trim().toLowerCase();
+    const duplicateQuestion = existingQuestions.find(
+      q => q.questionText && q.questionText.trim().toLowerCase() === normalizedQuestion
+    );
+    if (duplicateQuestion) {
+      return res.status(409).json({ 
+        error: "A question with this exact text already exists in this assessment." 
+      });
+    }
+
+    let optionsToSave: string[] = [];
+    let correctAnswersToSave: string[] = [];
+
+    if (qType === QuestionType.MCQ_SINGLE || qType === "mcq_single" || qType === QuestionType.MCQ_MULTI || qType === "mcq_multi") {
       if (!Array.isArray(options)) {
         return res.status(400).json({ error: "MCQ questions must have an options array." });
       }
-      const cleanOpts = options.map(o => String(o || "").trim());
-      if (cleanOpts.length !== 5 || cleanOpts.some(o => o.length === 0)) {
-        return res.status(400).json({ error: "MCQ questions must have exactly 5 non-empty options (Option 1 through Option 5)." });
+      const cleanOpts = options.map(o => String(o || "").trim()).filter(Boolean);
+      if (cleanOpts.length < 2) {
+        return res.status(400).json({ error: `MCQ questions must have at least 2 non-empty options (found ${cleanOpts.length}).` });
       }
+      if (cleanOpts.length > 10) {
+        return res.status(400).json({ error: "MCQ questions cannot exceed 10 options." });
+      }
+
+      // Check for duplicate options within the question
+      const lowerOpts = cleanOpts.map(o => o.toLowerCase());
+      if (new Set(lowerOpts).size !== cleanOpts.length) {
+        return res.status(400).json({ error: "Duplicate options detected. Each option must have distinct text." });
+      }
+
       if (!Array.isArray(correctAnswers)) {
         return res.status(400).json({ error: "MCQ questions must have a correctAnswers array." });
       }
       const cleanCorrect = correctAnswers.map(c => String(c || "").trim()).filter(Boolean);
-      if (cleanCorrect.length !== 1) {
-        return res.status(400).json({ error: "MCQ questions must have exactly one correct option." });
+
+      if (qType === QuestionType.MCQ_SINGLE || qType === "mcq_single") {
+        if (cleanCorrect.length !== 1) {
+          return res.status(400).json({ error: "MCQ single-choice questions must have exactly one correct option." });
+        }
+        const rawAns = cleanCorrect[0];
+        let resolvedCorrect: string | null = null;
+        if (cleanOpts.includes(rawAns)) {
+          resolvedCorrect = rawAns;
+        } else {
+          const ciMatch = cleanOpts.find(o => o.toLowerCase() === rawAns.toLowerCase());
+          if (ciMatch) {
+            resolvedCorrect = ciMatch;
+          } else {
+            const optIndexMatch = rawAns.match(/^(?:option\s*|#)?([1-9]\d*)$/i);
+            if (optIndexMatch) {
+              const idx = parseInt(optIndexMatch[1], 10) - 1;
+              if (idx >= 0 && idx < cleanOpts.length) {
+                resolvedCorrect = cleanOpts[idx];
+              }
+            }
+          }
+        }
+
+        if (!resolvedCorrect) {
+          return res.status(400).json({ error: `The chosen correct answer '${rawAns}' must match one of the provided options.` });
+        }
+        optionsToSave = cleanOpts;
+        correctAnswersToSave = [resolvedCorrect];
+      } else {
+        // Multi-choice
+        if (cleanCorrect.length < 1) {
+          return res.status(400).json({ error: "Multiple-choice questions must have at least one correct option." });
+        }
+        const resolvedMulti: string[] = [];
+        for (const rawAns of cleanCorrect) {
+          let matched: string | null = null;
+          if (cleanOpts.includes(rawAns)) {
+            matched = rawAns;
+          } else {
+            const ciMatch = cleanOpts.find(o => o.toLowerCase() === rawAns.toLowerCase());
+            if (ciMatch) {
+              matched = ciMatch;
+            } else {
+              const optIndexMatch = rawAns.match(/^(?:option\s*|#)?([1-9]\d*)$/i);
+              if (optIndexMatch) {
+                const idx = parseInt(optIndexMatch[1], 10) - 1;
+                if (idx >= 0 && idx < cleanOpts.length) {
+                  matched = cleanOpts[idx];
+                }
+              }
+            }
+          }
+          if (!matched) {
+            return res.status(400).json({ error: `The chosen correct answer '${rawAns}' must match one of the provided options.` });
+          }
+          if (!resolvedMulti.includes(matched)) {
+            resolvedMulti.push(matched);
+          }
+        }
+        optionsToSave = cleanOpts;
+        correctAnswersToSave = resolvedMulti;
       }
-      if (!cleanOpts.includes(cleanCorrect[0])) {
-        return res.status(400).json({ error: "The chosen correct answer must match one of the 5 options." });
-      }
+    } else {
+      optionsToSave = Array.isArray(options) ? options.map(o => String(o || "").trim()).filter(Boolean) : [];
+      correctAnswersToSave = Array.isArray(correctAnswers) ? correctAnswers.map(c => String(c || "").trim()).filter(Boolean) : [];
     }
 
-    const existingQuestions = await questionsDb.find({ assessmentId });
     const qOrder = order !== undefined ? Number(order) : existingQuestions.length + 1;
-    const qPoints = Number(points) > 0 ? Number(points) : 10;
+    const rawPoints = Number(points);
+    const qPoints = !isNaN(rawPoints) && rawPoints > 0 ? rawPoints : 10;
+    const rawNeg = Number(negativePoints);
+    const qNegPoints = !isNaN(rawNeg) && rawNeg >= 0 ? rawNeg : 0;
+    const rawDiff = String(difficulty || "medium").toLowerCase();
+    const qDifficulty: "easy" | "medium" | "hard" = (rawDiff === "easy" || rawDiff === "hard") ? rawDiff : "medium";
 
     const newQuestion = await questionsDb.insert({
       assessmentId,
       type: qType,
       questionText: questionText.trim(),
-      options: Array.isArray(options) ? options : [],
-      correctAnswers: Array.isArray(correctAnswers) ? correctAnswers : [],
+      options: optionsToSave,
+      correctAnswers: correctAnswersToSave,
       points: qPoints,
-      negativePoints: Number(negativePoints) || 0,
-      explanation: explanation?.trim() || "",
-      difficulty: difficulty || "medium",
+      negativePoints: qNegPoints,
+      explanation: explanation ? String(explanation).trim() : "",
+      difficulty: qDifficulty,
       order: qOrder
     });
 
@@ -4203,7 +4690,7 @@ app.post("/api/admin/assessments/:assessmentId/questions", authenticateToken, as
 
 // Question Update (supports both /api/admin/assessment-questions/:id and /api/admin/questions/:id)
 const handleQuestionUpdate = async (req: any, res: any) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -4224,8 +4711,24 @@ const handleQuestionUpdate = async (req: any, res: any) => {
       order
     } = req.body;
 
+    if (questionText !== undefined && questionText.trim()) {
+      const normalizedQuestion = questionText.trim().toLowerCase();
+      const existingInAss = await questionsDb.find({ assessmentId: existing.assessmentId });
+      const duplicateQuestion = existingInAss.find(
+        q => q.id !== questionId && q.questionText && q.questionText.trim().toLowerCase() === normalizedQuestion
+      );
+      if (duplicateQuestion) {
+        return res.status(409).json({ 
+          error: "A question with this exact text already exists in this assessment." 
+        });
+      }
+    }
+
     const targetType = type !== undefined ? type : existing.type;
-    if (targetType === QuestionType.MCQ_SINGLE || targetType === "mcq_single") {
+    let optionsToSave: string[] | undefined = undefined;
+    let correctAnswersToSave: string[] | undefined = undefined;
+
+    if (targetType === QuestionType.MCQ_SINGLE || targetType === "mcq_single" || targetType === QuestionType.MCQ_MULTI || targetType === "mcq_multi") {
       const optsToCheck = options !== undefined ? options : existing.options;
       const correctToCheck = correctAnswers !== undefined ? correctAnswers : existing.correctAnswers;
 
@@ -4233,19 +4736,85 @@ const handleQuestionUpdate = async (req: any, res: any) => {
         if (!Array.isArray(optsToCheck)) {
           return res.status(400).json({ error: "MCQ questions must have an options array." });
         }
-        const cleanOpts = optsToCheck.map((o: any) => String(o || "").trim());
-        if (cleanOpts.length !== 5 || cleanOpts.some((o: string) => o.length === 0)) {
-          return res.status(400).json({ error: "MCQ questions must have exactly 5 non-empty options (Option 1 through Option 5)." });
+        const cleanOpts = optsToCheck.map((o: any) => String(o || "").trim()).filter(Boolean);
+        if (cleanOpts.length < 2) {
+          return res.status(400).json({ error: `MCQ questions must have at least 2 non-empty options (found ${cleanOpts.length}).` });
         }
+        if (cleanOpts.length > 10) {
+          return res.status(400).json({ error: "MCQ questions cannot exceed 10 options." });
+        }
+
+        // Check for duplicate options
+        const lowerOpts = cleanOpts.map(o => o.toLowerCase());
+        if (new Set(lowerOpts).size !== cleanOpts.length) {
+          return res.status(400).json({ error: "Duplicate options detected. Each option must have distinct text." });
+        }
+
         if (!Array.isArray(correctToCheck)) {
           return res.status(400).json({ error: "MCQ questions must have a correctAnswers array." });
         }
         const cleanCorrect = correctToCheck.map((c: any) => String(c || "").trim()).filter(Boolean);
-        if (cleanCorrect.length !== 1) {
-          return res.status(400).json({ error: "MCQ questions must have exactly one correct option." });
-        }
-        if (!cleanOpts.includes(cleanCorrect[0])) {
-          return res.status(400).json({ error: "The chosen correct answer must match one of the 5 options." });
+
+        if (targetType === QuestionType.MCQ_SINGLE || targetType === "mcq_single") {
+          if (cleanCorrect.length !== 1) {
+            return res.status(400).json({ error: "MCQ single-choice questions must have exactly one correct option." });
+          }
+          const rawAns = cleanCorrect[0];
+          let resolvedCorrect: string | null = null;
+          if (cleanOpts.includes(rawAns)) {
+            resolvedCorrect = rawAns;
+          } else {
+            const ciMatch = cleanOpts.find(o => o.toLowerCase() === rawAns.toLowerCase());
+            if (ciMatch) {
+              resolvedCorrect = ciMatch;
+            } else {
+              const optIndexMatch = rawAns.match(/^(?:option\s*|#)?([1-9]\d*)$/i);
+              if (optIndexMatch) {
+                const idx = parseInt(optIndexMatch[1], 10) - 1;
+                if (idx >= 0 && idx < cleanOpts.length) {
+                  resolvedCorrect = cleanOpts[idx];
+                }
+              }
+            }
+          }
+
+          if (!resolvedCorrect) {
+            return res.status(400).json({ error: `The chosen correct answer '${rawAns}' must match one of the provided options.` });
+          }
+          optionsToSave = cleanOpts;
+          correctAnswersToSave = [resolvedCorrect];
+        } else {
+          if (cleanCorrect.length < 1) {
+            return res.status(400).json({ error: "Multiple-choice questions must have at least one correct option." });
+          }
+          const resolvedMulti: string[] = [];
+          for (const rawAns of cleanCorrect) {
+            let matched: string | null = null;
+            if (cleanOpts.includes(rawAns)) {
+              matched = rawAns;
+            } else {
+              const ciMatch = cleanOpts.find(o => o.toLowerCase() === rawAns.toLowerCase());
+              if (ciMatch) {
+                matched = ciMatch;
+              } else {
+                const optIndexMatch = rawAns.match(/^(?:option\s*|#)?([1-9]\d*)$/i);
+                if (optIndexMatch) {
+                  const idx = parseInt(optIndexMatch[1], 10) - 1;
+                  if (idx >= 0 && idx < cleanOpts.length) {
+                    matched = cleanOpts[idx];
+                  }
+                }
+              }
+            }
+            if (!matched) {
+              return res.status(400).json({ error: `The chosen correct answer '${rawAns}' must match one of the provided options.` });
+            }
+            if (!resolvedMulti.includes(matched)) {
+              resolvedMulti.push(matched);
+            }
+          }
+          optionsToSave = cleanOpts;
+          correctAnswersToSave = resolvedMulti;
         }
       }
     }
@@ -4253,12 +4822,29 @@ const handleQuestionUpdate = async (req: any, res: any) => {
     const payload: Record<string, any> = {};
     if (questionText !== undefined) payload.questionText = questionText.trim();
     if (type !== undefined) payload.type = type;
-    if (options !== undefined) payload.options = Array.isArray(options) ? options : [];
-    if (correctAnswers !== undefined) payload.correctAnswers = Array.isArray(correctAnswers) ? correctAnswers : [];
-    if (points !== undefined) payload.points = Number(points);
-    if (negativePoints !== undefined) payload.negativePoints = Number(negativePoints);
+    if (optionsToSave !== undefined) {
+      payload.options = optionsToSave;
+    } else if (options !== undefined) {
+      payload.options = Array.isArray(options) ? options.map((o: any) => String(o || "").trim()).filter(Boolean) : [];
+    }
+    if (correctAnswersToSave !== undefined) {
+      payload.correctAnswers = correctAnswersToSave;
+    } else if (correctAnswers !== undefined) {
+      payload.correctAnswers = Array.isArray(correctAnswers) ? correctAnswers.map((c: any) => String(c || "").trim()).filter(Boolean) : [];
+    }
+    if (points !== undefined) {
+      const rawPoints = Number(points);
+      payload.points = !isNaN(rawPoints) && rawPoints > 0 ? rawPoints : 10;
+    }
+    if (negativePoints !== undefined) {
+      const rawNeg = Number(negativePoints);
+      payload.negativePoints = !isNaN(rawNeg) && rawNeg >= 0 ? rawNeg : 0;
+    }
     if (explanation !== undefined) payload.explanation = explanation.trim();
-    if (difficulty !== undefined) payload.difficulty = difficulty;
+    if (difficulty !== undefined) {
+      const rawDiff = String(difficulty).toLowerCase();
+      payload.difficulty = ["easy", "medium", "hard"].includes(rawDiff) ? rawDiff : "medium";
+    }
     if (order !== undefined) payload.order = Number(order);
 
     const updated = await questionsDb.update(questionId, payload);
@@ -4281,7 +4867,7 @@ app.put("/api/admin/questions/:id", authenticateToken, handleQuestionUpdate);
 
 // Question Delete (supports both paths)
 const handleQuestionDelete = async (req: any, res: any) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -4310,7 +4896,7 @@ app.delete("/api/admin/questions/:id", authenticateToken, handleQuestionDelete);
 
 // Reorder questions
 app.post("/api/admin/assessments/:id/reorder-questions", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -4330,7 +4916,7 @@ app.post("/api/admin/assessments/:id/reorder-questions", authenticateToken, asyn
 
 // Duplicate question
 app.post("/api/admin/assessment-questions/:id/duplicate", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -4366,7 +4952,7 @@ app.post("/api/admin/assessment-questions/:id/duplicate", authenticateToken, asy
 
 // 10. Question Bank APIs
 app.get("/api/admin/question-bank", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -4401,7 +4987,7 @@ app.get("/api/admin/question-bank", authenticateToken, async (req, res) => {
 });
 
 app.post("/api/admin/assessments/:id/add-from-bank", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -4442,7 +5028,7 @@ app.post("/api/admin/assessments/:id/add-from-bank", authenticateToken, async (r
 
 // 11. Excel Bulk Question Import
 app.post("/api/admin/assessments/:id/import-questions", authenticateToken, upload.single("file"), async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -4455,10 +5041,13 @@ app.post("/api/admin/assessments/:id/import-questions", authenticateToken, uploa
   // Support both file upload and direct parsed JSON payload
   if (req.file) {
     try {
-      const workbook = XLSX.readFile(req.file.path);
+      const fileBuf = fs.readFileSync(req.file.path);
+      const readFn = (XLSX as any).read || (XLSX as any).default?.read;
+      const workbook = readFn(fileBuf, { type: "buffer" });
       const firstSheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[firstSheetName];
-      rawRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+      const sheetToJson = (XLSX as any).utils?.sheet_to_json || (XLSX as any).default?.utils?.sheet_to_json;
+      rawRows = sheetToJson(worksheet, { defval: "" });
       try { await fs.promises.unlink(req.file.path); } catch (e) {}
     } catch (err: any) {
       return res.status(400).json({ error: "Failed to parse Excel file: " + err.message });
@@ -4473,8 +5062,24 @@ app.post("/api/admin/assessments/:id/import-questions", authenticateToken, uploa
     return res.status(400).json({ error: "The provided Excel file is empty." });
   }
 
+  // Header column presence validation
+  const firstRow = rawRows[0];
+  const keys = Object.keys(firstRow);
+  const hasQuestion = keys.some(k => /question/i.test(k));
+  const hasOption1 = keys.some(k => /option\s*1/i.test(k) || /option1/i.test(k) || /option_1/i.test(k));
+  const hasOption2 = keys.some(k => /option\s*2/i.test(k) || /option2/i.test(k) || /option_2/i.test(k));
+  const hasCorrect = keys.some(k => /correct/i.test(k) || /answer/i.test(k));
+
+  if (!hasQuestion || !hasOption1 || !hasOption2 || !hasCorrect) {
+    return res.status(400).json({
+      error: "Invalid template format: Missing required columns (Question, Option 1, Option 2, Correct Option). Please use the official template."
+    });
+  }
+
   const errors: Array<{ row: number; reason: string }> = [];
   const validQuestionsToInsert: any[] = [];
+  let exampleCount = 0;
+  const seenQuestionsInFile = new Map<string, number>();
 
   const existingQuestions = await questionsDb.find({ assessmentId });
   let currentOrder = existingQuestions.reduce((max, q) => Math.max(max, q.order || 0), 0);
@@ -4485,16 +5090,55 @@ app.post("/api/admin/assessments/:id/import-questions", authenticateToken, uploa
       row["Question"] || row["question"] || row["Question Text"] || row["question_text"] || ""
     ).trim();
 
-    if (!questionText) {
-      errors.push({ row: rowNum, reason: "Question text is empty" });
-      return;
-    }
-
     const opt1 = String(row["Option 1"] || row["option_1"] || row["option1"] || "").trim();
     const opt2 = String(row["Option 2"] || row["option_2"] || row["option2"] || "").trim();
     const opt3 = String(row["Option 3"] || row["option_3"] || row["option3"] || "").trim();
     const opt4 = String(row["Option 4"] || row["option_4"] || row["option4"] || "").trim();
     const opt5 = String(row["Option 5"] || row["option_5"] || row["option5"] || "").trim();
+
+    const rawCorrect = String(
+      row["Correct Option"] || row["correct_option"] || row["Correct Answer"] || row["correct_answer"] || row["Answer"] || ""
+    ).trim();
+
+    // Skip completely blank rows without generating an error
+    if (!questionText && !opt1 && !opt2 && !opt3 && !opt4 && !opt5 && !rawCorrect) {
+      return;
+    }
+
+    if (!questionText) {
+      errors.push({ row: rowNum, reason: "Question text is empty" });
+      return;
+    }
+
+    // Skip example / sample instruction rows if present in data
+    if (
+      questionText.toLowerCase().startsWith("[example") ||
+      questionText.toLowerCase().startsWith("example:") ||
+      questionText.toLowerCase().startsWith("[sample")
+    ) {
+      exampleCount++;
+      return;
+    }
+
+    // Duplicate question validation (within spreadsheet and against assessment DB)
+    const normalizedQuestion = questionText.toLowerCase().trim();
+    if (seenQuestionsInFile.has(normalizedQuestion)) {
+      errors.push({
+        row: rowNum,
+        reason: `Duplicate question: A question with this exact text was already included in this spreadsheet (Row ${seenQuestionsInFile.get(normalizedQuestion)})`
+      });
+      return;
+    }
+    seenQuestionsInFile.set(normalizedQuestion, rowNum);
+
+    const existingMatch = existingQuestions.find(q => q.questionText.trim().toLowerCase() === normalizedQuestion);
+    if (existingMatch) {
+      errors.push({
+        row: rowNum,
+        reason: `Duplicate question: This question already exists in this assessment.`
+      });
+      return;
+    }
 
     const options = [opt1, opt2, opt3, opt4, opt5].filter(o => o.length > 0);
     if (options.length < 2) {
@@ -4502,9 +5146,13 @@ app.post("/api/admin/assessments/:id/import-questions", authenticateToken, uploa
       return;
     }
 
-    const rawCorrect = String(
-      row["Correct Option"] || row["correct_option"] || row["Correct Answer"] || row["correct_answer"] || row["Answer"] || ""
-    ).trim();
+    // Duplicate options validation within the question
+    const lowerOptions = options.map(o => o.toLowerCase());
+    const uniqueOptions = new Set(lowerOptions);
+    if (uniqueOptions.size !== options.length) {
+      errors.push({ row: rowNum, reason: "Duplicate options detected. Each option must have distinct text." });
+      return;
+    }
 
     if (!rawCorrect) {
       errors.push({ row: rowNum, reason: "Correct option is required" });
@@ -4562,6 +5210,27 @@ app.post("/api/admin/assessments/:id/import-questions", authenticateToken, uploa
     });
   });
 
+  // If preview mode, return validation preview without modifying database
+  const isPreview = Boolean(req.body?.preview || req.query?.preview === "true");
+  if (isPreview) {
+    return res.json({
+      preview: true,
+      totalRows: rawRows.length,
+      validCount: validQuestionsToInsert.length,
+      invalidCount: errors.length,
+      exampleCount,
+      errors,
+      previewQuestions: validQuestionsToInsert.map(q => ({
+        questionText: q.questionText,
+        options: q.options,
+        correctAnswers: q.correctAnswers,
+        points: q.points,
+        difficulty: q.difficulty,
+        explanation: q.explanation
+      }))
+    });
+  }
+
   // Insert valid questions
   for (const q of validQuestionsToInsert) {
     await questionsDb.insert(q);
@@ -4580,6 +5249,7 @@ app.post("/api/admin/assessments/:id/import-questions", authenticateToken, uploa
     totalRows: rawRows.length,
     validCount: validQuestionsToInsert.length,
     invalidCount: errors.length,
+    exampleCount,
     errors,
     importedCount: validQuestionsToInsert.length
   });
@@ -4587,7 +5257,7 @@ app.post("/api/admin/assessments/:id/import-questions", authenticateToken, uploa
 
 // 12. Student Assignment & Management APIs
 app.get("/api/admin/assessments/:id/students", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -4641,7 +5311,7 @@ app.get("/api/admin/assessments/:id/students", authenticateToken, async (req, re
 });
 
 app.post("/api/admin/assessments/:id/assign", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -4690,7 +5360,7 @@ app.post("/api/admin/assessments/:id/assign", authenticateToken, async (req, res
 });
 
 app.post("/api/admin/assessments/:id/bulk-assign", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -4712,7 +5382,7 @@ app.post("/api/admin/assessments/:id/bulk-assign", authenticateToken, async (req
 });
 
 app.post("/api/admin/assessments/:id/revoke", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -4729,7 +5399,7 @@ app.post("/api/admin/assessments/:id/revoke", authenticateToken, async (req, res
 });
 
 app.get("/api/admin/assessments/:id/access", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
   try {
@@ -4741,7 +5411,7 @@ app.get("/api/admin/assessments/:id/access", authenticateToken, async (req, res)
 });
 
 app.get("/api/admin/assessments/:id/results", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -4848,7 +5518,7 @@ app.get("/api/admin/assessments/:id/results", authenticateToken, async (req, res
 });
 
 app.get("/api/admin/assessments/:id/analytics", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -4946,7 +5616,7 @@ app.get("/api/admin/assessments/:id/analytics", authenticateToken, async (req, r
 
 // 1. Admin: List all learning paths with metadata & stats
 app.get("/api/admin/learning-paths", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -5182,7 +5852,7 @@ app.put("/api/admin/learning-paths/:id", authenticateToken, async (req, res) => 
 
 // 5. Admin: Delete learning path
 app.delete("/api/admin/learning-paths/:id", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -5201,7 +5871,7 @@ app.delete("/api/admin/learning-paths/:id", authenticateToken, async (req, res) 
 
 // 6. Admin: Duplicate learning path
 app.post("/api/admin/learning-paths/:id/duplicate", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -5341,7 +6011,7 @@ app.post("/api/admin/learning-paths/:id/duplicate", authenticateToken, async (re
 
 // 7. Admin: Validation check
 app.get("/api/admin/learning-paths/:id/validation", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -5386,7 +6056,7 @@ app.get("/api/admin/learning-paths/:id/validation", authenticateToken, async (re
 
 // 8. Admin: Publish learning path
 app.post("/api/admin/learning-paths/:id/publish", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -5415,7 +6085,7 @@ app.post("/api/admin/learning-paths/:id/publish", authenticateToken, async (req,
 
 // 9. Admin: Archive learning path
 app.post("/api/admin/learning-paths/:id/archive", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -5432,7 +6102,7 @@ app.post("/api/admin/learning-paths/:id/archive", authenticateToken, async (req,
 
 // 10. Admin: Section endpoints
 app.post("/api/admin/learning-paths/:id/sections", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -5456,7 +6126,7 @@ app.post("/api/admin/learning-paths/:id/sections", authenticateToken, async (req
 });
 
 app.put("/api/admin/learning-path-sections/:id", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -5473,7 +6143,7 @@ app.put("/api/admin/learning-path-sections/:id", authenticateToken, async (req, 
 });
 
 app.delete("/api/admin/learning-path-sections/:id", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -5485,7 +6155,7 @@ app.delete("/api/admin/learning-path-sections/:id", authenticateToken, async (re
 });
 
 app.put("/api/admin/learning-paths/:id/sections/reorder", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -5503,7 +6173,7 @@ app.put("/api/admin/learning-paths/:id/sections/reorder", authenticateToken, asy
 
 // 11. Admin: Learning Path Items endpoints
 app.post("/api/admin/learning-path-sections/:sectionId/items", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -5554,7 +6224,7 @@ app.post("/api/admin/learning-path-sections/:sectionId/items", authenticateToken
 });
 
 app.put("/api/admin/learning-path-items/:id", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -5594,7 +6264,7 @@ app.put("/api/admin/learning-path-items/:id", authenticateToken, async (req, res
 });
 
 app.delete("/api/admin/learning-path-items/:id", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -5610,7 +6280,7 @@ app.delete("/api/admin/learning-path-items/:id", authenticateToken, async (req, 
 });
 
 app.put("/api/admin/learning-path-sections/:sectionId/items/reorder", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -5628,7 +6298,7 @@ app.put("/api/admin/learning-path-sections/:sectionId/items/reorder", authentica
 
 // 12. Admin: Practice Assessment & Final Assessment Builders
 app.post("/api/admin/learning-path-items/:itemId/assessment", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -5688,7 +6358,7 @@ app.post("/api/admin/learning-path-items/:itemId/assessment", authenticateToken,
 });
 
 app.post("/api/admin/learning-paths/:id/final-assessment", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -5747,7 +6417,7 @@ app.post("/api/admin/learning-paths/:id/final-assessment", authenticateToken, as
 
 // 13. Admin: Student Assignments & Metrics
 app.get("/api/admin/learning-paths/:id/students", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -5763,7 +6433,7 @@ app.get("/api/admin/learning-paths/:id/students", authenticateToken, async (req,
 });
 
 app.post("/api/admin/learning-paths/:id/assign", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -5809,7 +6479,7 @@ app.post("/api/admin/learning-paths/:id/assign", authenticateToken, async (req, 
 });
 
 app.post("/api/admin/learning-paths/:id/revoke", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -5840,7 +6510,7 @@ app.post("/api/admin/learning-paths/:id/revoke", authenticateToken, async (req, 
 });
 
 app.post("/api/admin/learning-paths/:id/restore", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -6324,7 +6994,9 @@ app.get("/api/assessments/:id", authenticateToken, async (req, res) => {
           attemptNumber: inProg.attemptNumber,
           startedAt: inProg.startedAt,
           expiresAt: inProg.expiresAt,
-          secondsRemaining: Math.max(0, Math.floor((expiresMs - now) / 1000))
+          secondsRemaining: Math.max(0, Math.floor((expiresMs - now) / 1000)),
+          answers: inProg.answers || {},
+          proctoringEvents: inProg.proctoringEvents || []
         };
       }
     }
@@ -6333,7 +7005,8 @@ app.get("/api/assessments/:id", authenticateToken, async (req, res) => {
   }
 
   let finalQuestions: any[] = questions;
-  if (req.user!.role === UserRole.STUDENT) {
+  const canSeeAnswerKeys = isPlatformAdmin(req.user!.role);
+  if (!canSeeAnswerKeys) {
     const rawAss = assessment as any;
     const shouldRandomizeQuestions = Boolean(
       rawAss.randomizeQuestions &&
@@ -6350,17 +7023,19 @@ app.get("/api/assessments/:id", authenticateToken, async (req, res) => {
 
     const attemptNum = activeAttempt ? activeAttempt.attemptNumber : userAttemptsCount + 1;
 
-    if (shouldRandomizeQuestions) {
+    if (req.user!.role === UserRole.STUDENT && shouldRandomizeQuestions) {
       finalQuestions = seededShuffle(finalQuestions, `${req.user!.id}-${assessment.id}-attempt-${attemptNum}`);
     }
 
     finalQuestions = finalQuestions.map(q => {
       let options = q.options;
-      if (shouldRandomizeOptions && Array.isArray(options) && options.length > 1) {
+      if (req.user!.role === UserRole.STUDENT && shouldRandomizeOptions && Array.isArray(options) && options.length > 1) {
         options = seededShuffle(options, `${req.user!.id}-${q.id}-attempt-${attemptNum}`);
       }
       const { correctAnswers: _, explanation: __, ...rest } = q;
-      return { ...rest, options };
+      const rawText = q.questionText || "";
+      const cleanedQuestionText = rawText.replace(/\s*\(\d{10,14}\)$/, "").trim();
+      return { ...rest, questionText: cleanedQuestionText, options };
     });
   }
 
@@ -6430,14 +7105,18 @@ app.post("/api/assessments/:id/start", authenticateToken, async (req, res) => {
           options = seededShuffle(options, `${studentId}-${q.id}-attempt-${inProg.attemptNumber}`);
         }
         const { correctAnswers: _, explanation: __, ...rest } = q;
-        return { ...rest, options };
+        const rawText = q.questionText || "";
+        const cleanedQuestionText = rawText.replace(/\s*\(\d{10,14}\)$/, "").trim();
+        return { ...rest, questionText: cleanedQuestionText, options };
       });
 
       return res.json({
         resumed: true,
         attempt: inProg,
         secondsRemaining: Math.max(0, Math.floor((expiresMs - now) / 1000)),
-        questions: finalQuestions
+        questions: finalQuestions,
+        answers: inProg.answers || {},
+        proctoringEvents: inProg.proctoringEvents || []
       });
     }
   }
@@ -6487,7 +7166,9 @@ app.post("/api/assessments/:id/start", authenticateToken, async (req, res) => {
       options = seededShuffle(options, `${studentId}-${q.id}-attempt-${attemptNumber}`);
     }
     const { correctAnswers: _, explanation: __, ...rest } = q;
-    return { ...rest, options };
+    const rawText = q.questionText || "";
+    const cleanedQuestionText = rawText.replace(/\s*\(\d{10,14}\)$/, "").trim();
+    return { ...rest, questionText: cleanedQuestionText, options };
   });
 
   const newAttempt = await assessmentAttemptsDb.insert({
@@ -6500,6 +7181,7 @@ app.post("/api/assessments/:id/start", authenticateToken, async (req, res) => {
     status: "in_progress",
     questionOrder,
     answers: {},
+    proctoringEvents: [],
     timeTakenSeconds: 0,
     createdAt: startedAt,
     updatedAt: startedAt
@@ -6838,6 +7520,76 @@ app.post("/api/assessments/:id/submit", authenticateToken, async (req, res) => {
   });
 });
 
+// Save progressive answers during active assessment
+app.post("/api/assessments/:id/save-answers", authenticateToken, async (req, res) => {
+  const studentId = req.user!.id;
+  const { id } = req.params;
+  const { attemptId, answers } = req.body;
+
+  if (!attemptId || typeof answers !== "object") {
+    return res.status(400).json({ error: "Invalid attemptId or answers payload" });
+  }
+
+  const attempt = await assessmentAttemptsDb.findOne({ id: attemptId });
+  if (!attempt || attempt.assessmentId !== id || attempt.studentId !== studentId) {
+    return res.status(403).json({ error: "Attempt not found or access denied" });
+  }
+
+  if (attempt.status !== "in_progress") {
+    return res.status(400).json({ error: "Cannot save answers for an attempt that is not in progress" });
+  }
+
+  const now = Date.now();
+  const expiresMs = new Date(attempt.expiresAt).getTime();
+  if (now > expiresMs + 15000) {
+    await assessmentAttemptsDb.update(attempt.id, {
+      status: "timed_out",
+      updatedAt: new Date().toISOString()
+    });
+    return res.status(400).json({ error: "Exam session has expired" });
+  }
+
+  await assessmentAttemptsDb.update(attempt.id, {
+    answers,
+    updatedAt: new Date().toISOString()
+  });
+
+  return res.json({ success: true, savedAt: new Date().toISOString() });
+});
+
+// Record proctoring events during active assessment
+app.post("/api/assessments/:id/proctoring-event", authenticateToken, async (req, res) => {
+  const studentId = req.user!.id;
+  const { id } = req.params;
+  const { attemptId, eventType, details, timestamp, severity } = req.body;
+
+  if (!attemptId || !eventType) {
+    return res.status(400).json({ error: "Missing attemptId or eventType" });
+  }
+
+  const attempt = await assessmentAttemptsDb.findOne({ id: attemptId });
+  if (!attempt || attempt.assessmentId !== id || attempt.studentId !== studentId) {
+    return res.status(403).json({ error: "Attempt not found or access denied" });
+  }
+
+  const currentEvents = Array.isArray(attempt.proctoringEvents) ? [...attempt.proctoringEvents] : [];
+  const newEvent: any = {
+    attemptId,
+    eventType,
+    details: details || `Proctoring event: ${eventType}`,
+    timestamp: timestamp || new Date().toISOString(),
+    severity: severity || "warning"
+  };
+  currentEvents.push(newEvent);
+
+  await assessmentAttemptsDb.update(attempt.id, {
+    proctoringEvents: currentEvents,
+    updatedAt: new Date().toISOString()
+  });
+
+  return res.json({ success: true, count: currentEvents.length });
+});
+
 // Student: Get their own result/submission for an assessment
 app.get("/api/student/assessments/:id/result", authenticateToken, async (req, res) => {
   const studentId = req.user!.id;
@@ -6874,7 +7626,7 @@ app.get("/api/student/assessments/:id/result", authenticateToken, async (req, re
 
 // Admin: Global Assessment Results & Analytics endpoint
 app.get("/api/admin/results", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -7006,7 +7758,7 @@ app.get("/api/admin/results", authenticateToken, async (req, res) => {
 
 // Admin: Detailed question-wise submission breakdown for modal
 app.get("/api/admin/results/submission/:submissionId", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin role required" });
   }
 
@@ -7791,7 +8543,7 @@ app.post("/api/blogs", authenticateToken, async (req, res) => {
 });
 
 app.put("/api/blogs/:id/status", authenticateToken, async (req, res) => {
-  if (req.user!.role !== UserRole.ADMIN) {
+  if (!isPlatformAdmin(req.user!.role)) {
     return res.status(403).json({ error: "Admin approval required" });
   }
 

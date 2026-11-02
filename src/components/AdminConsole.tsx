@@ -10,11 +10,11 @@ import {
   UserPlus, Upload, FileSpreadsheet, Download, RefreshCw,
   Key, Mail, UserCheck, AlertTriangle, Trash2, Plus, Filter,
   Lock, BookCheck, Shield, ChevronRight, X, Calendar, Clock,
-  Layers, Video, Edit3, Sparkles, Edit2, Eye, EyeOff, CheckSquare, Square
+  Layers, Video, Edit3, Sparkles, Edit2, Eye, EyeOff, CheckSquare, Square, GraduationCap
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { User, Course, UserRole } from "../types.js";
+import { User, Course, UserRole, Batch } from "../types.js";
 import { CourseAuthoringStudio } from "./admin/CourseAuthoringStudio.js";
 
 interface AdminConsoleProps {
@@ -24,7 +24,7 @@ interface AdminConsoleProps {
 }
 
 export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: AdminConsoleProps) {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const [adminStats, setAdminStats] = useState<any>(null);
@@ -50,17 +50,39 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
     }
   }, [mode, initialTab]);
 
-  // Support direct URL actions (e.g. ?action=new to create course, ?action=content to open curriculum)
+  // Support direct URL actions (e.g. ?action=new to create course/user, ?action=content to open curriculum, ?courseId=... to edit course)
   useEffect(() => {
     const action = searchParams.get("action");
-    if (action === "new") {
-      setAuthoringCourseId("new");
-    } else if (action === "content") {
-      if (courses.length > 0 && !authoringCourseId) {
-        setAuthoringCourseId(courses[0].id);
+    const courseIdParam = searchParams.get("courseId");
+
+    if (courseIdParam) {
+      if (authoringCourseId !== courseIdParam) {
+        setAuthoringCourseId(courseIdParam);
       }
+    } else if (action === "new") {
+      if (mode === "courses_only" || activeSubTab === "courses") {
+        if (authoringCourseId !== "new") {
+          setAuthoringCourseId("new");
+        }
+      } else if (mode === "users_only" || activeSubTab === "users") {
+        setShowAddUserModal(true);
+      }
+    } else if (action === "content") {
+      if (courseIdParam) {
+        if (authoringCourseId !== courseIdParam) {
+          setAuthoringCourseId(courseIdParam);
+        }
+      } else {
+        // In content management mode without a selected course, do not auto-load a studio
+        if (authoringCourseId !== null) {
+          setAuthoringCourseId(null);
+        }
+      }
+    } else if (!action && !courseIdParam && authoringCourseId !== null) {
+      // Browser navigated back to catalog without courseId/action params
+      setAuthoringCourseId(null);
     }
-  }, [searchParams, courses]);
+  }, [searchParams, courses, mode, activeSubTab, authoringCourseId]);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -91,6 +113,19 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
   const [addUserLoading, setAddUserLoading] = useState(false);
   const [addUserError, setAddUserError] = useState("");
   const [addUserSuccess, setAddUserSuccess] = useState("");
+  const [addBatchIds, setAddBatchIds] = useState<string[]>([]);
+  const [addBatchSearch, setAddBatchSearch] = useState("");
+  const [availableBatches, setAvailableBatches] = useState<Batch[]>([]);
+
+  // Manage User Batch Memberships Modal State
+  const [showManageBatchesModal, setShowManageBatchesModal] = useState(false);
+  const [batchModalUser, setBatchModalUser] = useState<User | null>(null);
+  const [userAssignedBatches, setUserAssignedBatches] = useState<any[]>([]);
+  const [batchModalLoading, setBatchModalLoading] = useState(false);
+  const [batchModalError, setBatchModalError] = useState<string | null>(null);
+  const [batchModalSuccess, setBatchModalSuccess] = useState<string | null>(null);
+  const [selectedNewBatchId, setSelectedNewBatchId] = useState("");
+  const [batchActionLoading, setBatchActionLoading] = useState(false);
 
   // Bulk Import State
   const [showBulkModal, setShowBulkModal] = useState(false);
@@ -187,6 +222,15 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
         const coursesData = await coursesRes.json();
         setCourses(coursesData);
       }
+
+      // Load active batches for mandatory cohort assignment
+      const batchesRes = await fetch("/api/batches?status=active", {
+        headers: { "Authorization": `Bearer ${authToken}` }
+      });
+      if (batchesRes.ok) {
+        const batchesData = await batchesRes.json();
+        setAvailableBatches(batchesData.batches || (Array.isArray(batchesData) ? batchesData : []));
+      }
     } catch (e) {
       console.error("Error loading admin system configs", e);
     }
@@ -195,6 +239,101 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
   useEffect(() => {
     loadAdminDashboard();
   }, [authToken]);
+
+  // Handlers for managing user cohort batch memberships
+  const handleOpenManageUserBatches = async (u: User) => {
+    setBatchModalUser(u);
+    setBatchModalError(null);
+    setBatchModalSuccess(null);
+    setSelectedNewBatchId("");
+    setShowManageBatchesModal(true);
+    setBatchModalLoading(true);
+
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}/batches`, {
+        headers: { Authorization: `Bearer ${authToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUserAssignedBatches(data.batches || []);
+      } else {
+        const err = await res.json();
+        setBatchModalError(err.error || "Failed to load user batch memberships.");
+      }
+    } catch (e: any) {
+      setBatchModalError(e.message || "Failed to load user batch memberships.");
+    } finally {
+      setBatchModalLoading(false);
+    }
+  };
+
+  const handleAddBatchToUser = async () => {
+    if (!batchModalUser || !selectedNewBatchId) return;
+    setBatchActionLoading(true);
+    setBatchModalError(null);
+    setBatchModalSuccess(null);
+
+    try {
+      const res = await fetch(`/api/admin/users/${batchModalUser.id}/batches`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ batchId: selectedNewBatchId })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to assign batch.");
+      }
+
+      setBatchModalSuccess("Cohort batch assigned successfully!");
+      setSelectedNewBatchId("");
+      setUserAssignedBatches(data.batches || []);
+      loadAdminDashboard();
+    } catch (err: any) {
+      setBatchModalError(err.message || "Failed to assign batch.");
+    } finally {
+      setBatchActionLoading(false);
+    }
+  };
+
+  const handleRemoveBatchFromUser = async (batchId: string, batchName: string) => {
+    if (!batchModalUser) return;
+    if (userAssignedBatches.length <= 1) {
+      setBatchModalError("Cannot remove batch: Every user must belong to at least one active cohort batch.");
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to remove ${batchModalUser.name} from batch "${batchName}"? Remaining batch memberships will be preserved.`)) {
+      return;
+    }
+
+    setBatchActionLoading(true);
+    setBatchModalError(null);
+    setBatchModalSuccess(null);
+
+    try {
+      const res = await fetch(`/api/admin/users/${batchModalUser.id}/batches/${batchId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${authToken}` }
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to remove batch membership.");
+      }
+
+      setBatchModalSuccess(`Batch "${batchName}" removed successfully.`);
+      setUserAssignedBatches(data.batches || data.remainingBatches || []);
+      loadAdminDashboard();
+    } catch (err: any) {
+      setBatchModalError(err.message || "Failed to remove batch membership.");
+    } finally {
+      setBatchActionLoading(false);
+    }
+  };
 
   // Load student enrollments when selectedStudentId changes
   const loadStudentEnrollments = async (studentId: string) => {
@@ -351,6 +490,11 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
       return;
     }
 
+    if (addBatchIds.length === 0) {
+      setAddUserError("Mandatory cohort membership: User must be assigned to at least one active batch cohort.");
+      return;
+    }
+
     setAddUserLoading(true);
     try {
       const res = await fetch("/api/admin/users", {
@@ -366,19 +510,22 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
           role: addRole,
           status: addStatus,
           phoneNumber: trimmedPhone || undefined,
-          location: trimmedLoc || undefined
+          location: trimmedLoc || undefined,
+          batchIds: addBatchIds
         })
       });
 
       const data = await res.json();
       if (res.ok) {
-        setAddUserSuccess(`User ${data.name} (${data.role}) created successfully!`);
+        setAddUserSuccess(`User ${data.name} (${data.role}) created successfully with ${addBatchIds.length} batch cohort(s)!`);
         setAddName("");
         setAddEmail("");
         setAddPassword("");
         setAddPhone("");
         setAddLocation("");
         setAddFieldError({});
+        setAddBatchIds([]);
+        setAddBatchSearch("");
         setAddRole(UserRole.STUDENT);
         setAddStatus("active");
         loadAdminDashboard();
@@ -893,9 +1040,22 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
         authToken={authToken}
         onBack={() => {
           setAuthoringCourseId(null);
+          const currentAction = searchParams.get("action");
+          if (currentAction === "content") {
+            setSearchParams({ action: "content" }, { replace: true });
+          } else {
+            setSearchParams({}, { replace: true });
+          }
           loadAdminDashboard();
         }}
-        onCourseSaved={() => {
+        onCourseSaved={(savedCourse) => {
+          if (savedCourse && savedCourse.id) {
+            setAuthoringCourseId(savedCourse.id);
+            const currentAction = searchParams.get("action");
+            const newParams: Record<string, string> = { courseId: savedCourse.id, step: "curriculum" };
+            if (currentAction) newParams.action = currentAction;
+            setSearchParams(newParams, { replace: true });
+          }
           loadAdminDashboard();
         }}
       />
@@ -912,8 +1072,8 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
               <Users className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider font-mono">Total Students</p>
-              <p className="text-2xl font-extrabold text-gray-950 font-mono">{adminStats.studentsCount}</p>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider font-mono">Total Students</p>
+              <p className="text-2xl font-extrabold text-slate-900 font-mono">{adminStats.studentsCount}</p>
             </div>
           </div>
 
@@ -922,8 +1082,8 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
               <Users className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider font-mono">Total Trainers</p>
-              <p className="text-2xl font-extrabold text-gray-950 font-mono">{adminStats.trainersCount}</p>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider font-mono">Total Trainers</p>
+              <p className="text-2xl font-extrabold text-slate-900 font-mono">{adminStats.trainersCount}</p>
             </div>
           </div>
 
@@ -932,8 +1092,8 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
               <BookOpen className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider font-mono">Platform Courses</p>
-              <p className="text-2xl font-extrabold text-gray-950 font-mono">{adminStats.coursesCount}</p>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider font-mono">Platform Courses</p>
+              <p className="text-2xl font-extrabold text-slate-900 font-mono">{adminStats.coursesCount}</p>
             </div>
           </div>
 
@@ -942,8 +1102,8 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
               <Award className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider font-mono">Exam Submissions</p>
-              <p className="text-2xl font-extrabold text-gray-950 font-mono">{adminStats.submissionsCount}</p>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider font-mono">Exam Submissions</p>
+              <p className="text-2xl font-extrabold text-slate-900 font-mono">{adminStats.submissionsCount}</p>
             </div>
           </div>
         </div>
@@ -1041,7 +1201,7 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
                   setBulkValidationResult(null);
                   setShowBulkModal(true);
                 }}
-                className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-emerald-500/10 cursor-pointer"
+                className="px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-emerald-500/10 cursor-pointer"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5" />
                 <span>Bulk Import (.xlsx)</span>
@@ -1051,13 +1211,17 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
 
           {/* Courses Action Buttons */}
           {(activeSubTab === "courses" || mode === "courses_only") && mode !== "users_only" && (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <button
-                onClick={() => setAuthoringCourseId("new")}
-                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-emerald-500/10 cursor-pointer"
+                onClick={() => {
+                  setAuthoringCourseId("new");
+                  setSearchParams({ action: "new", step: "info" });
+                }}
+                className="h-9 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-sm font-semibold rounded-lg shadow-sm transition-all duration-150 inline-flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 cursor-pointer whitespace-nowrap shrink-0"
+                aria-label="Create New Course"
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>+ Create New Course</span>
+                <Plus className="w-4 h-4 shrink-0" />
+                <span>Create New Course</span>
               </button>
             </div>
           )}
@@ -1104,77 +1268,122 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
             </div>
 
             {/* Users Directory Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+            <div className="w-full min-w-0 overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs">
+              <table className="w-full text-left border-collapse min-w-[920px]">
                 <thead>
-                  <tr className="border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider font-mono">
-                    <th className="py-3 px-4">User Details</th>
-                    <th className="py-3 px-4">Platform Role</th>
-                    <th className="py-3 px-4">System Status</th>
-                    <th className="py-3 px-4">Assigned Courses</th>
-                    <th className="py-3 px-4">Assessments</th>
-                    <th className="py-3 px-4">Joined Date</th>
-                    <th className="py-3 px-4 text-right">Moderation Actions</th>
+                  <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/50 text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider font-mono">
+                    <th className="py-2.5 px-3.5 w-[22%] min-w-[175px]">User Details</th>
+                    <th className="py-2.5 px-2.5 w-[9%] min-w-[75px]">System Status</th>
+                    <th className="py-2.5 px-3 w-[18%] min-w-[155px]">Batch Cohorts</th>
+                    <th className="py-2.5 px-3 w-[19%] min-w-[160px]">Assigned Courses</th>
+                    <th className="py-2.5 px-2.5 w-[10%] min-w-[85px]">Assessments</th>
+                    <th className="py-2.5 px-2.5 w-[9%] min-w-[80px]">Joined Date</th>
+                    <th className="py-2.5 px-3.5 w-[13%] min-w-[165px] text-right">Moderation Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 text-xs">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70 text-xs">
                   {filteredUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-slate-400 font-semibold">
+                      <td colSpan={7} className="py-8 text-center text-slate-500 font-semibold">
                         No users found matching your filters.
                       </td>
                     </tr>
                   ) : (
                     filteredUsers.map((u) => (
-                      <tr key={u.id} className="hover:bg-slate-50/50 transition">
-                        <td className="py-3.5 px-4">
-                          <div>
-                            <p className="font-bold text-gray-900 text-sm">{u.name}</p>
-                            <p className="text-gray-400 font-mono text-[11px] mt-0.5">{u.email}</p>
+                      <tr key={u.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                        {/* 1. User Details & Role */}
+                        <td className="py-2.5 px-3.5 align-top">
+                          <div className="flex flex-col gap-0.5 min-w-[165px]">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-slate-900 dark:text-white text-xs sm:text-[13px] truncate max-w-[125px]" title={u.name}>
+                                {u.name}
+                              </span>
+                              <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold font-mono uppercase tracking-wider shrink-0 ${
+                                u.role === UserRole.ADMIN 
+                                  ? "bg-amber-50 text-amber-700 border border-amber-200/60 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800" 
+                                  : u.role === UserRole.TRAINER
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
+                                  : "bg-blue-50 text-blue-700 border border-blue-200/60 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800"
+                              }`}>
+                                {u.role}
+                              </span>
+                            </div>
+                            <p className="text-slate-500 dark:text-slate-400 font-mono text-[11px] truncate max-w-[165px]" title={u.email}>
+                              {u.email}
+                            </p>
                             {(u.phoneNumber || u.location) && (
-                              <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 mt-1 font-sans">
-                                {u.phoneNumber && <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-mono">📞 {u.phoneNumber}</span>}
-                                {u.location && <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">📍 {u.location}</span>}
+                              <div className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 truncate max-w-[165px]">
+                                {u.phoneNumber && (
+                                  <span className="font-mono shrink-0" title={`Phone: ${u.phoneNumber}`}>
+                                    📞 {u.phoneNumber}
+                                  </span>
+                                )}
+                                {u.phoneNumber && u.location && <span className="text-slate-300 dark:text-slate-600 select-none">•</span>}
+                                {u.location && (
+                                  <span className="truncate" title={`Location: ${u.location}`}>
+                                    📍 {u.location}
+                                  </span>
+                                )}
                               </div>
                             )}
                           </div>
                         </td>
-                        <td className="py-3.5 px-4">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase ${
-                            u.role === UserRole.ADMIN 
-                              ? "bg-amber-50 text-amber-700 border border-amber-200/60" 
-                              : u.role === UserRole.TRAINER
-                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
-                              : "bg-blue-50 text-blue-700 border border-blue-200/60"
-                          }`}>
-                            {u.role}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold font-mono ${
+
+                        {/* 2. System Status */}
+                        <td className="py-2.5 px-2.5 align-top">
+                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono shrink-0 whitespace-nowrap ${
                             u.status === "active" 
-                              ? "bg-emerald-50 text-emerald-700 border border-emerald-100" 
-                              : "bg-rose-50 text-rose-700 border border-rose-100"
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" 
+                              : "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800"
                           }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${u.status === "active" ? "bg-emerald-500" : "bg-rose-500"}`} />
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${u.status === "active" ? "bg-emerald-500" : "bg-rose-500"}`} />
                             {u.status.toUpperCase()}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 align-top">
+
+                        {/* 3. Batch Cohorts */}
+                        <td className="py-2.5 px-3 align-top">
+                          <div className="flex flex-col gap-1 min-w-[145px] max-w-[180px]">
+                            {u.batches && u.batches.length > 0 ? (
+                              <div className="flex flex-col gap-1">
+                                {u.batches.map((b: any) => (
+                                  <span
+                                    key={b.id}
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/70 dark:border-purple-800/60 leading-tight"
+                                    title={`${b.name} (${b.code}) — Academic Year ${b.academicYear}`}
+                                  >
+                                    <GraduationCap className="w-2.5 h-2.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                                    <span className="truncate max-w-[95px] font-semibold">{b.name}</span>
+                                    <span className="font-mono text-[9px] text-purple-600/80 dark:text-purple-400/80 shrink-0">
+                                      ({b.academicYear})
+                                    </span>
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-[10.5px] text-amber-600 dark:text-amber-400 font-medium italic flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3 shrink-0" />
+                                <span>No batch assigned</span>
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* 4. Assigned Courses */}
+                        <td className="py-2.5 px-3 align-top">
                           {(() => {
                             const count = u.assignedCoursesCount ?? u.assignedCourses?.length ?? 0;
                             const coursesList = u.assignedCourses || [];
                             const isExpanded = expandedStudentCourses.has(u.id);
                             const visibleCourses = isExpanded ? coursesList : coursesList.slice(0, 2);
-                            const remainingCount = coursesList.length - 2;
 
                             return (
-                              <div className="flex flex-col gap-1 min-w-[170px]">
-                                <div className="font-mono text-xs font-bold text-slate-700">
+                              <div className="flex flex-col gap-0.5 min-w-[150px] max-w-[190px]">
+                                <div className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200">
                                   {count} {count === 1 ? "course" : "courses"}
                                 </div>
                                 {count === 0 ? (
-                                  <div className="text-[11px] text-slate-400 font-sans italic">
+                                  <div className="text-[10.5px] text-slate-400 dark:text-slate-500 font-sans italic">
                                     No courses assigned
                                   </div>
                                 ) : (
@@ -1187,18 +1396,24 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
                                           ? "Direct+Batch" 
                                           : "Direct";
                                         const badgeStyle = c.source === "batch"
-                                          ? "bg-purple-50 text-purple-700 border-purple-200"
+                                          ? "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800"
                                           : c.source === "individual_and_batch"
-                                          ? "bg-amber-50 text-amber-700 border-amber-200"
-                                          : "bg-blue-50 text-blue-700 border-blue-200";
+                                          ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
+                                          : "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800";
 
                                         return (
-                                          <li key={c.id} className="flex items-center gap-1.5 text-[11px] text-slate-700 leading-tight">
+                                          <li key={c.id} className="flex items-center gap-1 text-[10.5px] text-slate-700 dark:text-slate-300 leading-tight">
                                             <span className="text-slate-400 select-none">•</span>
-                                            <span className="font-medium truncate max-w-[155px]" title={`${c.title} • ${c.sourceDetails || sourceLabel}`}>
+                                            <span 
+                                              className="font-medium truncate max-w-[95px]" 
+                                              title={`${c.title} • Access: ${c.sourceDetails || sourceLabel}`}
+                                            >
                                               {c.title}
                                             </span>
-                                            <span className={`text-[9px] font-mono px-1 py-0.2 rounded border font-semibold shrink-0 ${badgeStyle}`} title={c.sourceDetails || sourceLabel}>
+                                            <span 
+                                              className={`text-[8.5px] font-mono px-1 py-0.2 rounded border font-semibold shrink-0 ${badgeStyle}`} 
+                                              title={c.sourceDetails || sourceLabel}
+                                            >
                                               {sourceLabel}
                                             </span>
                                           </li>
@@ -1212,7 +1427,7 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
                                           e.stopPropagation();
                                           toggleStudentCoursesExpanded(u.id);
                                         }}
-                                        className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 text-left transition cursor-pointer w-fit mt-0.5 flex items-center gap-1"
+                                        className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline text-left transition cursor-pointer w-fit mt-0.5 flex items-center gap-1"
                                         aria-label={isExpanded ? "Show fewer courses" : `View all ${count} courses`}
                                       >
                                         {isExpanded ? "Show less" : `View all (${count})`}
@@ -1224,55 +1439,97 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
                             );
                           })()}
                         </td>
-                        <td className="py-3.5 px-4 font-mono text-slate-600">
-                          <span className="font-bold text-slate-800">{u.assignedAssessmentsCount ?? 0}</span> assigned
-                          {u.completedAssessmentsCount ? ` (${u.completedAssessmentsCount} passed)` : ""}
+
+                        {/* 5. Assessments */}
+                        <td className="py-2.5 px-2.5 font-mono text-slate-600 dark:text-slate-300 align-top whitespace-nowrap">
+                          <div className="flex flex-col gap-0.5">
+                            <div className="text-xs">
+                              <span className="font-bold text-slate-900 dark:text-white">{u.assignedAssessmentsCount ?? 0}</span>
+                              <span className="text-slate-500 dark:text-slate-400 text-[10.5px] ml-1">assigned</span>
+                            </div>
+                            {u.completedAssessmentsCount ? (
+                              <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                                ✓ {u.completedAssessmentsCount} passed
+                              </div>
+                            ) : (
+                              <div className="text-[10px] text-slate-400 dark:text-slate-500 font-normal">
+                                0 completed
+                              </div>
+                            )}
+                          </div>
                         </td>
-                        <td className="py-3.5 px-4 font-mono text-slate-400 text-[11px]">
-                          {new Date(u.createdAt).toLocaleDateString()}
+
+                        {/* 6. Joined Date */}
+                        <td className="py-2.5 px-2.5 font-mono text-slate-500 dark:text-slate-400 text-[11px] align-top whitespace-nowrap">
+                          {new Date(u.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
                         </td>
-                        <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                            {u.role === UserRole.STUDENT && (
-                              <>
+
+                        {/* 7. Moderation Actions */}
+                        <td className="py-2.5 px-3.5 text-right align-top">
+                          <div className="flex flex-col gap-1 min-w-[155px] max-w-[175px] ml-auto">
+                            {/* Primary Management Actions */}
+                            <div className="grid grid-cols-2 gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenManageUserBatches(u)}
+                                className="h-6.5 px-1.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/50 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 rounded text-[10px] font-semibold transition flex items-center justify-center gap-1 cursor-pointer truncate"
+                                title="Manage Cohort Batch Memberships"
+                              >
+                                <GraduationCap className="w-2.5 h-2.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                                <span className="truncate">Batches ({u.batchCount ?? u.batches?.length ?? 0})</span>
+                              </button>
+
+                              {u.role === UserRole.STUDENT ? (
                                 <button
                                   onClick={() => navigate(`/admin/access?view=students&studentId=${u.id}`)}
-                                  className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-lg text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
+                                  className="h-6.5 px-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 rounded text-[10px] font-semibold transition flex items-center justify-center gap-1 cursor-pointer truncate"
                                   title="Manage Course Access in Course Access Console"
                                 >
-                                  <Lock className="w-3 h-3 text-indigo-500" />
-                                  <span>Course Access</span>
+                                  <Lock className="w-2.5 h-2.5 text-indigo-500 dark:text-indigo-400 shrink-0" />
+                                  <span className="truncate">Access</span>
                                 </button>
+                              ) : (
+                                <div className="h-6.5" />
+                              )}
+                            </div>
+
+                            {/* Secondary Utility Actions */}
+                            <div className="flex items-center justify-end gap-1">
+                              {u.role === UserRole.STUDENT && (
+                                <>
+                                  <button
+                                    onClick={() => handleOpenEditModal(u)}
+                                    className="h-6 px-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded text-[9.5px] font-semibold transition flex items-center gap-0.5 cursor-pointer"
+                                    title="Edit Contact & Details"
+                                  >
+                                    <Edit2 className="w-2.5 h-2.5 text-slate-500 dark:text-slate-400 shrink-0" />
+                                    <span>Edit</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleOpenResetPasswordModal(u)}
+                                    className="h-6 px-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 rounded text-[9.5px] font-semibold transition flex items-center gap-0.5 cursor-pointer"
+                                    title="Reset Student Password"
+                                  >
+                                    <Key className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                                    <span>Reset</span>
+                                  </button>
+                                </>
+                              )}
+
+                              {u.role !== UserRole.ADMIN && (
                                 <button
-                                  onClick={() => handleOpenEditModal(u)}
-                                  className="px-2 py-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
-                                  title="Edit Contact & Details"
+                                  onClick={() => handleToggleUserStatus(u.id, u.status)}
+                                  className={`h-6 px-1.5 border rounded text-[9.5px] font-semibold transition flex items-center gap-0.5 cursor-pointer shadow-2xs ${
+                                    u.status === "active"
+                                      ? "bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300"
+                                      : "bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300"
+                                  }`}
+                                  title={u.status === "active" ? "Suspend user account access" : "Activate user account access"}
                                 >
-                                  <Edit2 className="w-3 h-3 text-slate-500" />
-                                  <span>Edit</span>
+                                  {u.status === "active" ? "Suspend" : "Activate"}
                                 </button>
-                                <button
-                                  onClick={() => handleOpenResetPasswordModal(u)}
-                                  className="px-2 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 rounded-lg text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
-                                  title="Reset Student Password"
-                                >
-                                  <Key className="w-3 h-3 text-amber-600" />
-                                  <span>Reset Pass</span>
-                                </button>
-                              </>
-                            )}
-                            {u.role !== UserRole.ADMIN && (
-                              <button
-                                onClick={() => handleToggleUserStatus(u.id, u.status)}
-                                className={`px-2.5 py-1 border rounded-lg text-[10px] font-bold transition flex items-center gap-1 shadow-xs cursor-pointer ${
-                                  u.status === "active"
-                                    ? "bg-rose-50 border-rose-100 text-rose-700 hover:bg-rose-100"
-                                    : "bg-emerald-50 border-emerald-100 text-emerald-700 hover:bg-emerald-100"
-                                }`}
-                              >
-                                {u.status === "active" ? "Suspend" : "Activate"}
-                              </button>
-                            )}
+                              )}
+                            </div>
                           </div>
                         </td>
                       </tr>
@@ -1544,51 +1801,57 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
         {activeSubTab === "courses" && (
           <div className="space-y-4">
             {/* Search & Status Filter Controls */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/60 p-4 rounded-2xl border border-slate-200/60">
-              <div className="flex items-center gap-2 flex-1 max-w-md">
-                <div className="relative flex-1">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={courseSearchQuery}
-                    onChange={(e) => setCourseSearchQuery(e.target.value)}
-                    placeholder="Search courses by title or category..."
-                    className="w-full pl-9 pr-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  />
-                </div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/80 p-3.5 rounded-xl border border-slate-200">
+              <div className="relative flex-1 max-w-md">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={courseSearchQuery}
+                  onChange={(e) => setCourseSearchQuery(e.target.value)}
+                  placeholder="Search courses by title or category..."
+                  className="w-full pl-9 pr-3.5 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+                />
               </div>
 
               <div className="flex flex-wrap items-center gap-1.5">
-                {(["all", "published", "draft", "archived"] as const).map((st) => (
-                  <button
-                    key={st}
-                    onClick={() => setCourseStatusFilter(st)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition cursor-pointer ${
-                      courseStatusFilter === st
-                        ? "bg-slate-900 text-white shadow-xs font-bold"
-                        : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
-                    }`}
-                  >
-                    {st === "all" ? "All Courses" : st}
-                    <span className="ml-1.5 text-[10px] opacity-70 font-mono">
-                      ({st === "all" ? courses.length : courses.filter(c => c.status === st).length})
-                    </span>
-                  </button>
-                ))}
+                {(["all", "published", "draft", "archived"] as const).map((st) => {
+                  const count = st === "all" ? courses.length : courses.filter((c) => c.status === st).length;
+                  const isActive = courseStatusFilter === st;
+                  return (
+                    <button
+                      key={st}
+                      onClick={() => setCourseStatusFilter(st)}
+                      className={`h-8.5 px-3 rounded-lg text-xs font-semibold capitalize transition-all inline-flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-1 ${
+                        isActive
+                          ? "bg-slate-900 text-white shadow-xs font-bold"
+                          : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:text-slate-900"
+                      }`}
+                    >
+                      <span>{st === "all" ? "All Courses" : st}</span>
+                      <span
+                        className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono leading-none ${
+                          isActive ? "bg-slate-800 text-slate-200" : "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             {/* Courses Table */}
-            <div className="overflow-x-auto rounded-2xl border border-slate-200/70">
+            <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-xs">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-200/80 text-xs font-bold text-slate-400 uppercase tracking-wider font-mono bg-slate-50/70">
-                    <th className="py-3 px-4">Course Info</th>
-                    <th className="py-3 px-4">Category / Level</th>
-                    <th className="py-3 px-4">Curriculum Structure</th>
-                    <th className="py-3 px-4">Enrolled Students</th>
-                    <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4 text-right">Actions</th>
+                  <tr className="border-b border-slate-200 text-xs font-bold text-black uppercase tracking-normal bg-slate-50/90">
+                    <th className="py-3 px-3">Course Info</th>
+                    <th className="py-3 px-3">Category / Level</th>
+                    <th className="py-3 px-3">Curriculum Structure</th>
+                    <th className="py-3 px-3">Enrolled Students</th>
+                    <th className="py-3 px-3">Status</th>
+                    <th className="py-3 px-3 text-right w-44">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs bg-white">
@@ -1602,108 +1865,129 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
                     })
                     .map((c) => (
                       <tr key={c.id} className="hover:bg-slate-50/60 transition">
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-3 align-middle">
                           <div className="flex items-center gap-3">
                             <img 
                               src={c.thumbnail || "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=80"} 
                               alt={c.title}
-                              className="w-12 h-8 rounded-lg object-cover border border-slate-200 shrink-0" 
+                              className="w-11 h-9 rounded-lg object-cover border border-slate-200 shrink-0 shadow-xs" 
                             />
-                            <div className="min-w-0">
-                              <p className="font-bold text-slate-900 truncate max-w-xs">{c.title}</p>
+                            <div className="min-w-0 max-w-[170px]">
+                              <p className="font-bold text-sm text-black truncate">{c.title}</p>
                               {c.shortDescription ? (
-                                <p className="text-slate-400 text-[11px] truncate max-w-xs">{c.shortDescription}</p>
+                                <p className="text-black text-xs truncate mt-0.5 opacity-80">{c.shortDescription}</p>
                               ) : (
-                                <p className="text-slate-400 text-[11px]">Instructor: {c.instructorName || "Admin"}</p>
+                                <p className="text-black text-xs mt-0.5 opacity-80">Instructor: {c.instructorName || "Admin"}</p>
                               )}
                             </div>
                           </div>
                         </td>
-                        <td className="py-3.5 px-4">
-                          <div>
-                            <span className="font-semibold text-slate-700">{c.category || "General"}</span>
-                            <span className="block text-[10px] text-slate-400 font-mono">{c.difficulty || "Beginner"}</span>
-                          </div>
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <div className="space-y-0.5 text-[11px] text-slate-600 font-mono">
-                            <span className="flex items-center gap-1 font-semibold text-blue-700">
-                              <Layers className="w-3 h-3 text-blue-500" />
-                              {c.modulesCount || 0} Modules • {c.lessonsCount || 0} Lessons
+                        <td className="py-3.5 px-3 align-middle">
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-slate-100 text-black border border-slate-200 whitespace-nowrap">
+                              {c.category || "General"}
                             </span>
-                            <span className="flex items-center gap-1 text-emerald-700">
-                              <Award className="w-3 h-3 text-emerald-500" />
-                              {c.assessmentsCount || 0} Practice Tests / Exam
+                            <span className="text-[11px] text-black capitalize pl-0.5 opacity-80">
+                              {c.difficulty || "Beginner"}
                             </span>
                           </div>
                         </td>
-                        <td className="py-3.5 px-4">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-700 rounded-lg text-xs font-bold font-mono">
-                            <Users className="w-3 h-3" />
-                            {c.studentsCount || 0} Students
+                        <td className="py-3.5 px-3 align-middle whitespace-nowrap">
+                          <div className="flex flex-col gap-1 items-start text-xs">
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 text-black border border-blue-100 rounded-md font-medium text-xs whitespace-nowrap">
+                              <Layers className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                              <span>{c.modulesCount || 0} Modules • {c.lessonsCount || 0} Lessons</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 text-black border border-emerald-100 rounded-md font-medium text-xs whitespace-nowrap">
+                              <Award className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span>{c.assessmentsCount || 0} Practice Tests / Exam</span>
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-3 align-middle">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-purple-50 text-black border border-purple-100 rounded-lg text-xs font-semibold whitespace-nowrap">
+                            <Users className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                            <span>{c.studentsCount || 0} Students</span>
                           </span>
                         </td>
-                        <td className="py-3.5 px-4">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold font-mono uppercase tracking-wider ${
+                        <td className="py-3.5 px-3 align-middle">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide text-black whitespace-nowrap ${
                             c.status === "published"
-                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              ? "bg-emerald-50 border border-emerald-200"
                               : c.status === "draft"
-                              ? "bg-amber-50 text-amber-700 border border-amber-200"
-                              : "bg-slate-100 text-slate-600 border border-slate-200"
+                              ? "bg-amber-50 border border-amber-200"
+                              : "bg-slate-100 border border-slate-200"
                           }`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${
                               c.status === "published" ? "bg-emerald-500" : c.status === "draft" ? "bg-amber-500" : "bg-slate-400"
                             }`} />
-                            {c.status}
+                            <span>{c.status}</span>
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                        <td className="py-3.5 px-3 align-middle text-right">
+                          <div className="w-[164px] ml-auto flex flex-col gap-1.5">
+                            {/* Row 1: Course Access */}
                             <button
                               onClick={() => navigate(`/admin/access?view=assign&courseId=${c.id}`)}
-                              className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-xs"
+                              className="w-full h-8 px-2 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-black border border-indigo-200 rounded-lg text-xs font-semibold transition-all inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
                               title="Assign Access to Students & Batches in Course Access Console"
+                              aria-label="Manage Course Access"
                             >
-                              <Lock className="w-3.5 h-3.5" />
-                              <span>Course Access</span>
+                              <Lock className="w-3.5 h-3.5 shrink-0 text-indigo-700" />
+                              <span className="truncate">Course Access</span>
                             </button>
+
+                            {/* Row 2: Edit / Build Content */}
                             <button
-                              onClick={() => setAuthoringCourseId(c.id)}
-                              className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-xs"
+                              onClick={() => {
+                                setAuthoringCourseId(c.id);
+                                setSearchParams({ courseId: c.id, step: "info" });
+                              }}
+                              className="w-full h-8 px-2 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-black border border-blue-200 rounded-lg text-xs font-semibold transition-all inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
                               title="Open Course Authoring Studio (Modules, Lessons, Tests)"
+                              aria-label="Edit and Build Course Content"
                             >
-                              <Edit3 className="w-3.5 h-3.5" />
-                              <span>Edit / Build Content</span>
+                              <Edit3 className="w-3.5 h-3.5 shrink-0 text-blue-700" />
+                              <span className="truncate">Edit / Build Content</span>
                             </button>
-                            <button
-                              onClick={() => handleToggleFeatured(c.id, c.isFeatured)}
-                              className={`p-1.5 border rounded-xl transition cursor-pointer ${
-                                c.isFeatured 
-                                  ? "bg-amber-50 border-amber-200 text-amber-600" 
-                                  : "bg-slate-50 border-slate-200 text-slate-400 hover:text-slate-600"
-                              }`}
-                              title={c.isFeatured ? "Unfeature Course" : "Feature Course"}
-                            >
-                              <Star className={`w-3.5 h-3.5 ${c.isFeatured ? "fill-amber-400" : ""}`} />
-                            </button>
-                            <button
-                              onClick={() => handleToggleCourseStatus(c.id, c.status)}
-                              className={`px-2.5 py-1.5 border rounded-xl text-[11px] font-bold transition cursor-pointer ${
-                                c.status === "published"
-                                  ? "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100"
-                                  : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
-                              }`}
-                              title={c.status === "published" ? "Unpublish to Draft" : "Publish Course"}
-                            >
-                              {c.status === "published" ? "Unpublish" : "Publish"}
-                            </button>
-                            <button
-                              onClick={() => handleDeleteCourse(c.id, c.title)}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl border border-transparent hover:border-rose-100 transition cursor-pointer"
-                              title="Delete Course and All Content"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+
+                            {/* Row 3: Star/Featured, Unpublish/Publish, and Delete */}
+                            <div className="flex items-center gap-1.5 w-full">
+                              <button
+                                onClick={() => handleToggleFeatured(c.id, c.isFeatured)}
+                                className={`h-8 w-8 rounded-lg border transition-all inline-flex items-center justify-center cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1 ${
+                                  c.isFeatured 
+                                    ? "bg-amber-50 border-amber-300 text-amber-600 hover:bg-amber-100" 
+                                    : "bg-white border-slate-200 text-slate-400 hover:text-amber-500 hover:border-amber-200 hover:bg-amber-50/50"
+                                }`}
+                                title={c.isFeatured ? "Unfeature Course" : "Mark as Featured"}
+                                aria-label={c.isFeatured ? "Unfeature Course" : "Mark as Featured"}
+                              >
+                                <Star className={`w-3.5 h-3.5 ${c.isFeatured ? "fill-amber-400 text-amber-500" : ""}`} />
+                              </button>
+
+                              <button
+                                onClick={() => handleToggleCourseStatus(c.id, c.status)}
+                                className={`flex-1 h-8 px-1 border rounded-lg text-[11px] font-semibold transition-all inline-flex items-center justify-center text-center cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-offset-1 text-black ${
+                                  c.status === "published"
+                                    ? "bg-rose-50 border-rose-200 hover:bg-rose-100 focus-visible:ring-rose-500"
+                                    : "bg-emerald-50 border-emerald-200 hover:bg-emerald-100 focus-visible:ring-emerald-500"
+                                }`}
+                                title={c.status === "published" ? "Unpublish Course to Draft" : "Publish Course to Students"}
+                                aria-label={c.status === "published" ? "Unpublish Course" : "Publish Course"}
+                              >
+                                <span className="truncate">{c.status === "published" ? "Unpublish" : "Publish"}</span>
+                              </button>
+
+                              <button
+                                onClick={() => handleDeleteCourse(c.id, c.title)}
+                                className="h-8 w-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200 transition-all inline-flex items-center justify-center cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-1"
+                                title="Delete Course and All Content"
+                                aria-label="Delete Course"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
                         </td>
                       </tr>
@@ -1711,15 +1995,19 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
 
                   {courses.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-slate-400">
-                        <BookOpen className="w-8 h-8 mx-auto text-slate-300 mb-2" />
-                        <p className="font-bold text-slate-700">No courses available in catalog.</p>
+                      <td colSpan={6} className="py-12 text-center text-black">
+                        <BookOpen className="w-8 h-8 mx-auto text-slate-400 mb-2" />
+                        <p className="font-bold text-black">No courses available in catalog.</p>
                         <button
-                          onClick={() => setAuthoringCourseId("new")}
-                          className="mt-3 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition inline-flex items-center gap-1.5 cursor-pointer"
+                          onClick={() => {
+                            setAuthoringCourseId("new");
+                            setSearchParams({ action: "new", step: "info" });
+                          }}
+                          className="mt-3 h-9 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-sm font-semibold rounded-lg shadow-sm transition inline-flex items-center gap-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+                          aria-label="Create First Course"
                         >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>+ Create Your First Course</span>
+                          <Plus className="w-4 h-4 shrink-0" />
+                          <span>Create First Course</span>
                         </button>
                       </td>
                     </tr>
@@ -1733,161 +2021,281 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
 
       {/* MODAL 1: ADD SINGLE USER */}
       {showAddUserModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 space-y-6 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl w-[min(100%-1rem,720px)] max-h-[calc(100dvh-2rem)] flex flex-col min-h-0 min-w-0 shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Pinned Header */}
+            <div className="shrink-0 p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-800/40">
+              <div className="flex items-center gap-2.5 text-slate-900 dark:text-white font-bold text-sm sm:text-base">
+                <div className="p-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl">
                   <UserPlus className="w-5 h-5" />
                 </div>
-                <span>Create New User Account</span>
+                <div>
+                  <h3 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base">Create New User Account</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-normal">Add user and assign mandatory cohort batches</p>
+                </div>
               </div>
               <button
+                type="button"
                 onClick={() => {
                   setShowAddUserModal(false);
                   setAddFieldError({});
                   setAddUserError("");
                   setAddUserSuccess("");
                 }}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {addUserError && (
-              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold rounded-xl flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
-                <span>{addUserError}</span>
-              </div>
-            )}
-
-            {addUserSuccess && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-xl flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-                <span>{addUserSuccess}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleCreateSingleUser} className="space-y-4 text-xs">
-              <div>
-                <label className="font-bold text-slate-700 uppercase font-mono tracking-wider block mb-1">Full Name *</label>
-                <input
-                  type="text"
-                  value={addName}
-                  onChange={(e) => setAddName(e.target.value)}
-                  placeholder="e.g. John Doe"
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 uppercase font-mono tracking-wider block mb-1">Email Address *</label>
-                <input
-                  type="email"
-                  value={addEmail}
-                  onChange={(e) => setAddEmail(e.target.value)}
-                  placeholder="e.g. john.doe@example.com"
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-mono font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 uppercase font-mono tracking-wider block mb-1">Initial Password *</label>
-                <input
-                  type="password"
-                  value={addPassword}
-                  onChange={(e) => setAddPassword(e.target.value)}
-                  placeholder="Min 8 characters"
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  required
-                />
-                <p className="text-[10px] text-slate-400 mt-1">Password will be hashed with bcryptjs (minimum 8 characters).</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-700 uppercase font-mono tracking-wider block mb-1">Platform Role</label>
-                  <select
-                    value={addRole}
-                    onChange={(e) => setAddRole(e.target.value as UserRole)}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  >
-                    <option value={UserRole.STUDENT}>Student</option>
-                    <option value={UserRole.TRAINER}>Trainer</option>
-                    <option value={UserRole.ADMIN}>Admin</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-bold text-slate-700 uppercase font-mono tracking-wider block mb-1">Status</label>
-                  <select
-                    value={addStatus}
-                    onChange={(e) => setAddStatus(e.target.value as "active" | "suspended")}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  >
-                    <option value="active">Active</option>
-                    <option value="suspended">Suspended</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="font-bold text-slate-700 uppercase font-mono tracking-wider block">
-                    Phone Number {addRole === UserRole.STUDENT ? <span className="text-rose-500">*</span> : <span className="text-[10px] text-slate-400 font-mono font-normal">Optional</span>}
-                  </label>
-                </div>
-                <input
-                  type="tel"
-                  value={addPhone}
-                  onChange={(e) => {
-                    setAddPhone(e.target.value);
-                    if (addFieldError.phone) setAddFieldError(prev => ({ ...prev, phone: undefined }));
-                  }}
-                  placeholder="e.g. +1 555-123-4567 or +91 9876543210"
-                  className={`w-full bg-white border ${
-                    addFieldError.phone ? "border-rose-500 ring-1 ring-rose-500" : "border-slate-300"
-                  } rounded-xl px-3 py-2 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
-                  required={addRole === UserRole.STUDENT}
-                />
-                {addFieldError.phone ? (
-                  <p className="text-[11px] text-rose-600 mt-1 font-medium">{addFieldError.phone}</p>
-                ) : (
-                  <p className="text-[10px] text-slate-400 mt-1">Country-code friendly format with leading digits</p>
+            {/* Form Container with Flex-1 to support internal scroll body and pinned footer */}
+            <form onSubmit={handleCreateSingleUser} className="flex flex-col min-h-0 flex-1 overflow-hidden">
+              {/* Scrollable Form Body */}
+              <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0 text-xs">
+                {addUserError && (
+                  <div className="p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs font-semibold rounded-xl flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+                    <span>{addUserError}</span>
+                  </div>
                 )}
-              </div>
 
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="font-bold text-slate-700 uppercase font-mono tracking-wider block">
-                    Location {addRole === UserRole.STUDENT ? <span className="text-rose-500">*</span> : <span className="text-[10px] text-slate-400 font-mono font-normal">Optional</span>}
-                  </label>
-                </div>
-                <input
-                  type="text"
-                  value={addLocation}
-                  onChange={(e) => {
-                    setAddLocation(e.target.value);
-                    if (addFieldError.location) setAddFieldError(prev => ({ ...prev, location: undefined }));
-                  }}
-                  placeholder="e.g. Hyderabad, India or Austin, TX, USA"
-                  maxLength={255}
-                  className={`w-full bg-white border ${
-                    addFieldError.location ? "border-rose-500 ring-1 ring-rose-500" : "border-slate-300"
-                  } rounded-xl px-3 py-2 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
-                  required={addRole === UserRole.STUDENT}
-                />
-                {addFieldError.location ? (
-                  <p className="text-[11px] text-rose-600 mt-1 font-medium">{addFieldError.location}</p>
-                ) : (
-                  <p className="text-[10px] text-slate-400 mt-1">City, state/region, or country</p>
+                {addUserSuccess && (
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-semibold rounded-xl flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <span>{addUserSuccess}</span>
+                  </div>
                 )}
+
+                {/* 2-column Grid for user details */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">Full Name *</label>
+                    <input
+                      type="text"
+                      value={addName}
+                      onChange={(e) => setAddName(e.target.value)}
+                      placeholder="e.g. John Doe"
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-medium text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">Email Address *</label>
+                    <input
+                      type="email"
+                      value={addEmail}
+                      onChange={(e) => setAddEmail(e.target.value)}
+                      placeholder="e.g. john.doe@example.com"
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-mono font-medium text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      required
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">Initial Password *</label>
+                    <input
+                      type="password"
+                      value={addPassword}
+                      onChange={(e) => setAddPassword(e.target.value)}
+                      placeholder="Min 8 characters"
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-medium text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      required
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">Password will be hashed with bcryptjs (minimum 8 characters).</p>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">Platform Role</label>
+                    <select
+                      value={addRole}
+                      onChange={(e) => setAddRole(e.target.value as UserRole)}
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    >
+                      <option value={UserRole.STUDENT}>Student</option>
+                      <option value={UserRole.TRAINER}>Trainer</option>
+                      <option value={UserRole.ADMIN}>Admin</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">Status</label>
+                    <select
+                      value={addStatus}
+                      onChange={(e) => setAddStatus(e.target.value as "active" | "suspended")}
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    >
+                      <option value="active">Active</option>
+                      <option value="suspended">Suspended</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block">
+                        Phone Number {addRole === UserRole.STUDENT ? <span className="text-rose-500">*</span> : <span className="text-[10px] text-slate-400 font-mono font-normal">Optional</span>}
+                      </label>
+                    </div>
+                    <input
+                      type="tel"
+                      value={addPhone}
+                      onChange={(e) => {
+                        setAddPhone(e.target.value);
+                        if (addFieldError.phone) setAddFieldError(prev => ({ ...prev, phone: undefined }));
+                      }}
+                      placeholder="e.g. +1 555-123-4567 or +91 9876543210"
+                      className={`w-full bg-white dark:bg-slate-800 border ${
+                        addFieldError.phone ? "border-rose-500 ring-1 ring-rose-500" : "border-slate-300 dark:border-slate-700"
+                      } rounded-xl px-3 py-2 font-medium text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+                      required={addRole === UserRole.STUDENT}
+                    />
+                    {addFieldError.phone ? (
+                      <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-1 font-medium">{addFieldError.phone}</p>
+                    ) : (
+                      <p className="text-[10px] text-slate-400 mt-1">Country-code friendly format with leading digits</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block">
+                        Location {addRole === UserRole.STUDENT ? <span className="text-rose-500">*</span> : <span className="text-[10px] text-slate-400 font-mono font-normal">Optional</span>}
+                      </label>
+                    </div>
+                    <input
+                      type="text"
+                      value={addLocation}
+                      onChange={(e) => {
+                        setAddLocation(e.target.value);
+                        if (addFieldError.location) setAddFieldError(prev => ({ ...prev, location: undefined }));
+                      }}
+                      placeholder="e.g. Hyderabad, India or Austin, TX, USA"
+                      maxLength={255}
+                      className={`w-full bg-white dark:bg-slate-800 border ${
+                        addFieldError.location ? "border-rose-500 ring-1 ring-rose-500" : "border-slate-300 dark:border-slate-700"
+                      } rounded-xl px-3 py-2 font-medium text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+                      required={addRole === UserRole.STUDENT}
+                    />
+                    {addFieldError.location ? (
+                      <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-1 font-medium">{addFieldError.location}</p>
+                    ) : (
+                      <p className="text-[10px] text-slate-400 mt-1">City, state/region, or country</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* MANDATORY MULTI-BATCH MEMBERSHIP SELECTOR */}
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2.5">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <GraduationCap className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                      <label className="font-bold text-slate-800 dark:text-slate-200 uppercase font-mono text-[11px] tracking-wider">
+                        Assign Cohort Batches <span className="text-rose-500">*</span>
+                      </label>
+                    </div>
+                    <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                      addBatchIds.length > 0 
+                        ? "bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
+                        : "bg-rose-100 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
+                    }`}>
+                      {addBatchIds.length} {addBatchIds.length === 1 ? "Batch" : "Batches"} Selected
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
+                    Every user must belong to at least 1 batch. Users can be assigned to multiple batches simultaneously.
+                  </p>
+
+                  {availableBatches.length === 0 ? (
+                    <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 rounded-xl text-xs flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold">No active batches exist</p>
+                        <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-0.5">Please create an active batch before provisioning users.</p>
+                        <button
+                          type="button"
+                          onClick={() => navigate("/admin/batches?action=new")}
+                          className="mt-2 text-xs font-bold text-purple-700 dark:text-purple-400 underline hover:text-purple-900 dark:hover:text-purple-300 cursor-pointer"
+                        >
+                          Create Batch in Batch Hub &rarr;
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {availableBatches.length > 4 && (
+                        <div className="relative">
+                          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                          <input
+                            type="text"
+                            value={addBatchSearch}
+                            onChange={(e) => setAddBatchSearch(e.target.value)}
+                            placeholder="Filter batches by name, code or year..."
+                            className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-white placeholder:text-slate-400"
+                          />
+                        </div>
+                      )}
+
+                      <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1 divide-y divide-slate-100 dark:divide-slate-700/50">
+                        {availableBatches
+                          .filter(b => {
+                            if (!addBatchSearch.trim()) return true;
+                            const q = addBatchSearch.toLowerCase();
+                            return b.name.toLowerCase().includes(q) || b.code.toLowerCase().includes(q) || b.academicYear.toLowerCase().includes(q);
+                          })
+                          .map((batch) => {
+                            const isChecked = addBatchIds.includes(batch.id);
+                            return (
+                              <label
+                                key={batch.id}
+                                className={`flex items-center justify-between p-2 rounded-xl cursor-pointer transition select-none ${
+                                  isChecked
+                                    ? "bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800"
+                                    : "hover:bg-slate-100 dark:hover:bg-slate-700/50 border border-transparent"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setAddBatchIds(prev => [...prev, batch.id]);
+                                      } else {
+                                        setAddBatchIds(prev => prev.filter(id => id !== batch.id));
+                                      }
+                                    }}
+                                    className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 w-4 h-4 cursor-pointer"
+                                  />
+                                  <div className="min-w-0">
+                                    <p className="font-semibold text-slate-800 dark:text-slate-200 text-xs truncate">
+                                      {batch.name}
+                                    </p>
+                                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                                      Code: {batch.code}
+                                    </p>
+                                  </div>
+                                </div>
+                                <span className="shrink-0 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-200/70 dark:bg-slate-700 text-slate-700 dark:text-slate-300 ml-2">
+                                  {batch.academicYear}
+                                </span>
+                              </label>
+                            );
+                          })}
+                      </div>
+
+                      {addBatchIds.length === 0 && (
+                        <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium flex items-center gap-1">
+                          <AlertTriangle className="w-3.5 h-3.5" /> Please check at least one batch above.
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
 
-              <div className="flex gap-2 pt-2">
+              {/* Pinned Footer */}
+              <div className="shrink-0 p-3.5 sm:p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/40 flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => {
@@ -1896,16 +2304,17 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
                     setAddUserError("");
                     setAddUserSuccess("");
                   }}
-                  className="w-1/2 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition cursor-pointer"
+                  className="w-full sm:w-auto px-5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl transition cursor-pointer text-xs"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={addUserLoading}
-                  className="w-1/2 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl transition shadow-sm shadow-blue-500/10 cursor-pointer"
+                  disabled={addUserLoading || addBatchIds.length === 0 || availableBatches.length === 0}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl transition shadow-sm shadow-blue-500/10 cursor-pointer text-xs flex items-center justify-center gap-2"
                 >
-                  {addUserLoading ? "Creating..." : "Create Account"}
+                  {addUserLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
+                  <span>{addUserLoading ? "Creating..." : "Create Account"}</span>
                 </button>
               </div>
             </form>
@@ -1957,7 +2366,7 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
                 </span>
                 <h5 className="font-bold text-slate-800 text-xs">Download Template</h5>
                 <p className="text-[11px] text-slate-500 leading-relaxed">
-                  Get the official spreadsheet with pre-formatted column headers: <code className="text-slate-700 bg-slate-200/60 px-1 rounded">fullName</code>, <code className="text-slate-700 bg-slate-200/60 px-1 rounded">email</code>, <code className="text-slate-700 bg-slate-200/60 px-1 rounded">password</code>, <code className="text-slate-700 bg-slate-200/60 px-1 rounded">status</code>.
+                  Get the official spreadsheet with pre-formatted column headers: <code className="text-slate-700 bg-slate-200/60 px-1 rounded">fullName</code>, <code className="text-slate-700 bg-slate-200/60 px-1 rounded">email</code>, <code className="text-slate-700 bg-slate-200/60 px-1 rounded">password</code>, <code className="text-slate-700 bg-slate-200/60 px-1 rounded">batchCodes</code>, <code className="text-slate-700 bg-slate-200/60 px-1 rounded">status</code>.
                 </p>
                 <button
                   onClick={handleDownloadTemplate}
@@ -2037,6 +2446,7 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
                         <th className="py-2 px-3">Row</th>
                         <th className="py-2 px-3">Full Name</th>
                         <th className="py-2 px-3">Email</th>
+                        <th className="py-2 px-3">Batch Codes</th>
                         <th className="py-2 px-3">Status</th>
                         <th className="py-2 px-3">Validation Result</th>
                       </tr>
@@ -2047,6 +2457,7 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
                           <td className="py-2 px-3 font-mono text-slate-400">{row.rowNumber}</td>
                           <td className="py-2 px-3 font-bold text-slate-800">{row.fullName || "—"}</td>
                           <td className="py-2 px-3 font-mono text-slate-600 text-[11px]">{row.email || "—"}</td>
+                          <td className="py-2 px-3 font-mono text-purple-700 text-[11px] font-semibold">{row.batchCodes || "—"}</td>
                           <td className="py-2 px-3">
                             <span className="text-[9px] font-mono font-bold uppercase bg-slate-100 px-1.5 py-0.5 rounded">
                               {row.status}
@@ -2546,81 +2957,84 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
 
       {/* 2. Edit User Modal */}
       {showEditUserModal && editingUser && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl w-[min(100%-1rem,520px)] max-h-[calc(100dvh-2rem)] flex flex-col min-h-0 min-w-0 shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+            <div className="shrink-0 p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-800/40">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
                   <Edit2 className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-base">Edit Student Details</h3>
+                  <h3 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base">Edit Student Details</h3>
                   <p className="text-[11px] text-slate-400 font-mono">{editingUser.email}</p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => { setShowEditUserModal(false); setEditingUser(null); }}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {editUserError && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0" />
-                <span>{editUserError}</span>
-              </div>
-            )}
+            <form onSubmit={handleSaveEditUser} className="flex flex-col min-h-0 flex-1 overflow-hidden">
+              <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0 text-xs">
+                {editUserError && (
+                  <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>{editUserError}</span>
+                  </div>
+                )}
 
-            <form onSubmit={handleSaveEditUser} className="space-y-4 text-xs">
-              <div>
-                <label className="font-bold text-slate-700 uppercase font-mono tracking-wider block mb-1">Full Name *</label>
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  required
-                />
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">Full Name *</label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-medium text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">Phone Number *</label>
+                  <input
+                    type="tel"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    placeholder="+1 555-123-4567 or +91 9876543210"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-mono font-medium text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">Location *</label>
+                  <input
+                    type="text"
+                    value={editLocation}
+                    onChange={(e) => setEditLocation(e.target.value)}
+                    placeholder="City, State, Country"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-medium text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    required
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="font-bold text-slate-700 uppercase font-mono tracking-wider block mb-1">Phone Number *</label>
-                <input
-                  type="tel"
-                  value={editPhone}
-                  onChange={(e) => setEditPhone(e.target.value)}
-                  placeholder="+1 555-123-4567 or +91 9876543210"
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-mono font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 uppercase font-mono tracking-wider block mb-1">Location *</label>
-                <input
-                  type="text"
-                  value={editLocation}
-                  onChange={(e) => setEditLocation(e.target.value)}
-                  placeholder="City, State, Country"
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  required
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              <div className="shrink-0 p-3.5 sm:p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/40 flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => { setShowEditUserModal(false); setEditingUser(null); }}
-                  className="px-4 py-2 border border-slate-200 text-slate-600 text-xs font-bold rounded-xl hover:bg-slate-50 transition cursor-pointer"
+                  className="w-full sm:w-auto px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={editUserLoading}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-blue-500/10 cursor-pointer"
+                  className="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-sm shadow-blue-500/10 cursor-pointer"
                 >
                   {editUserLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                   <span>Save Changes</span>
@@ -2633,102 +3047,302 @@ export function AdminConsole({ authToken, initialTab = "users", mode = "all" }: 
 
       {/* 3. Reset Password Modal */}
       {showResetPasswordModal && resetPasswordUser && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl w-[min(100%-1rem,500px)] max-h-[calc(100dvh-2rem)] flex flex-col min-h-0 min-w-0 shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+            <div className="shrink-0 p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-800/40">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 dark:text-amber-400">
                   <Key className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-base">Reset Student Password</h3>
+                  <h3 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base">Reset Student Password</h3>
                   <p className="text-[11px] text-slate-400 font-mono">{resetPasswordUser.name} ({resetPasswordUser.email})</p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => { setShowResetPasswordModal(false); setResetPasswordUser(null); }}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {resetPasswordError && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0" />
-                <span>{resetPasswordError}</span>
-              </div>
-            )}
+            <form onSubmit={handleSaveResetPassword} className="flex flex-col min-h-0 flex-1 overflow-hidden">
+              <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0 text-xs">
+                {resetPasswordError && (
+                  <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+                    <span>{resetPasswordError}</span>
+                  </div>
+                )}
 
-            {resetPasswordSuccess && (
-              <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>{resetPasswordSuccess}</span>
-              </div>
-            )}
+                {resetPasswordSuccess && (
+                  <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span>{resetPasswordSuccess}</span>
+                  </div>
+                )}
 
-            <form onSubmit={handleSaveResetPassword} className="space-y-4 text-xs">
-              <div>
-                <label className="font-bold text-slate-700 uppercase font-mono tracking-wider block mb-1">New Password *</label>
-                <div className="relative">
-                  <input
-                    type={showNewPassword ? "text" : "password"}
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Minimum 8 characters"
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 pr-9 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                  >
-                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">New Password *</label>
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Minimum 8 characters"
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 pr-9 font-medium text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
+                    >
+                      {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">Must be at least 8 characters long.</p>
                 </div>
-                <p className="text-[10px] text-slate-400 mt-1">Must be at least 8 characters long.</p>
-              </div>
 
-              <div>
-                <label className="font-bold text-slate-700 uppercase font-mono tracking-wider block mb-1">Confirm New Password *</label>
-                <div className="relative">
-                  <input
-                    type={showConfirmPassword ? "text" : "password"}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Re-enter new password"
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 pr-9 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                  >
-                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">Confirm New Password *</label>
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? "text" : "password"}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Re-enter new password"
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 pr-9 font-medium text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              <div className="shrink-0 p-3.5 sm:p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/40 flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => { setShowResetPasswordModal(false); setResetPasswordUser(null); }}
-                  className="px-4 py-2 border border-slate-200 text-slate-600 text-xs font-bold rounded-xl hover:bg-slate-50 transition cursor-pointer"
+                  className="w-full sm:w-auto px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={resetPasswordLoading}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-amber-500/10 cursor-pointer"
+                  className="w-full sm:w-auto px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-sm shadow-amber-500/10 cursor-pointer"
                 >
                   {resetPasswordLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Key className="w-3.5 h-3.5" />}
                   <span>Update Password</span>
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 6: MANAGE USER BATCH MEMBERSHIPS MODAL */}
+      {showManageBatchesModal && batchModalUser && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl w-[min(100%-1rem,680px)] max-h-[calc(100dvh-2rem)] flex flex-col min-h-0 min-w-0 shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-800/40 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-xl border border-purple-100 dark:border-purple-800">
+                  <GraduationCap className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base">Cohort Batch Memberships</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                    {batchModalUser.name} • {batchModalUser.email}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowManageBatchesModal(false);
+                  setBatchModalUser(null);
+                  setBatchModalError(null);
+                  setBatchModalSuccess(null);
+                }}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Body */}
+            <div className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1 min-h-0 text-xs">
+              {batchModalError && (
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs font-semibold rounded-xl flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+                  <span>{batchModalError}</span>
+                </div>
+              )}
+
+              {batchModalSuccess && (
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-semibold rounded-xl flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  <span>{batchModalSuccess}</span>
+                </div>
+              )}
+
+              {/* Current Batches Section */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <label className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider font-mono">
+                    Assigned Cohort Batches ({userAssignedBatches.length})
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Mandatory minimum: 1 batch
+                  </span>
+                </div>
+
+                {batchModalLoading ? (
+                  <div className="py-8 text-center text-slate-400">
+                    <RefreshCw className="w-5 h-5 animate-spin mx-auto text-purple-600 dark:text-purple-400 mb-2" />
+                    <p className="text-xs">Loading assigned cohorts...</p>
+                  </div>
+                ) : userAssignedBatches.length === 0 ? (
+                  <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs space-y-1">
+                    <p className="font-bold flex items-center gap-1.5">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                      No active batch assigned
+                    </p>
+                    <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                      This user is not enrolled in any batch. Please assign an active cohort batch below.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {userAssignedBatches.map((b: any) => {
+                      const isOnlyBatch = userAssignedBatches.length <= 1;
+                      return (
+                        <div
+                          key={b.id}
+                          className="flex items-center justify-between p-3 rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-slate-50/60 dark:bg-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                        >
+                          <div className="min-w-0 flex-1 pr-3">
+                            <div className="flex items-center gap-2">
+                              <p className="font-bold text-slate-900 dark:text-white text-xs truncate">
+                                {b.name}
+                              </p>
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
+                                {b.academicYear}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 text-[10px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
+                              <span>Code: {b.code}</span>
+                              <span className="capitalize">• Status: {b.status}</span>
+                            </div>
+                          </div>
+
+                          <div className="shrink-0 flex items-center gap-2">
+                            {isOnlyBatch ? (
+                              <span
+                                className="px-2.5 py-1 rounded-lg text-[10px] font-semibold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 select-none"
+                                title="Every user must belong to at least one batch cohort. Assign an additional batch before removing this one."
+                              >
+                                Last Batch (Protected)
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveBatchFromUser(b.id, b.name)}
+                                disabled={batchActionLoading}
+                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-rose-700 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 hover:border-rose-600 transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>Remove</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Add to Additional Batch Section */}
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                <label className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider font-mono block">
+                  Assign Additional Cohort Batch
+                </label>
+
+                {(() => {
+                  const assignedIds = new Set(userAssignedBatches.map((b: any) => b.id));
+                  const unassignedBatches = availableBatches.filter(b => !assignedIds.has(b.id));
+
+                  if (unassignedBatches.length === 0) {
+                    return (
+                      <p className="text-xs text-slate-500 dark:text-slate-400 italic bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+                        {availableBatches.length === 0
+                          ? "No active batches exist in the system. Create a batch first."
+                          : "User is currently enrolled in all available active cohorts."}
+                      </p>
+                    );
+                  }
+
+                  return (
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                      <select
+                        value={selectedNewBatchId}
+                        onChange={(e) => setSelectedNewBatchId(e.target.value)}
+                        className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                      >
+                        <option value="">-- Select Cohort Batch to Assign --</option>
+                        {unassignedBatches.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.name} ({b.academicYear}) • {b.code}
+                          </option>
+                        ))}
+                      </select>
+
+                      <button
+                        type="button"
+                        onClick={handleAddBatchToUser}
+                        disabled={!selectedNewBatchId || batchActionLoading}
+                        className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-sm shadow-purple-500/10 cursor-pointer shrink-0"
+                      >
+                        {batchActionLoading ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Plus className="w-3.5 h-3.5" />
+                        )}
+                        <span>Assign Cohort</span>
+                      </button>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="shrink-0 p-3.5 sm:p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/40 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowManageBatchesModal(false);
+                  setBatchModalUser(null);
+                  setBatchModalError(null);
+                  setBatchModalSuccess(null);
+                }}
+                className="px-5 py-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl text-xs transition cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}

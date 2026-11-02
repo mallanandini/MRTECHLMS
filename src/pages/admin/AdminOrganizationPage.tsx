@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { 
   Building2, Users, Layers, Plus, Search, Filter, 
   Trash2, Edit, CheckCircle2, AlertCircle, Calendar, 
@@ -11,11 +12,13 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.js";
 import { Department, Cohort, Group, User, Course, Assessment, LearningPath } from "../../types.js";
+import { ThemeQuickControls } from "../../components/ThemeQuickControls.js";
 
 type OrgTab = "groups" | "departments" | "cohorts";
 
 export function AdminOrganizationPage() {
   const { authToken } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<OrgTab>("groups");
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -429,6 +432,7 @@ export function AdminOrganizationPage() {
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
+          <ThemeQuickControls onOpenPreferences={() => navigate("/admin/profile")} />
           <button
             onClick={fetchAllData}
             className="p-2 border rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center justify-center text-slate-600 dark:text-slate-300"

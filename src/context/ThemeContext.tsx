@@ -10,20 +10,20 @@ export const PREDEFINED_THEMES: Record<ThemeId, ThemeDefinition> = {
   "default-blue": {
     id: "default-blue",
     name: "Default Blue",
-    description: "Professional academy blue with white/light surfaces and electric blue actions",
+    description: "Professional academy blue with crisp light surfaces and electric blue actions",
     light: {
       primaryColor: "#2563eb",
       secondaryColor: "#4f46e5",
       backgroundColor: "#f8fafc",
       surfaceColor: "#ffffff",
-      textColor: "#000000"
+      textColor: "#111827"
     },
     dark: {
       primaryColor: "#3b82f6",
       secondaryColor: "#6366f1",
-      backgroundColor: "#f1f5f9",
-      surfaceColor: "#ffffff",
-      textColor: "#000000"
+      backgroundColor: "#0b1120",
+      surfaceColor: "#111c30",
+      textColor: "#f8fafc"
     }
   },
   "purple-royal": {
@@ -35,14 +35,14 @@ export const PREDEFINED_THEMES: Record<ThemeId, ThemeDefinition> = {
       secondaryColor: "#9333ea",
       backgroundColor: "#faf5ff",
       surfaceColor: "#ffffff",
-      textColor: "#000000"
+      textColor: "#111827"
     },
     dark: {
       primaryColor: "#a855f7",
       secondaryColor: "#c084fc",
-      backgroundColor: "#f1f5f9",
-      surfaceColor: "#ffffff",
-      textColor: "#000000"
+      backgroundColor: "#0f0d1a",
+      surfaceColor: "#1a162b",
+      textColor: "#f8fafc"
     }
   },
   "emerald-green": {
@@ -50,18 +50,18 @@ export const PREDEFINED_THEMES: Record<ThemeId, ThemeDefinition> = {
     name: "Emerald Green",
     description: "Botanical emerald primary with subtle mint-tinted surfaces and teal highlights",
     light: {
-      primaryColor: "#059669",
+      primaryColor: "#047857",
       secondaryColor: "#0d9488",
       backgroundColor: "#f0fdf4",
       surfaceColor: "#ffffff",
-      textColor: "#000000"
+      textColor: "#111827"
     },
     dark: {
       primaryColor: "#10b981",
       secondaryColor: "#14b8a6",
-      backgroundColor: "#f1f5f9",
-      surfaceColor: "#ffffff",
-      textColor: "#000000"
+      backgroundColor: "#071711",
+      surfaceColor: "#0d261e",
+      textColor: "#f8fafc"
     }
   },
   "sunset-orange": {
@@ -69,18 +69,18 @@ export const PREDEFINED_THEMES: Record<ThemeId, ThemeDefinition> = {
     name: "Sunset Orange",
     description: "Warm terracotta amber primary with soft cream/warm surfaces and orange actions",
     light: {
-      primaryColor: "#ea580c",
+      primaryColor: "#c2410c",
       secondaryColor: "#d97706",
       backgroundColor: "#fff7ed",
       surfaceColor: "#ffffff",
-      textColor: "#000000"
+      textColor: "#111827"
     },
     dark: {
       primaryColor: "#f97316",
       secondaryColor: "#fbbf24",
-      backgroundColor: "#f1f5f9",
-      surfaceColor: "#ffffff",
-      textColor: "#000000"
+      backgroundColor: "#190e06",
+      surfaceColor: "#28170c",
+      textColor: "#f8fafc"
     }
   },
   "cyber-dark": {
@@ -88,18 +88,18 @@ export const PREDEFINED_THEMES: Record<ThemeId, ThemeDefinition> = {
     name: "Cyber Dark",
     description: "Electric cyan and cyber sky accents with adaptive high-readability surfaces",
     light: {
-      primaryColor: "#0ea5e9",
-      secondaryColor: "#06b6d4",
+      primaryColor: "#0369a1",
+      secondaryColor: "#0891b2",
       backgroundColor: "#f8fafc",
       surfaceColor: "#ffffff",
-      textColor: "#000000"
+      textColor: "#111827"
     },
     dark: {
       primaryColor: "#38bdf8",
       secondaryColor: "#22d3ee",
-      backgroundColor: "#f1f5f9",
-      surfaceColor: "#ffffff",
-      textColor: "#000000"
+      backgroundColor: "#06131c",
+      surfaceColor: "#0b2030",
+      textColor: "#f8fafc"
     }
   },
   "high-contrast": {
@@ -107,8 +107,8 @@ export const PREDEFINED_THEMES: Record<ThemeId, ThemeDefinition> = {
     name: "High Contrast",
     description: "Maximum accessibility with stark foreground separation and strong focus indicators",
     light: {
-      primaryColor: "#000000",
-      secondaryColor: "#000000",
+      primaryColor: "#0f172a",
+      secondaryColor: "#1e293b",
       backgroundColor: "#ffffff",
       surfaceColor: "#ffffff",
       textColor: "#000000"
@@ -116,9 +116,9 @@ export const PREDEFINED_THEMES: Record<ThemeId, ThemeDefinition> = {
     dark: {
       primaryColor: "#facc15",
       secondaryColor: "#ffffff",
-      backgroundColor: "#f1f5f9",
-      surfaceColor: "#ffffff",
-      textColor: "#000000"
+      backgroundColor: "#000000",
+      surfaceColor: "#121212",
+      textColor: "#ffffff"
     }
   }
 };

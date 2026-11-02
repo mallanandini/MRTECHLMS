@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { UserRole } from "../types.js";
 import { useTour } from "../context/TourContext.js";
+import { ThemeQuickControls } from "./ThemeQuickControls.js";
 
 export interface SubmenuItem {
   id: string;
@@ -65,7 +66,9 @@ export function Sidebar({
   const navigate = useNavigate();
   const { startTour, expandedSubmenuRequest, clearSubmenuRequest } = useTour();
 
-  // Compact sidebar state for desktop (persisted in localStorage)
+  const isAdmin = userRole === UserRole.ADMIN || userRole === UserRole.SUPER_ADMIN;
+
+  // Compact sidebar state for desktop (persisted in localStorage, disabled for Admin Portal)
   const [internalCompact, setInternalCompact] = useState<boolean>(() => {
     try {
       return localStorage.getItem(SIDEBAR_COMPACT_KEY) === "true";
@@ -74,9 +77,11 @@ export function Sidebar({
     }
   });
 
-  const isCompact = externalCompact !== undefined ? externalCompact : internalCompact;
+  const effectiveCompact = isAdmin ? false : (externalCompact !== undefined ? externalCompact : internalCompact);
+  const desktopWidth = isAdmin ? "280px" : (effectiveCompact ? "72px" : "260px");
 
   const toggleCompact = () => {
+    if (isAdmin) return; // Fixed width on desktop for Admin Portal
     if (externalToggleCompact) {
       externalToggleCompact();
     } else {
@@ -132,7 +137,7 @@ export function Sidebar({
                 icon: Lock,
                 dataTour: "admin-access",
                 children: [
-                  { id: "access-assign", label: "Assign Courses", path: "/admin/access?view=assign" },
+                  { id: "access-assign", label: "Assign Course Access", path: "/admin/access?view=assign" },
                   { id: "access-students", label: "Student Course Access", path: "/admin/access?view=students" },
                   { id: "access-batches", label: "Batch Course Access", path: "/admin/access?view=batches" },
                   { id: "access-revocations", label: "Access History & Revocations", path: "/admin/access?view=revocations" },
@@ -153,12 +158,8 @@ export function Sidebar({
                 id: "assessments",
                 label: "Assessments",
                 icon: Award,
+                path: "/admin/assessments",
                 dataTour: "admin-assessments",
-                children: [
-                  { id: "assessments-list", label: "All Assessments", path: "/admin/assessments" },
-                  { id: "assessments-new", label: "Create Assessment", path: "/admin/assessments/new" },
-                  { id: "assessment-results", label: "Assessment Results", path: "/admin/assessment-results" },
-                ],
               },
             ],
           },
@@ -168,11 +169,6 @@ export function Sidebar({
             dataTour: "admin-monitoring",
             items: [
               { id: "analytics", label: "Reports", icon: BarChart3, path: "/admin/analytics" },
-              { id: "certificates", label: "Certificates", icon: Medal, path: "/admin/certificates" },
-              { id: "notifications", label: "Notifications & Alerts", icon: BellRing, path: "/admin/notifications" },
-              { id: "integrations", label: "Enterprise Integrations", icon: Layers, path: "/admin/integrations" },
-              { id: "gamification", label: "Gamification & Badges", icon: Trophy, path: "/admin/gamification" },
-              { id: "blogs", label: "Moderate Blogs", icon: PenSquare, path: "/admin/blogs" },
               { id: "settings", label: "Settings", icon: Settings, path: "/admin/organization", dataTour: "admin-settings" },
             ],
           },
@@ -268,60 +264,83 @@ export function Sidebar({
   // Check if a path is active
   const isPathActive = (path?: string) => {
     if (!path) return false;
-    const currentFullPath = location.pathname + location.search;
+    const currentPathname = location.pathname;
+    const currentParams = new URLSearchParams(location.search);
 
-    // Exact match including search query
-    if (currentFullPath === path) return true;
+    const [targetPathname, targetSearchStr] = path.split("?");
+    const targetParams = targetSearchStr ? new URLSearchParams(targetSearchStr) : null;
 
-    // If target path has query params (e.g. ?view=assign or ?action=new), require exact match
-    if (path.includes("?")) {
-      return currentFullPath === path;
-    }
+    // Check base pathname match or special prefix exceptions
+    let pathnameMatches = currentPathname === targetPathname;
 
-    // Base path check: if path has NO query params, but current URL has query params,
-    // only consider the base active if no search query exists.
-    if (location.pathname === path && !location.search) {
-      return true;
-    }
-
-    // Student assessments flow
-    if (path === "/student/assessments" && location.pathname.startsWith("/student/assessment")) {
-      return true;
-    }
-    // Student coding practice flow
-    if (path === "/student/coding-practice" && location.pathname.startsWith("/student/coding-practice")) {
-      return true;
-    }
-    // Student courses flow
-    if (path === "/student/courses" && (location.pathname.startsWith("/student/course/") || location.pathname.startsWith("/student/courses/"))) {
-      return true;
+    if (!pathnameMatches) {
+      // Prefix exceptions for nested detail views
+      if (path === "/student/assessments" && currentPathname.startsWith("/student/assessment")) {
+        pathnameMatches = true;
+      } else if (path === "/student/coding-practice" && currentPathname.startsWith("/student/coding-practice")) {
+        pathnameMatches = true;
+      } else if (path === "/student/courses" && (currentPathname.startsWith("/student/course/") || currentPathname.startsWith("/student/courses/"))) {
+        pathnameMatches = true;
+      } else if (path === "/admin/batches" && currentPathname.startsWith("/admin/batches")) {
+        pathnameMatches = true;
+      } else if (path === "/admin/users" && currentPathname.startsWith("/admin/users/") && !path.includes("?")) {
+        pathnameMatches = true;
+      } else if (path === "/admin/assessments" && (currentPathname.startsWith("/admin/assessments") || currentPathname.startsWith("/admin/assessment-results") || currentPathname.startsWith("/admin/results"))) {
+        pathnameMatches = true;
+      } else if (path === "/admin/organization" && (currentPathname === "/admin/organization" || currentPathname === "/admin/settings" || currentPathname === "/admin/profile")) {
+        pathnameMatches = true;
+      }
     }
 
-    // Admin batches detail
-    if (path === "/admin/batches" && location.pathname.startsWith("/admin/batches/")) {
-      return true;
-    }
-    // Admin user detail
-    if (path === "/admin/users" && location.pathname.startsWith("/admin/users/") && !path.includes("?")) {
-      return true;
-    }
-    // Admin assessment builder/edit
-    if (path === "/admin/assessments/new" && location.pathname === "/admin/assessments/new") {
-      return true;
-    }
-    if (path === "/admin/assessments" && location.pathname === "/admin/assessments" && !location.search) {
-      return true;
-    }
-    // Admin assessment results
-    if (path === "/admin/assessment-results" && (location.pathname.startsWith("/admin/assessment-results") || location.pathname.startsWith("/admin/results"))) {
+    if (!pathnameMatches) return false;
+
+    // If target specifies query params (e.g. ?action=new, ?action=content, ?view=assign, ?view=directory)
+    if (targetParams && targetParams.size > 0) {
+      for (const [key, val] of targetParams.entries()) {
+        const currentVal = currentParams.get(key);
+        // Special case: /admin/access?view=assign is the default view when on /admin/access without view param
+        if (targetPathname === "/admin/access" && key === "view" && val === "assign" && !currentVal) {
+          continue;
+        }
+        if (currentVal !== val) {
+          return false;
+        }
+      }
       return true;
     }
 
-    if (path !== "/student/dashboard" && path !== "/admin/dashboard" && path !== "/manager/team") {
-      if (!path.includes("?") && location.pathname === path) return true;
+    // Target does NOT specify query params (e.g. "/admin/courses", "/admin/users", "/admin/access").
+    // If the base route has sibling actions/views, ensure those action/view params are not present!
+    if (targetPathname === "/admin/courses") {
+      const action = currentParams.get("action");
+      if (action === "new" || action === "content") {
+        return false;
+      }
+      return true;
     }
 
-    return false;
+    if (targetPathname === "/admin/users") {
+      const view = currentParams.get("view");
+      if (view === "directory") {
+        return false;
+      }
+      return true;
+    }
+
+    if (targetPathname === "/admin/access") {
+      const view = currentParams.get("view");
+      if (view && view !== "assign") {
+        return false;
+      }
+      return true;
+    }
+
+    if (targetPathname === "/admin/assessments") {
+      return !location.search;
+    }
+
+    // Default for paths without query parameters
+    return true;
   };
 
   // Check if any child of a menu item is active
@@ -532,7 +551,7 @@ export function Sidebar({
                           data-tour={item.dataTour}
                           style={{
                             backgroundColor: isActive ? "var(--theme-primary-light)" : undefined,
-                            color: "#000000",
+                            color: "var(--theme-text)",
                             borderColor: isActive ? "var(--theme-primary)" : "transparent",
                           }}
                           className={`w-10 h-10 rounded-xl flex items-center justify-center border transition duration-150 cursor-pointer relative ${
@@ -572,7 +591,7 @@ export function Sidebar({
                           data-tour={item.dataTour}
                           style={{
                             backgroundColor: isActive && !hasChildren ? "var(--theme-primary-light)" : undefined,
-                            color: "#000000",
+                            color: "var(--theme-text)",
                             borderColor: isActive && !hasChildren ? "var(--theme-primary)" : "transparent",
                           }}
                           className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition duration-150 border cursor-pointer select-none ${
@@ -609,7 +628,7 @@ export function Sidebar({
                             <span 
                               style={{ 
                                 backgroundColor: "var(--theme-primary-light)", 
-                                color: "#000000" 
+                                color: "var(--theme-primary)" 
                               }}
                               className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full"
                             >
@@ -621,7 +640,7 @@ export function Sidebar({
 
                       {/* Submenu Child Items */}
                       {hasChildren && isExpanded && (
-                        <div className="ml-5 pl-2.5 my-1 border-l-2 border-[var(--theme-sidebar-border)] space-y-1 animate-in fade-in duration-150">
+                        <div className="ml-4 pl-2.5 my-1 border-l-2 border-[var(--theme-sidebar-border)] space-y-1 animate-in fade-in duration-150">
                           {item.children!.map((child) => {
                             const isChildActive = isPathActive(child.path);
                             return (
@@ -632,7 +651,7 @@ export function Sidebar({
                                 data-tour={child.dataTour}
                                 style={{
                                   backgroundColor: isChildActive ? "var(--theme-primary-light)" : undefined,
-                                  color: "#000000",
+                                  color: "var(--theme-text)",
                                   fontWeight: isChildActive ? "700" : "500",
                                 }}
                                 className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition duration-150 text-left cursor-pointer ${
@@ -642,11 +661,11 @@ export function Sidebar({
                                 }`}
                               >
                                 <span 
-                                  className={`w-1.5 h-1.5 rounded-full transition ${
+                                  className={`w-1.5 h-1.5 rounded-full shrink-0 transition ${
                                     isChildActive ? "bg-[var(--theme-primary)] scale-110" : "bg-[var(--theme-sidebar-muted)] opacity-40"
                                   }`} 
                                 />
-                                <span className="truncate">{child.label}</span>
+                                <span className="leading-snug break-words">{child.label}</span>
                               </button>
                             );
                           })}
@@ -661,11 +680,25 @@ export function Sidebar({
         )}
       </nav>
 
-      {/* Tour & Help Launcher Tier */}
+      {/* Theme & Display Quick Controls Tier (Student & Manager only) */}
+      {!isAdmin && (
+        <div 
+          style={{ borderColor: "var(--theme-sidebar-border)" }}
+          className={`px-3 py-2 border-t shrink-0 flex ${compactView ? "justify-center" : "items-center justify-between"}`}
+        >
+          <ThemeQuickControls 
+            compact={compactView}
+            onOpenPreferences={() => navigate(userRole === UserRole.MANAGER ? "/manager/profile" : "/student/profile")}
+          />
+        </div>
+      )}
+
+      {/* Compact Bottom Utility Tier (Tour & Sign Out) */}
       <div 
         style={{ borderColor: "var(--theme-sidebar-border)" }}
-        className="p-3 border-t shrink-0 space-y-2"
+        className="p-3 border-t shrink-0 space-y-2 bg-[var(--theme-sidebar)]"
       >
+        {/* Take a Tour */}
         <button
           type="button"
           data-tour="sidebar-tour-launcher"
@@ -690,20 +723,14 @@ export function Sidebar({
           </div>
           {!compactView && (
             <span 
-              style={{ backgroundColor: "var(--theme-primary-light)", color: "#000000" }}
+              style={{ backgroundColor: "var(--theme-primary-light)", color: "var(--theme-primary)" }}
               className="text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded-md shrink-0"
             >
               Start
             </span>
           )}
         </button>
-      </div>
 
-      {/* Footer: User Tier / Compact toggle & Sign Out */}
-      <div 
-        style={{ borderColor: "var(--theme-sidebar-border)" }}
-        className="p-3 border-t shrink-0 space-y-2"
-      >
         {/* Sign Out Button */}
         <button
           type="button"
@@ -721,24 +748,26 @@ export function Sidebar({
           {!compactView && <span>Sign Out</span>}
         </button>
 
-        {/* Compact Toggle on Desktop */}
-        <button
-          type="button"
-          onClick={toggleCompact}
-          style={{ color: "var(--theme-sidebar-muted)" }}
-          className="hidden lg:flex w-full items-center justify-center gap-1.5 py-1 text-[11px] font-medium hover:text-[var(--theme-text)] transition cursor-pointer"
-          aria-label={compactView ? "Expand navigation sidebar" : "Collapse navigation sidebar"}
-          title={compactView ? "Expand navigation sidebar" : "Collapse navigation sidebar"}
-        >
-          {compactView ? (
-            <PanelLeftOpen className="w-4 h-4" />
-          ) : (
-            <>
-              <PanelLeftClose className="w-4 h-4" />
-              <span>Collapse Sidebar</span>
-            </>
-          )}
-        </button>
+        {/* Compact Toggle on Desktop (ONLY for !isAdmin) */}
+        {!isAdmin && (
+          <button
+            type="button"
+            onClick={toggleCompact}
+            style={{ color: "var(--theme-sidebar-muted)" }}
+            className="hidden lg:flex w-full items-center justify-center gap-1.5 py-1 text-[11px] font-medium hover:text-[var(--theme-text)] transition cursor-pointer"
+            aria-label={compactView ? "Expand navigation sidebar" : "Collapse navigation sidebar"}
+            title={compactView ? "Expand navigation sidebar" : "Collapse navigation sidebar"}
+          >
+            {compactView ? (
+              <PanelLeftOpen className="w-4 h-4" />
+            ) : (
+              <>
+                <PanelLeftClose className="w-4 h-4" />
+                <span>Collapse Sidebar</span>
+              </>
+            )}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -769,7 +798,7 @@ export function Sidebar({
             {/* Brand Header */}
             <div 
               style={{ borderColor: "var(--theme-sidebar-border)" }}
-              className="p-4 border-b flex items-center justify-between"
+              className="p-4 border-b flex items-center justify-between shrink-0"
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 <img 
@@ -807,11 +836,11 @@ export function Sidebar({
             {/* User Profile Info */}
             <div 
               style={{ backgroundColor: "var(--theme-sidebar-card)", borderColor: "var(--theme-sidebar-border)" }}
-              className="p-3.5 border-b flex items-center gap-3"
+              className="p-3.5 border-b flex items-center gap-3 shrink-0"
             >
               <div 
                 className="w-9 h-9 rounded-full border flex items-center justify-center font-bold text-sm shadow-xs shrink-0 overflow-hidden"
-                style={{ backgroundColor: "var(--theme-sidebar)", borderColor: "var(--theme-sidebar-border)", color: "#000000" }}
+                style={{ backgroundColor: "var(--theme-sidebar)", borderColor: "var(--theme-sidebar-border)", color: "var(--theme-sidebar-text)" }}
               >
                 {userAvatar ? (
                   <img src={userAvatar} alt={userName} className="w-full h-full object-cover" />
@@ -841,12 +870,12 @@ export function Sidebar({
         </div>
       )}
 
-      {/* 2. Desktop In-Flow Sidebar (Fixed 260px or 72px compact, flex item in normal flow) */}
+      {/* 2. Desktop In-Flow Sidebar (Fixed 280px for Admin, or 260px/72px for Student) */}
       <aside 
         style={{ 
-          width: isCompact ? "72px" : "260px", 
-          minWidth: isCompact ? "72px" : "260px", 
-          maxWidth: isCompact ? "72px" : "260px", 
+          width: desktopWidth, 
+          minWidth: desktopWidth, 
+          maxWidth: desktopWidth, 
           backgroundColor: "var(--theme-sidebar)", 
           color: "var(--theme-sidebar-text)",
           borderColor: "var(--theme-sidebar-border)" 
@@ -856,14 +885,14 @@ export function Sidebar({
         {/* Brand Header */}
         <div 
           style={{ borderColor: "var(--theme-sidebar-border)" }}
-          className={`p-4 border-b flex items-center ${isCompact ? "justify-center" : "gap-3"}`}
+          className={`p-4 border-b flex items-center shrink-0 ${effectiveCompact ? "justify-center" : "gap-3"}`}
         >
           <img 
             src="/mr-logo-icon.png" 
             alt="MR Technologies" 
             className="w-8 h-8 object-contain shrink-0 drop-shadow-xs" 
           />
-          {!isCompact && (
+          {!effectiveCompact && (
             <div className="min-w-0 flex-1">
               <h1 
                 style={{ color: "var(--theme-text)" }}
@@ -884,11 +913,11 @@ export function Sidebar({
         {/* User Status Profile */}
         <div 
           style={{ backgroundColor: "var(--theme-sidebar-card)", borderColor: "var(--theme-sidebar-border)" }}
-          className={`p-3 border-b flex items-center ${isCompact ? "justify-center" : "gap-3"}`}
+          className={`p-3 border-b flex items-center shrink-0 ${effectiveCompact ? "justify-center" : "gap-3"}`}
         >
           <div 
             className="w-8 h-8 rounded-full border flex items-center justify-center font-bold text-xs shadow-xs shrink-0 overflow-hidden"
-            style={{ backgroundColor: "var(--theme-sidebar)", borderColor: "var(--theme-sidebar-border)", color: "#000000" }}
+            style={{ backgroundColor: "var(--theme-sidebar)", borderColor: "var(--theme-sidebar-border)", color: "var(--theme-sidebar-text)" }}
             title={`${userName} (${userEmail})`}
           >
             {userAvatar ? (
@@ -897,7 +926,7 @@ export function Sidebar({
               userName.charAt(0)
             )}
           </div>
-          {!isCompact && (
+          {!effectiveCompact && (
             <div className="min-w-0 flex-1">
               <p 
                 style={{ color: "var(--theme-text)" }}
@@ -916,7 +945,7 @@ export function Sidebar({
         </div>
 
         {/* Navigation Content */}
-        {renderNavContent(isCompact)}
+        {renderNavContent(effectiveCompact)}
       </aside>
     </>
   );
