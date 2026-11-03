@@ -24,7 +24,7 @@ export function AdminProfilePage() {
             <Settings className="w-6 h-6 text-amber-500" />
             <span>Preferences & Settings</span>
           </h1>
-          <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider mt-1 truncate font-mono">
+          <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold uppercase tracking-wider mt-1 truncate font-mono">
             Admin Profile, Theme Settings, and System Display Configurations
           </p>
         </div>

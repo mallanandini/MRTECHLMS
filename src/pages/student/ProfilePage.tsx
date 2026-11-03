@@ -24,7 +24,7 @@ export function StudentProfilePage() {
             <User className="w-6 h-6 text-blue-600" />
             <span>Preferences & Profile</span>
           </h1>
-          <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider mt-1 truncate font-mono">
+          <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold uppercase tracking-wider mt-1 truncate font-mono">
             Customize Color Theme, Appearance Mode, and Personal Profile
           </p>
         </div>

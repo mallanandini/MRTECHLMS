@@ -308,8 +308,8 @@ body {
   transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
 }
 
-/* Headings default to clear theme text */
-h1, h2, h3, h4, h5, h6 {
+/* Headings default to clear theme text with zero-specificity :where() so utility classes like text-white always take precedence */
+:where(h1, h2, h3, h4, h5, h6) {
   color: var(--theme-text);
   font-weight: 700;
   letter-spacing: -0.015em;

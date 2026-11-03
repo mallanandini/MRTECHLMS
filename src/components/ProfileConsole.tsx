@@ -419,32 +419,40 @@ export function ProfileConsole({
     <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-200">
       
       {/* Profile Header Banner */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-blue-50 via-indigo-50 to-indigo-100 text-black border border-indigo-200 rounded-3xl p-6 sm:p-8 shadow-md">
-        <div className="absolute right-0 bottom-0 top-0 w-1/3 opacity-10 flex items-center justify-center pointer-events-none">
+      <div
+        style={{ backgroundColor: "#172554" }}
+        className="relative overflow-hidden bg-gradient-to-r from-[#0f172a] via-[#172554] to-[#1e1b4b] text-white border border-blue-900/60 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-lg"
+      >
+        <div className="absolute right-0 bottom-0 top-0 w-1/3 opacity-10 flex items-center justify-center pointer-events-none text-white/10">
           <GraduationCap className="w-64 h-64 transform translate-x-12 translate-y-12 rotate-12" />
         </div>
         <div className="relative z-10 flex flex-col sm:flex-row gap-5 items-center justify-between">
           <div className="flex flex-col sm:flex-row items-center gap-5 text-center sm:text-left">
-            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-slate-900 border-2 border-white/20 overflow-hidden flex items-center justify-center shrink-0 shadow-lg relative group">
+            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-slate-900 border-2 border-white/30 ring-2 ring-white/10 overflow-hidden flex items-center justify-center shrink-0 shadow-lg relative group">
               {profilePhoto ? (
                 <img src={profilePhoto} alt={currentUser.name} className="w-full h-full object-cover" />
               ) : (
-                <span className="text-3xl sm:text-4xl font-extrabold text-blue-300">{currentUser.name.charAt(0)}</span>
+                <span className="text-3xl sm:text-4xl font-extrabold text-white">{currentUser.name.charAt(0)}</span>
               )}
             </div>
             <div className="space-y-1.5">
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                <h2 className="text-2xl sm:text-3xl font-black tracking-tight">{currentUser.name}</h2>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-white/15 text-white border border-white/20">
+                <h2
+                  style={{ color: "#ffffff" }}
+                  className="text-2xl sm:text-3xl font-black tracking-tight text-white !text-white"
+                >
+                  {currentUser.name}
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-blue-500/25 text-blue-100 border border-blue-400/40">
                   {currentUser.role}
                 </span>
               </div>
-              <p className="text-blue-100/90 text-xs sm:text-sm font-medium">{currentUser.email}</p>
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 text-[11px] text-blue-200/80 font-mono mt-1">
+              <p className="text-[#E2E8F0] text-xs sm:text-sm font-medium">{currentUser.email}</p>
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 text-[11px] text-[#E2E8F0]/90 font-mono mt-1">
                 {studentOrg?.department && (
-                  <span>Dept: {studentOrg.department.name}</span>
+                  <span className="bg-white/10 px-2 py-0.5 rounded border border-white/15">Dept: {studentOrg.department.name}</span>
                 )}
-                <span>Joined: {new Date(currentUser.createdAt).toLocaleDateString()}</span>
+                <span className="bg-white/10 px-2 py-0.5 rounded border border-white/15">Joined: {new Date(currentUser.createdAt).toLocaleDateString()}</span>
               </div>
             </div>
           </div>
@@ -454,7 +462,7 @@ export function ProfileConsole({
             <div className="flex items-center gap-2 sm:gap-3 bg-white/10 backdrop-blur-xs border border-white/15 rounded-2xl p-3 sm:p-4 text-center shrink-0">
               <div className="px-2">
                 <p className="text-lg sm:text-xl font-black text-white">{learningData.statistics.completedCourses}</p>
-                <p className="text-[10px] uppercase font-mono tracking-wider text-blue-200">Completed</p>
+                <p className="text-[10px] uppercase font-mono tracking-wider text-slate-200">Completed</p>
               </div>
               <div className="h-8 w-px bg-white/20" />
               <div className="px-2">
@@ -462,12 +470,12 @@ export function ProfileConsole({
                   <Flame className="w-4 h-4 fill-amber-300" />
                   {learningData.statistics.learningStreakDays}d
                 </p>
-                <p className="text-[10px] uppercase font-mono tracking-wider text-blue-200">Streak</p>
+                <p className="text-[10px] uppercase font-mono tracking-wider text-slate-200">Streak</p>
               </div>
               <div className="h-8 w-px bg-white/20" />
               <div className="px-2">
                 <p className="text-lg sm:text-xl font-black text-emerald-300">{learningData.certificates.length}</p>
-                <p className="text-[10px] uppercase font-mono tracking-wider text-blue-200">Certs</p>
+                <p className="text-[10px] uppercase font-mono tracking-wider text-slate-200">Certs</p>
               </div>
             </div>
           )}
@@ -482,7 +490,7 @@ export function ProfileConsole({
             className={`flex items-center gap-2 px-4 py-3 text-xs sm:text-sm font-bold border-b-2 transition whitespace-nowrap cursor-pointer ${
               activeTab === "learning"
                 ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+                : "border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
             }`}
           >
             <GraduationCap className="w-4 h-4" />
@@ -495,7 +503,7 @@ export function ProfileConsole({
           className={`flex items-center gap-2 px-4 py-3 text-xs sm:text-sm font-bold border-b-2 transition whitespace-nowrap cursor-pointer ${
             activeTab === "personal"
               ? "border-blue-600 text-blue-600 dark:text-blue-400"
-              : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+              : "border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
           }`}
         >
           <UserIcon className="w-4 h-4" />
@@ -507,7 +515,7 @@ export function ProfileConsole({
           className={`flex items-center gap-2 px-4 py-3 text-xs sm:text-sm font-bold border-b-2 transition whitespace-nowrap cursor-pointer ${
             activeTab === "settings"
               ? "border-blue-600 text-blue-600 dark:text-blue-400"
-              : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+              : "border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
           }`}
         >
           <Settings className="w-4 h-4" />
@@ -519,7 +527,7 @@ export function ProfileConsole({
           className={`flex items-center gap-2 px-4 py-3 text-xs sm:text-sm font-bold border-b-2 transition whitespace-nowrap cursor-pointer ${
             activeTab === "bookmarks"
               ? "border-blue-600 text-blue-600 dark:text-blue-400"
-              : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+              : "border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
           }`}
         >
           <Bookmark className="w-4 h-4" />
@@ -536,7 +544,7 @@ export function ProfileConsole({
           {loadingLearning ? (
             <div className="py-20 flex flex-col items-center justify-center space-y-3">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <p className="text-xs text-slate-400 font-mono">Loading your learning credentials & progress...</p>
+              <p className="text-xs text-slate-600 dark:text-slate-400 font-mono">Loading your learning credentials & progress...</p>
             </div>
           ) : learningData ? (
             <>
@@ -549,8 +557,8 @@ export function ProfileConsole({
                 
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                   {/* Card 1: Completed Courses */}
-                  <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xs">
-                    <div className="flex items-center justify-between text-slate-400 mb-2">
+                  <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xs">
+                    <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 mb-2">
                       <span className="text-[10px] font-mono font-bold uppercase">Courses</span>
                       <BookOpen className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                     </div>
@@ -558,16 +566,16 @@ export function ProfileConsole({
                       <p className="text-2xl font-black text-slate-900 dark:text-white">
                         {learningData.statistics.completedCourses}
                       </p>
-                      <span className="text-xs text-slate-400 font-mono">/ {learningData.statistics.totalAssignedCourses}</span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">/ {learningData.statistics.totalAssignedCourses}</span>
                     </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
                       {learningData.statistics.inProgressCourses} currently active
                     </p>
                   </div>
 
                   {/* Card 2: Overall Progress */}
-                  <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xs">
-                    <div className="flex items-center justify-between text-slate-400 mb-2">
+                  <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xs">
+                    <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 mb-2">
                       <span className="text-[10px] font-mono font-bold uppercase">Progress</span>
                       <Zap className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                     </div>
@@ -583,22 +591,22 @@ export function ProfileConsole({
                   </div>
 
                   {/* Card 3: Learning Hours */}
-                  <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xs">
-                    <div className="flex items-center justify-between text-slate-400 mb-2">
+                  <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xs">
+                    <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 mb-2">
                       <span className="text-[10px] font-mono font-bold uppercase">Study Hours</span>
                       <Clock className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                     </div>
                     <p className="text-2xl font-black text-slate-900 dark:text-white">
                       {learningData.statistics.estimatedLearningHours}h
                     </p>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
                       {learningData.statistics.totalLessonsCompleted} topics studied
                     </p>
                   </div>
 
                   {/* Card 4: Daily Streak */}
-                  <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xs">
-                    <div className="flex items-center justify-between text-slate-400 mb-2">
+                  <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xs">
+                    <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 mb-2">
                       <span className="text-[10px] font-mono font-bold uppercase">Streak</span>
                       <Flame className="w-4 h-4 text-amber-500 fill-amber-500" />
                     </div>
@@ -608,49 +616,49 @@ export function ProfileConsole({
                       </p>
                       <span className="text-xs text-amber-700 dark:text-amber-300 font-bold">Days</span>
                     </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
                       Consistent daily habit
                     </p>
                   </div>
 
                   {/* Card 5: Assessments Passed */}
-                  <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xs">
-                    <div className="flex items-center justify-between text-slate-400 mb-2">
+                  <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xs">
+                    <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 mb-2">
                       <span className="text-[10px] font-mono font-bold uppercase">Assessments</span>
                       <Award className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                     </div>
                     <p className="text-2xl font-black text-slate-900 dark:text-white">
                       {learningData.statistics.passedAssessments}
                     </p>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
                       Avg Score: <strong>{learningData.statistics.averageAssessmentScore}%</strong>
                     </p>
                   </div>
 
                   {/* Card 6: Coding Solved */}
-                  <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xs">
-                    <div className="flex items-center justify-between text-slate-400 mb-2">
+                  <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xs">
+                    <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 mb-2">
                       <span className="text-[10px] font-mono font-bold uppercase">Coding Solved</span>
                       <Code className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
                     </div>
                     <p className="text-2xl font-black text-slate-900 dark:text-white">
                       {learningData.statistics.codingChallengesSolved}
                     </p>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
                       Hands-on exercises
                     </p>
                   </div>
 
                   {/* Card 7: Verified Certificates */}
-                  <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xs">
-                    <div className="flex items-center justify-between text-slate-400 mb-2">
+                  <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xs">
+                    <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 mb-2">
                       <span className="text-[10px] font-mono font-bold uppercase">Certificates</span>
                       <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                     </div>
                     <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
                       {learningData.certificates.length}
                     </p>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
                       Tamper-evident credentials
                     </p>
                   </div>
@@ -658,14 +666,14 @@ export function ProfileConsole({
               </div>
 
               {/* Skills Mastered & Competencies */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xs">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-4 mb-5">
+              <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-4 mb-5">
                   <div>
                     <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
                       <CheckCircle2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                       <span>Skills & Competencies Acquired</span>
                     </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                       Technical proficiencies verified through completed course curricula and hands-on modules
                     </p>
                   </div>
@@ -679,33 +687,33 @@ export function ProfileConsole({
                     {learningData.skills.map((skill, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center gap-2 px-3.5 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 shadow-2xs"
+                        className="flex items-center gap-2 px-3.5 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700/80 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 shadow-2xs"
                       >
                         <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                         <span>{skill}</span>
-                        <span className="text-[9px] font-mono text-slate-400 uppercase bg-slate-200/60 dark:bg-slate-700 px-1.5 py-0.5 rounded">
+                        <span className="text-[9px] font-mono text-slate-600 dark:text-slate-300 uppercase bg-slate-200/80 dark:bg-slate-700 px-1.5 py-0.5 rounded font-bold">
                           Verified
                         </span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="py-8 text-center text-slate-400 space-y-2">
-                    <p className="text-xs">No course skills indexed yet.</p>
-                    <p className="text-[11px] text-slate-500">Complete curriculum lessons and exercises to build your technical competencies badge showcase.</p>
+                  <div className="py-8 text-center text-slate-500 dark:text-slate-400 space-y-2">
+                    <p className="text-xs font-semibold">No course skills indexed yet.</p>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400">Complete curriculum lessons and exercises to build your technical competencies badge showcase.</p>
                   </div>
                 )}
               </div>
 
               {/* Dynamic Achievements & Badges Showcase */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xs">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-4 mb-5">
+              <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-4 mb-5">
                   <div>
                     <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
                       <Trophy className="w-5 h-5 text-amber-500" />
                       <span>Achievements & Learning Milestones</span>
                     </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                       Dynamic honors unlocked as you complete topics, pass assessments, and maintain study momentum
                     </p>
                   </div>
@@ -720,8 +728,8 @@ export function ProfileConsole({
                       key={ach.id}
                       className={`p-4 rounded-2xl border transition-all duration-200 flex flex-col justify-between ${
                         ach.earned
-                          ? "bg-gradient-to-br from-amber-50/60 via-white to-amber-50/20 dark:from-amber-950/20 dark:via-slate-900 dark:to-slate-900 border-amber-200 dark:border-amber-800/60 shadow-xs"
-                          : "bg-slate-50/60 dark:bg-slate-850/40 border-slate-200/60 dark:border-slate-800 opacity-60"
+                          ? "bg-gradient-to-br from-amber-50/60 via-white to-amber-50/20 dark:from-amber-950/20 dark:via-slate-900 dark:to-slate-900 border-amber-300 dark:border-amber-800/60 shadow-xs"
+                          : "bg-slate-50/60 dark:bg-slate-850/40 border-slate-300 dark:border-slate-800 opacity-60"
                       }`}
                     >
                       <div className="space-y-3">
@@ -730,17 +738,17 @@ export function ProfileConsole({
                             className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                               ach.earned
                                 ? "bg-amber-500 text-white shadow-sm shadow-amber-500/20"
-                                : "bg-slate-200 dark:bg-slate-800 text-slate-400"
+                                : "bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
                             }`}
                           >
                             {getAchievementIcon(ach.icon)}
                           </div>
                           {ach.earned ? (
-                            <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 rounded-full">
+                            <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 rounded-full">
                               ✓ Unlocked
                             </span>
                           ) : (
-                            <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                            <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1">
                               <Lock className="w-2.5 h-2.5" />
                               Locked
                             </span>
@@ -750,14 +758,14 @@ export function ProfileConsole({
                           <h4 className="font-bold text-xs text-slate-900 dark:text-white leading-tight">
                             {ach.title}
                           </h4>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                          <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
                             {ach.description}
                           </p>
                         </div>
                       </div>
 
                       {ach.earned && (
-                        <div className="mt-4 pt-2 border-t border-amber-100/80 dark:border-amber-900/30 flex items-center gap-1.5 text-[10px] text-amber-700 dark:text-amber-400 font-mono font-semibold">
+                        <div className="mt-4 pt-2 border-t border-amber-200 dark:border-amber-900/30 flex items-center gap-1.5 text-[10px] text-amber-800 dark:text-amber-400 font-mono font-semibold">
                           <CheckCircle2 className="w-3 h-3" />
                           <span>Honors Earned</span>
                         </div>
@@ -768,14 +776,14 @@ export function ProfileConsole({
               </div>
 
               {/* Verified Certificates Showcase */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xs">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-4 mb-5">
+              <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-4 mb-5">
                   <div>
                     <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
                       <Medal className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                       <span>Verified Credentials & Certificates</span>
                     </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                       Official certificates of curriculum completion and demonstrated subject competency
                     </p>
                   </div>
@@ -793,31 +801,31 @@ export function ProfileConsole({
                     {learningData.certificates.map((cert) => (
                       <div
                         key={cert.id}
-                        className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850/60 hover:bg-slate-50 dark:hover:bg-slate-800/80 transition flex flex-col justify-between gap-4"
+                        className="p-5 rounded-2xl border border-slate-300 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850/60 hover:bg-slate-50 dark:hover:bg-slate-800/80 transition flex flex-col justify-between gap-4"
                       >
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-mono font-bold uppercase text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 rounded">
+                            <span className="text-[10px] font-mono font-bold uppercase text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
                               Verified Certificate
                             </span>
-                            <span className="text-[10px] font-mono text-slate-400">
+                            <span className="text-[10px] font-mono text-slate-600 dark:text-slate-400">
                               Issued: {new Date(cert.issuedAt).toLocaleDateString()}
                             </span>
                           </div>
                           <h4 className="font-bold text-sm text-slate-900 dark:text-white">
                             {cert.title}
                           </h4>
-                          <p className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
-                            Credential Code: <strong className="text-slate-700 dark:text-slate-200">{cert.verificationCode || cert.certificateNumber}</strong>
+                          <p className="text-[11px] font-mono text-slate-600 dark:text-slate-400">
+                            Credential Code: <strong className="text-slate-800 dark:text-slate-200">{cert.verificationCode || cert.certificateNumber}</strong>
                           </p>
                         </div>
 
-                        <div className="flex items-center gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-800">
+                        <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
                           <a
                             href={`/verify-certificate/${cert.verificationCode || cert.certificateNumber}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex-1 text-center py-2 px-3 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-2xs"
+                            className="flex-1 text-center py-2 px-3 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-2xs"
                           >
                             <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
                             <span>Verify Online</span>
@@ -833,10 +841,10 @@ export function ProfileConsole({
                     ))}
                   </div>
                 ) : (
-                  <div className="py-10 text-center text-slate-400 space-y-2">
-                    <Medal className="w-10 h-10 stroke-[1.2] mx-auto text-slate-300 dark:text-slate-700" />
-                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">No certificates earned yet</p>
-                    <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                  <div className="py-10 text-center text-slate-500 dark:text-slate-400 space-y-2">
+                    <Medal className="w-10 h-10 stroke-[1.2] mx-auto text-slate-400 dark:text-slate-600" />
+                    <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">No certificates earned yet</p>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 max-w-sm mx-auto">
                       Complete all modules and pass the final course evaluation in accredited courses to receive verifiable certificates.
                     </p>
                   </div>
@@ -855,20 +863,20 @@ export function ProfileConsole({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-150">
           
           {/* Edit Profile Form */}
-          <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-sm space-y-5">
-            <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xs space-y-5">
+            <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
               <UserIcon className="w-4.5 h-4.5 text-blue-600 dark:text-blue-400" />
               <span>Personal Details</span>
             </h3>
 
             {profileMessage && (
-              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-semibold rounded-xl flex items-center gap-2">
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-semibold rounded-xl flex items-center gap-2">
                 <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>{profileMessage}</span>
               </div>
             )}
             {profileError && (
-              <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-100 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs font-semibold rounded-xl flex items-center gap-2">
+              <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs font-semibold rounded-xl flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
                 <span>{profileError}</span>
               </div>
@@ -877,40 +885,40 @@ export function ProfileConsole({
             <form onSubmit={handleUpdateProfile} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Full Name</label>
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider font-mono">Full Name</label>
                   <input
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Alex Johnson"
-                    className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white mt-1.5"
+                    className="w-full border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 mt-1.5"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Email Address (Read Only)</label>
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider font-mono">Email Address (Read Only)</label>
                   <input
                     type="email"
                     value={currentUser.email}
                     disabled
-                    className="w-full border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-xs font-semibold bg-slate-100 dark:bg-slate-850 mt-1.5 text-slate-400 cursor-not-allowed font-mono"
+                    className="w-full border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-semibold bg-slate-100 dark:bg-slate-800/60 mt-1.5 text-slate-700 dark:text-slate-300 cursor-not-allowed font-mono"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Custom Avatar Image URL</label>
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider font-mono">Custom Avatar Image URL</label>
                 <input
                   type="text"
                   value={profilePhoto}
                   onChange={(e) => handleCustomUrlChange(e.target.value)}
                   placeholder="https://images.unsplash.com/photo-..."
-                  className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white mt-1.5 font-mono"
+                  className="w-full border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 mt-1.5 font-mono"
                 />
               </div>
 
               {/* Avatar Preset Grid */}
               <div className="space-y-2 pt-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono block">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider font-mono block">
                   Or Choose from Curated Avatar Presets
                 </label>
                 <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
@@ -922,7 +930,7 @@ export function ProfileConsole({
                         type="button"
                         onClick={() => selectAvatarPreset(avatar.url)}
                         className={`aspect-square rounded-xl overflow-hidden border-2 relative hover:scale-105 transition duration-150 cursor-pointer ${
-                          isSelected ? "border-blue-600 ring-2 ring-blue-500/10" : "border-slate-100 dark:border-slate-800 hover:border-slate-300"
+                          isSelected ? "border-blue-600 ring-2 ring-blue-500/20" : "border-slate-300 dark:border-slate-700 hover:border-slate-400"
                         }`}
                         title={avatar.name}
                       >
@@ -940,16 +948,16 @@ export function ProfileConsole({
 
               {/* Upload Profile Photo */}
               <div className="space-y-2 pt-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono block">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider font-mono block">
                   Upload Profile Photo
                 </label>
-                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 space-y-2.5">
+                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 space-y-2.5">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                    <div className="w-14 h-14 rounded-full border-2 border-slate-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-900 shrink-0 flex items-center justify-center shadow-xs">
+                    <div className="w-14 h-14 rounded-full border-2 border-slate-300 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-900 shrink-0 flex items-center justify-center shadow-xs">
                       {profilePhoto ? (
                         <img src={profilePhoto} alt="Profile Preview" className="w-full h-full object-cover" />
                       ) : (
-                        <UserIcon className="w-6 h-6 text-slate-400" />
+                        <UserIcon className="w-6 h-6 text-slate-500 dark:text-slate-400" />
                       )}
                     </div>
                     <div className="flex-1 space-y-1.5 min-w-0">
@@ -965,7 +973,7 @@ export function ProfileConsole({
                         <button
                           type="button"
                           onClick={() => fileInputRef.current?.click()}
-                          className="px-3.5 py-1.5 rounded-xl border border-slate-300 dark:border-slate-650 bg-white dark:bg-slate-750 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2 transition cursor-pointer shadow-xs"
+                          className="px-3.5 py-1.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold flex items-center gap-2 transition cursor-pointer shadow-xs"
                         >
                           <Upload className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                           <span>Upload from Device</span>
@@ -977,7 +985,7 @@ export function ProfileConsole({
                           </span>
                         )}
                       </div>
-                      <p className="text-[10px] text-slate-400 font-mono">
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400 font-mono">
                         Supported formats: JPG, JPEG, PNG, WEBP • Max 5 MB
                       </p>
                     </div>
@@ -1005,87 +1013,87 @@ export function ProfileConsole({
 
           {/* Right Column: Organization Affiliations */}
           <div className="space-y-6">
-            <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
-              <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+              <div className="border-b border-slate-200 dark:border-slate-800 pb-3">
                 <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
                   <Building2 className="w-4.5 h-4.5 text-blue-600 dark:text-blue-400" />
                   <span>My Organization</span>
                 </h3>
-                <p className="text-[11px] text-slate-400">Department, Batch, and Assigned Learning Groups</p>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Department, Batch, and Assigned Learning Groups</p>
               </div>
 
               <div className="space-y-3.5 text-xs">
                 {/* Department */}
-                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-850 border border-slate-100 dark:border-slate-800 space-y-1">
+                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-750 space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">Department</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 font-mono">Department</span>
                     {studentOrg?.department && (
-                      <span className="px-2 py-0.5 rounded font-mono text-[9px] font-bold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 uppercase">
+                      <span className="px-2 py-0.5 rounded font-mono text-[9px] font-bold bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 uppercase border border-blue-200 dark:border-blue-800">
                         {studentOrg.department.code}
                       </span>
                     )}
                   </div>
-                  <div className="font-bold text-slate-800 dark:text-slate-200">
+                  <div className="font-bold text-slate-900 dark:text-white">
                     {studentOrg?.department?.name || "General Academy"}
                   </div>
                   {studentOrg?.department?.managerName && (
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                    <div className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">
                       Lead: {studentOrg.department.managerName}
                     </div>
                   )}
                 </div>
 
                 {/* Direct Reporting Manager */}
-                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-850 border border-slate-100 dark:border-slate-800 space-y-1">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono block">Reporting Manager</span>
-                  <div className="font-bold text-slate-800 dark:text-slate-200">
+                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-750 space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 font-mono block">Reporting Manager</span>
+                  <div className="font-bold text-slate-900 dark:text-white">
                     {studentOrg?.manager?.name || "Academy Academic Director"}
                   </div>
                   {studentOrg?.manager?.email && (
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                    <div className="text-[11px] text-slate-600 dark:text-slate-400 font-mono">
                       {studentOrg.manager.email}
                     </div>
                   )}
                 </div>
 
                 {/* Batches / Cohorts */}
-                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-850 border border-slate-100 dark:border-slate-800 space-y-1.5">
+                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-750 space-y-1.5">
                   <div className="flex items-center gap-1.5">
                     <Layers className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">Enrolled Cohorts</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 font-mono">Enrolled Cohorts</span>
                   </div>
                   {studentOrg?.cohorts && studentOrg.cohorts.length > 0 ? (
                     <div className="space-y-1">
                       {studentOrg.cohorts.map(c => (
                         <div key={c.id} className="flex items-center justify-between text-[11px]">
-                          <span className="font-semibold text-slate-700 dark:text-slate-300">{c.name}</span>
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 uppercase font-bold">
+                          <span className="font-semibold text-slate-900 dark:text-slate-200">{c.name}</span>
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-200 uppercase font-bold border border-purple-200 dark:border-purple-800">
                             {c.code}
                           </span>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="text-[11px] text-slate-400 italic">Global Standard Track</div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 italic">Global Standard Track</div>
                   )}
                 </div>
 
                 {/* Groups */}
-                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-850 border border-slate-100 dark:border-slate-800 space-y-1.5">
+                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-750 space-y-1.5">
                   <div className="flex items-center gap-1.5">
                     <UsersIcon className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">Assigned Groups</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 font-mono">Assigned Groups</span>
                   </div>
                   {studentOrg?.groups && studentOrg.groups.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5 pt-0.5">
                       {studentOrg.groups.map(g => (
-                        <span key={g.id} className="px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-800 font-semibold text-[10px]">
+                        <span key={g.id} className="px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800 font-semibold text-[10px]">
                           {g.name}
                         </span>
                       ))}
                     </div>
                   ) : (
-                    <div className="text-[11px] text-slate-400 italic">Full-Access Learner Pool</div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 italic">Full-Access Learner Pool</div>
                   )}
                 </div>
               </div>
@@ -1102,8 +1110,8 @@ export function ProfileConsole({
         <div className="space-y-6 animate-in fade-in duration-150">
           
           {/* Theme & Visual Display Preferences */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-sm space-y-5">
-            <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xs space-y-5">
+            <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-3">
               <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
                 <Palette className="w-4.5 h-4.5 text-blue-600 dark:text-blue-400" />
                 <span>Theme & Display Preferences</span>
@@ -1124,7 +1132,7 @@ export function ProfileConsole({
 
             {/* Light / Dark Mode Toggle */}
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono block">
+              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider font-mono block">
                 Interface Mode
               </label>
               <div className="grid grid-cols-2 gap-3 max-w-sm">
@@ -1168,10 +1176,10 @@ export function ProfileConsole({
             {/* Predefined Color Themes Grid */}
             <div className="space-y-3 pt-2">
               <div className="flex items-center justify-between">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono block">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider font-mono block">
                   Color Palette Themes (Applies Globally)
                 </label>
-                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold font-mono">
+                <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-bold font-mono">
                   ✓ Instant Live Switch
                 </span>
               </div>
@@ -1212,7 +1220,7 @@ export function ProfileConsole({
                               </span>
                             )}
                           </div>
-                          <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">{t.description}</p>
+                          <p className="text-[10px] text-slate-600 dark:text-slate-400 line-clamp-1 mt-0.5">{t.description}</p>
                         </div>
                         {isCurrent && (
                           <div 
@@ -1228,7 +1236,7 @@ export function ProfileConsole({
                       </div>
 
                       {/* Color Swatch Dots */}
-                      <div className="flex items-center gap-2 pt-1 border-t border-slate-100/60 dark:border-slate-800">
+                      <div className="flex items-center gap-2 pt-1 border-t border-slate-200 dark:border-slate-800">
                         <div className="flex items-center gap-1.5">
                           <span
                             className="w-4 h-4 rounded-full border border-black/10 shadow-xs shrink-0"
@@ -1251,7 +1259,7 @@ export function ProfileConsole({
                             title="Card Surface"
                           />
                         </div>
-                        <span className="text-[9px] text-slate-400 font-mono ml-auto">
+                        <span className="text-[9px] text-slate-600 dark:text-slate-400 font-mono ml-auto">
                           {mode === "dark" ? "Dark Palette" : "Light Palette"}
                         </span>
                       </div>
@@ -1263,20 +1271,20 @@ export function ProfileConsole({
           </div>
 
           {/* Edit Password Form */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-sm space-y-5">
-            <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xs space-y-5">
+            <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
               <Key className="w-4.5 h-4.5 text-amber-500" />
               <span>Change Login Password</span>
             </h3>
 
             {passwordMessage && (
-              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-semibold rounded-xl flex items-center gap-2">
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-semibold rounded-xl flex items-center gap-2">
                 <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>{passwordMessage}</span>
               </div>
             )}
             {passwordError && (
-              <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-100 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs font-semibold rounded-xl flex items-center gap-2">
+              <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs font-semibold rounded-xl flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
                 <span>{passwordError}</span>
               </div>
@@ -1285,24 +1293,24 @@ export function ProfileConsole({
             <form onSubmit={handleUpdatePassword} className="space-y-4 max-w-lg">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">New Password</label>
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider font-mono">New Password</label>
                   <input
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white mt-1.5"
+                    className="w-full border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 mt-1.5"
                     required
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Confirm Password</label>
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider font-mono">Confirm Password</label>
                   <input
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white mt-1.5"
+                    className="w-full border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 mt-1.5"
                     required
                   />
                 </div>
@@ -1311,7 +1319,7 @@ export function ProfileConsole({
               <button
                 type="submit"
                 disabled={isSavingPassword || !password || !confirmPassword}
-                className="bg-slate-900 dark:bg-blue-600 hover:bg-slate-800 dark:hover:bg-blue-500 text-white font-bold text-xs px-6 py-2.5 rounded-xl transition disabled:opacity-50 cursor-pointer shadow-xs"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-6 py-2.5 rounded-xl transition disabled:opacity-50 cursor-pointer shadow-xs"
               >
                 {isSavingPassword ? "Updating..." : "Update Password"}
               </button>
@@ -1325,18 +1333,18 @@ export function ProfileConsole({
       {/* TAB 4: BOOKMARKED BLOGS                                                   */}
       {/* ========================================================================= */}
       {activeTab === "bookmarks" && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-sm space-y-5 animate-in fade-in duration-150">
-          <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-3">
+        <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xs space-y-5 animate-in fade-in duration-150">
+          <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-3">
             <div>
               <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
                 <Bookmark className="w-4.5 h-4.5 text-blue-600 dark:text-blue-400" />
                 <span>Saved Blog Articles</span>
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">Quick access to bookmarked technical guides and case studies</p>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">Quick access to bookmarked technical guides and case studies</p>
             </div>
             <button 
               onClick={fetchBookmarks}
-              className="p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent hover:border-slate-100 dark:hover:border-slate-700 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+              className="p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition cursor-pointer"
             >
               <RefreshCw className="w-4 h-4" />
             </button>
@@ -1349,27 +1357,27 @@ export function ProfileConsole({
           ) : bookmarks.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {bookmarks.map((blog) => (
-                <div key={blog.id} className="p-4 bg-slate-50/60 dark:bg-slate-850 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-150 dark:border-slate-800 rounded-2xl transition duration-150 flex flex-col justify-between h-[180px]">
+                <div key={blog.id} className="p-4 bg-slate-50/60 dark:bg-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl transition duration-150 flex flex-col justify-between h-[180px]">
                   <div>
                     <div className="flex justify-between items-start gap-2">
-                      <span className="text-[8px] font-bold font-mono text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/40 px-2 py-0.5 rounded border border-blue-100 dark:border-blue-800 uppercase shrink-0">
+                      <span className="text-[8px] font-bold font-mono text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/40 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 uppercase shrink-0">
                         {blog.category}
                       </span>
                       <button
                         onClick={() => handleRemoveBookmark(blog.id)}
-                        className="text-slate-400 hover:text-rose-600 transition cursor-pointer p-1"
+                        className="text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition cursor-pointer p-1"
                         title="Remove Bookmark"
                       >
                         <BookmarkMinus className="w-4 h-4" />
                       </button>
                     </div>
-                    <h4 className="font-bold text-slate-800 dark:text-slate-100 text-xs leading-snug line-clamp-2 mt-2.5">{blog.title}</h4>
-                    <p className="text-[10px] text-slate-400 mt-1 font-mono">{blog.authorName}</p>
+                    <h4 className="font-bold text-slate-900 dark:text-slate-100 text-xs leading-snug line-clamp-2 mt-2.5">{blog.title}</h4>
+                    <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-1 font-mono">{blog.authorName}</p>
                   </div>
 
                   <button
                     onClick={() => onReadBlog(blog.id)}
-                    className="w-full bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold py-2 rounded-xl transition border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                    className="w-full bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-bold py-2 rounded-xl transition border border-slate-300 dark:border-slate-700 flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
                   >
                     <BookOpen className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                     <span>Read Full Article</span>
@@ -1378,17 +1386,17 @@ export function ProfileConsole({
               ))}
             </div>
           ) : (
-            <div className="py-16 text-center text-slate-400 text-xs space-y-3 font-medium">
-              <Bookmark className="w-12 h-12 stroke-[1.2] mx-auto text-slate-200 dark:text-slate-700" />
+            <div className="py-16 text-center text-slate-500 dark:text-slate-400 text-xs space-y-3 font-medium">
+              <Bookmark className="w-12 h-12 stroke-[1.2] mx-auto text-slate-300 dark:text-slate-600" />
               <div className="space-y-1">
-                <p className="text-slate-700 dark:text-slate-300 font-semibold text-sm">No bookmarked articles yet</p>
-                <p className="text-slate-400 text-xs leading-relaxed max-w-sm mx-auto">
+                <p className="text-slate-900 dark:text-slate-100 font-semibold text-sm">No bookmarked articles yet</p>
+                <p className="text-slate-600 dark:text-slate-400 text-xs leading-relaxed max-w-sm mx-auto">
                   Save technical blogs and guides from the Blog Community feed to reference them quickly here.
                 </p>
               </div>
               <button
                 onClick={() => onNavigate && onNavigate("blogs")}
-                className="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-bold px-4 py-2 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/50 transition cursor-pointer border border-blue-100 dark:border-blue-800 inline-flex items-center gap-1.5"
+                className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-bold px-4 py-2 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/50 transition cursor-pointer border border-blue-200 dark:border-blue-800 inline-flex items-center gap-1.5"
               >
                 <BookOpen className="w-3.5 h-3.5" />
                 <span>Explore Blog Community</span>
