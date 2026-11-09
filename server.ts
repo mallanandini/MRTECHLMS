@@ -4585,7 +4585,8 @@ app.post("/api/admin/assessments/:id/publish", authenticateToken, async (req, re
       if (!q.questionText || !q.questionText.trim()) {
         checklistErrors.push(`Question #${qNum} is missing question text`);
       }
-      const isChoiceType = q.type === QuestionType.MCQ_SINGLE || q.type === QuestionType.MCQ_MULTI || q.type === "mcq_single" || q.type === "mcq_multi" || q.type === "true_false";
+      const qType = String(q.type);
+      const isChoiceType = qType === QuestionType.MCQ_SINGLE || qType === QuestionType.MCQ_MULTI || qType === QuestionType.TRUE_FALSE;
       if (isChoiceType) {
         if (!q.options || q.options.length < 2) {
           checklistErrors.push(`Question #${qNum} must have at least 2 answer options`);
@@ -4593,7 +4594,7 @@ app.post("/api/admin/assessments/:id/publish", authenticateToken, async (req, re
         if (!q.correctAnswers || q.correctAnswers.length === 0 || !q.correctAnswers[0]) {
           checklistErrors.push(`Question #${qNum} must specify a correct answer`);
         }
-      } else if (q.type === QuestionType.FILL_BLANKS || q.type === "fill_blanks") {
+      } else if (qType === QuestionType.FILL_BLANKS) {
         if (!q.correctAnswers || q.correctAnswers.length === 0 || !q.correctAnswers[0]) {
           checklistErrors.push(`Question #${qNum} must specify acceptable fill-in answer(s)`);
         }
