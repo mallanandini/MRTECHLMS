@@ -4579,16 +4579,24 @@ app.post("/api/admin/assessments/:id/publish", authenticateToken, async (req, re
   if (questions.length === 0) {
     checklistErrors.push("Assessment must contain at least 1 question");
   } else {
+    questions.sort((a, b) => (a.order || 0) - (b.order || 0));
     questions.forEach((q, idx) => {
       const qNum = idx + 1;
       if (!q.questionText || !q.questionText.trim()) {
         checklistErrors.push(`Question #${qNum} is missing question text`);
       }
-      if (!q.options || q.options.length < 2) {
-        checklistErrors.push(`Question #${qNum} must have at least 2 answer options`);
-      }
-      if (!q.correctAnswers || q.correctAnswers.length === 0 || !q.correctAnswers[0]) {
-        checklistErrors.push(`Question #${qNum} must specify a correct answer`);
+      const isChoiceType = q.type === QuestionType.MCQ_SINGLE || q.type === QuestionType.MCQ_MULTI || q.type === "mcq_single" || q.type === "mcq_multi" || q.type === "true_false";
+      if (isChoiceType) {
+        if (!q.options || q.options.length < 2) {
+          checklistErrors.push(`Question #${qNum} must have at least 2 answer options`);
+        }
+        if (!q.correctAnswers || q.correctAnswers.length === 0 || !q.correctAnswers[0]) {
+          checklistErrors.push(`Question #${qNum} must specify a correct answer`);
+        }
+      } else if (q.type === QuestionType.FILL_BLANKS || q.type === "fill_blanks") {
+        if (!q.correctAnswers || q.correctAnswers.length === 0 || !q.correctAnswers[0]) {
+          checklistErrors.push(`Question #${qNum} must specify acceptable fill-in answer(s)`);
+        }
       }
       if (!q.points || q.points <= 0) {
         checklistErrors.push(`Question #${qNum} points must be greater than 0`);
@@ -5463,9 +5471,16 @@ app.post("/api/admin/assessments/:id/assign", authenticateToken, async (req, res
   const assessment = await assessmentsDb.findOne({ id: assessmentId });
   if (!assessment) return res.status(404).json({ error: "Assessment not found" });
 
-  const { studentId, studentIds, groupId, dueDate, isMandatory } = req.body;
+  let { studentId, studentIds, studentEmails, groupId, dueDate, isMandatory } = req.body;
 
   try {
+    if (Array.isArray(studentEmails) && studentEmails.length > 0) {
+      const allStudents = await usersDb.find({});
+      const matched = allStudents.filter(u => studentEmails.includes(u.email)).map(u => u.id);
+      if (matched.length > 0) {
+        studentIds = Array.isArray(studentIds) ? [...studentIds, ...matched] : matched;
+      }
+    }
     if (groupId) {
       const result = await AccessControlService.assignAssessmentToGroup(assessmentId, groupId, req.user!, {
         dueDate,
@@ -6582,9 +6597,16 @@ app.post("/api/admin/learning-paths/:id/assign", authenticateToken, async (req, 
   }
 
   const learningPathId = req.params.id;
-  const { studentId, studentIds, groupId, dueDate, isMandatory } = req.body;
+  let { studentId, studentIds, studentEmails, groupId, dueDate, isMandatory } = req.body;
 
   try {
+    if (Array.isArray(studentEmails) && studentEmails.length > 0) {
+      const allStudents = await usersDb.find({});
+      const matched = allStudents.filter(u => studentEmails.includes(u.email)).map(u => u.id);
+      if (matched.length > 0) {
+        studentIds = Array.isArray(studentIds) ? [...studentIds, ...matched] : matched;
+      }
+    }
     if (groupId) {
       const result = await AccessControlService.assignLearningPathToGroup(learningPathId, groupId, req.user!, {
         dueDate,
