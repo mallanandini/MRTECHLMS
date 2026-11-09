@@ -9,7 +9,23 @@ import { userPreferencesDb } from "../db.js";
 
 export const userRouter = express.Router();
 
-const ALLOWED_THEMES = ["default-blue", "purple-royal", "emerald-green", "sunset-orange", "cyber-dark", "high-contrast"];
+const ALLOWED_THEMES = [
+  "default-blue",
+  "ocean-teal",
+  "royal-indigo",
+  "emerald-green",
+  "graphite",
+  "royal-purple",
+  "sunset-orange",
+  "ruby-red",
+  "midnight-navy",
+  "rose-pink",
+  // Backward-compatible aliases
+  "emerald",
+  "purple-royal",
+  "cyber-dark",
+  "high-contrast"
+];
 const ALLOWED_MODES = ["light", "dark"];
 const HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
 

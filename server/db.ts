@@ -20,17 +20,19 @@ import {
 const JSON_FIELDS: { [table: string]: string[] } = {
   users: ["bookmarkedBlogIds"],
   courses: ["requirements", "skillsCovered", "tags", "prerequisites"],
+  assessments: ["proctoringConfig"],
   lessons: ["codingPrompt"],
   questions: ["options", "correctAnswers"],
   submissions: ["answers"],
-  assessment_attempts: ["questionOrder", "answers"],
+  assessment_attempts: ["questionOrder", "answers", "proctoringEvents"],
   certificates: ["metadata"],
   blogs: ["tags"],
   learning_paths: ["requirements", "learningObjectives"],
   coding_challenges: ["supportedLanguages", "starterCode", "examples", "publicTestCases", "privateTestCases", "hints"],
   organizations: ["settings"],
   notifications: ["data"],
-  institutions: ["academicYears"]
+  institutions: ["academicYears"],
+  audit_logs: ["details"]
 };
 
 const SOFT_DELETABLE_TABLES = new Set([
@@ -144,10 +146,12 @@ export class MySQLCollection<T extends { id: string }> {
       }
     }
     
-    // Convert boolean to 0/1 for MySQL
+    // Convert boolean to 0/1 for MySQL and defensively stringify unhandled objects/arrays
     for (const key in result) {
       if (typeof result[key] === "boolean") {
         result[key] = result[key] ? 1 : 0;
+      } else if (result[key] !== null && typeof result[key] === "object" && !(result[key] instanceof Date) && !Buffer.isBuffer(result[key])) {
+        result[key] = JSON.stringify(result[key]);
       }
     }
     return result;

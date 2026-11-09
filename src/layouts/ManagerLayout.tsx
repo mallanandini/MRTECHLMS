@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet, useNavigate, Link } from "react-router-dom";
 import { Menu } from "lucide-react";
 import { Sidebar } from "../components/Sidebar.js";
 import { ThemeQuickControls } from "../components/ThemeQuickControls.js";
@@ -60,12 +60,21 @@ export function ManagerLayout() {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-2.5 min-w-0">
-              <img src="/mr-logo-icon.png" alt="MR Technologies" className="w-7 h-7 object-contain shrink-0" />
+            <Link 
+              to="/manager/dashboard"
+              aria-label="MR TECHNOLOGIES Manager Dashboard"
+              className="flex items-center gap-2.5 min-w-0 group cursor-pointer rounded-xl p-1 -m-1 hover:bg-white/5 active:opacity-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              <img 
+                src="/mr-logo-icon.png" 
+                alt="MR Technologies" 
+                className="w-7 h-7 object-contain shrink-0 brand-logo-preserve transition-transform duration-150 group-hover:scale-105" 
+                style={{ filter: "none", mixBlendMode: "normal", opacity: 1 }}
+              />
               <div className="min-w-0">
                 <span 
                   style={{ color: "var(--theme-text)" }}
-                  className="font-bold text-sm tracking-tight truncate block"
+                  className="font-bold text-sm tracking-tight truncate block group-hover:opacity-95 transition-opacity"
                 >
                   MR TECHNOLOGIES
                 </span>
@@ -76,7 +85,7 @@ export function ManagerLayout() {
                   Manager Portal
                 </span>
               </div>
-            </div>
+            </Link>
           </div>
 
           <div className="flex items-center gap-2">

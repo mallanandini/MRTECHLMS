@@ -47,7 +47,8 @@ export function PortalGateway() {
           <img 
             src="/mr-logo-icon.png" 
             alt="MR Technologies Logo" 
-            className="w-10 h-10 object-contain shrink-0 drop-shadow-xs" 
+            className="w-10 h-10 object-contain shrink-0 brand-logo-preserve" 
+            style={{ filter: "none", mixBlendMode: "normal", opacity: 1 }}
           />
           <div>
             <h1 className="font-extrabold text-base tracking-tight leading-none" style={{ color: "var(--theme-text)" }}>
@@ -73,7 +74,8 @@ export function PortalGateway() {
               <img 
                 src="/mr-logo-full.jpg" 
                 alt="MR Technologies - Medha Rubiks" 
-                className="h-16 sm:h-20 object-contain rounded-lg"
+                className="h-16 sm:h-20 object-contain rounded-lg brand-logo-preserve" 
+                style={{ filter: "none", mixBlendMode: "normal", opacity: 1 }}
               />
             </div>
           </div>
@@ -226,7 +228,12 @@ export function PortalGateway() {
         className="border-t py-6 text-center text-xs text-slate-500 dark:text-slate-400 font-sans"
       >
         <div className="flex items-center justify-center gap-2 mb-2 font-semibold">
-          <img src="/mr-logo-icon.png" alt="MR Logo" className="w-4 h-4 object-contain" />
+          <img 
+            src="/mr-logo-icon.png" 
+            alt="MR Logo" 
+            className="w-4 h-4 object-contain brand-logo-preserve" 
+            style={{ filter: "none", mixBlendMode: "normal", opacity: 1 }}
+          />
           <span>MR TECHNOLOGIES • MEDHA - RUBIKS</span>
         </div>
         <p className="font-mono text-[11px]">

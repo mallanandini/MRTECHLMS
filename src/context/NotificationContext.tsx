@@ -41,8 +41,20 @@ interface NotificationContextValue {
 
 const NotificationContext = createContext<NotificationContextValue | null>(null);
 
+const DEFAULT_DURATIONS: Record<ToastType, number> = {
+  success: 3000, // Ordinary success: ~3 seconds
+  info: 4000,    // Informational: ~4 seconds
+  error: 5000,   // Ordinary error: ~5 seconds to allow ample time to read
+  warning: 0     // Persistent warning by default unless explicitly specified
+};
+
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const toastsRef = useRef<ToastItem[]>([]);
+  toastsRef.current = toasts;
+
+  const timersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
   const [confirmState, setConfirmState] = useState<{
     options: ConfirmOptions;
     resolve: (val: boolean) => void;
@@ -50,33 +62,53 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const confirmCancelRef = useRef<HTMLButtonElement | null>(null);
 
+  // Clean up all active timers on unmount
+  useEffect(() => {
+    return () => {
+      timersRef.current.forEach(timer => clearTimeout(timer));
+      timersRef.current.clear();
+    };
+  }, []);
+
   // Toast handlers
   const dismissToast = useCallback((id: string) => {
+    if (timersRef.current.has(id)) {
+      clearTimeout(timersRef.current.get(id)!);
+      timersRef.current.delete(id);
+    }
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  const addToast = useCallback((message: string, type: ToastType = "info", duration = 4000): string => {
-    let assignedId = "";
-    let isDuplicate = false;
+  const addToast = useCallback((message: string, type: ToastType = "info", customDuration?: number): string => {
+    const cleanMessage = String(message || "").trim();
+    if (!cleanMessage) return "";
+
+    const duration = customDuration !== undefined ? customDuration : DEFAULT_DURATIONS[type];
+    const existing = toastsRef.current.find(t => t.message === cleanMessage && t.type === type);
+    const targetId = existing ? existing.id : `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+    // Reset dismissal timer if already running for this toast
+    if (timersRef.current.has(targetId)) {
+      clearTimeout(timersRef.current.get(targetId)!);
+      timersRef.current.delete(targetId);
+    }
+
+    if (duration > 0) {
+      const timer = setTimeout(() => {
+        dismissToast(targetId);
+      }, duration);
+      timersRef.current.set(targetId, timer);
+    }
 
     setToasts(prev => {
-      // Check if an identical toast with the same message and type is already active
-      const existing = prev.find(t => t.message === message && t.type === type);
       if (existing) {
-        assignedId = existing.id;
-        isDuplicate = true;
-        return prev;
+        return prev.map(t => t.id === targetId ? { ...t, duration } : t);
       }
-      assignedId = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      return [...prev.slice(-4), { id: assignedId, type, message, duration }];
+      // Keep at most 4 active toasts so they never obstruct the UI or overlap controls
+      return [...prev.slice(-3), { id: targetId, type, message: cleanMessage, duration }];
     });
 
-    if (duration > 0 && !isDuplicate && assignedId) {
-      setTimeout(() => {
-        dismissToast(assignedId);
-      }, duration);
-    }
-    return assignedId;
+    return targetId;
   }, [dismissToast]);
 
   const toastMethods: ToastMethods = Object.assign(

@@ -17,6 +17,7 @@ import {
   LearningPath, LearningPathSection, LearningPathItem, 
   LearningPathItemType, Assessment, Question, QuestionType 
 } from "../../types.js";
+import { getEmbedVideo } from "../../utils/youtube.js";
 import { useToast, useConfirm } from "../../context/NotificationContext.js";
 
 interface LearningPathBuilderProps {
@@ -2609,21 +2610,34 @@ export function LearningPathBuilder({
                       </div>
                     )}
 
-                    {previewActiveItem.type === "video" && (
-                      <div className="aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center">
-                        {previewActiveItem.videoSource === "upload" ? (
-                          <video src={previewActiveItem.videoUrl} controls className="w-full h-full" />
-                        ) : previewActiveItem.videoUrl?.includes("youtube.com") || previewActiveItem.videoUrl?.includes("youtu.be") ? (
-                          <iframe
-                            src={`https://www.youtube.com/embed/${previewActiveItem.videoUrl.split("v=")[1]?.split("&")[0] || ""}`}
-                            className="w-full h-full"
-                            allowFullScreen
-                          />
-                        ) : (
-                          <div className="text-white text-xs">Video preview for {previewActiveItem.videoUrl}</div>
-                        )}
-                      </div>
-                    )}
+                    {previewActiveItem.type === "video" && (() => {
+                      const embed = getEmbedVideo(previewActiveItem.videoUrl);
+                      return (
+                        <div className="aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center">
+                          {previewActiveItem.videoSource === "upload" ? (
+                            <video src={previewActiveItem.videoUrl} controls className="w-full h-full" />
+                          ) : embed?.type === "youtube" ? (
+                            <iframe
+                              src={embed.embedUrl}
+                              className="w-full h-full border-0"
+                              referrerPolicy="strict-origin-when-cross-origin"
+                              allowFullScreen
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            />
+                          ) : embed?.type === "vimeo" ? (
+                            <iframe
+                              src={embed.embedUrl}
+                              className="w-full h-full border-0"
+                              referrerPolicy="strict-origin-when-cross-origin"
+                              allowFullScreen
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            />
+                          ) : (
+                            <div className="text-white text-xs">Video preview for {previewActiveItem.videoUrl}</div>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {previewActiveItem.type === "pdf" && (
                       <div className="p-6 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-700 text-center space-y-3">

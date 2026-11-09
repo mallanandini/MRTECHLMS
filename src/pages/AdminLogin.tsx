@@ -69,7 +69,12 @@ export function AdminLogin() {
       >
         <Link to="/" className="flex items-center gap-2.5 text-xs font-semibold hover:opacity-80 transition" style={{ color: "var(--theme-text)" }}>
           <ArrowLeft className="w-4 h-4" />
-          <img src="/mr-logo-icon.png" alt="MR Logo" className="w-5 h-5 object-contain" />
+          <img 
+            src="/mr-logo-icon.png" 
+            alt="MR Logo" 
+            className="w-5 h-5 object-contain brand-logo-preserve" 
+            style={{ filter: "none", mixBlendMode: "normal", opacity: 1 }}
+          />
           <span>Back to Home</span>
         </Link>
         <ThemeQuickControls />
@@ -81,7 +86,12 @@ export function AdminLogin() {
           {/* Logo & Header */}
           <div className="text-center mb-8">
             <div className="inline-flex p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl shadow-amber-500/10 mb-4 hover:scale-105 transition-transform">
-              <img src="/mr-logo-icon.png" alt="MR Technologies" className="w-16 h-16 object-contain" />
+              <img 
+                src="/mr-logo-icon.png" 
+                alt="MR Technologies" 
+                className="w-16 h-16 object-contain brand-logo-preserve" 
+                style={{ filter: "none", mixBlendMode: "normal", opacity: 1 }}
+              />
             </div>
             <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight" style={{ color: "var(--theme-text)" }}>
               Admin Portal Sign In

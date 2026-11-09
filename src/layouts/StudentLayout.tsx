@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { Outlet, useNavigate, useLocation } from "react-router-dom";
+import { Outlet, useNavigate, useLocation, Link } from "react-router-dom";
 import { Menu, Sparkles } from "lucide-react";
 import { Sidebar } from "../components/Sidebar.js";
 import { ThemeQuickControls } from "../components/ThemeQuickControls.js";
@@ -28,7 +28,7 @@ export function StudentLayout() {
   if (isDedicatedExamView) {
     return (
       <div 
-        style={{ backgroundColor: "var(--theme-background)", color: "var(--theme-text)" }}
+        style={{ backgroundColor: "var(--color-background)", color: "var(--color-text-primary)" }}
         className="min-h-screen w-full flex flex-col select-text transition-colors duration-200 overflow-hidden"
       >
         <main className="flex-1 min-w-0 h-screen w-full flex flex-col overflow-hidden">
@@ -40,7 +40,7 @@ export function StudentLayout() {
 
   return (
     <div 
-      style={{ backgroundColor: "var(--theme-background)", color: "var(--theme-text)" }}
+      style={{ backgroundColor: "var(--color-background)", color: "var(--color-text-primary)" }}
       className="min-h-screen w-full flex select-text transition-colors duration-200"
     >
       {/* Sidebar Navigation */}
@@ -59,9 +59,9 @@ export function StudentLayout() {
         {/* Mobile Top Header */}
         <div 
           style={{ 
-            backgroundColor: "var(--theme-sidebar)", 
-            color: "var(--theme-sidebar-text)", 
-            borderColor: "var(--theme-sidebar-border)" 
+            backgroundColor: "var(--color-sidebar)", 
+            color: "var(--color-sidebar-text)", 
+            borderColor: "var(--color-border)" 
           }}
           className="lg:hidden flex items-center justify-between px-4 py-3 border-b shrink-0 sticky top-0 z-20"
         >
@@ -70,32 +70,41 @@ export function StudentLayout() {
               type="button"
               onClick={() => setIsMobileSidebarOpen(true)}
               style={{
-                backgroundColor: "var(--theme-sidebar-card)",
-                color: "var(--theme-sidebar-text)",
-                borderColor: "var(--theme-sidebar-border)"
+                backgroundColor: "var(--color-surface-elevated)",
+                color: "var(--color-sidebar-text)",
+                borderColor: "var(--color-border)"
               }}
               className="p-2 rounded-xl border transition cursor-pointer hover:opacity-80"
               aria-label="Open navigation menu"
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-2.5 min-w-0">
-              <img src="/mr-logo-icon.png" alt="MR Technologies" className="w-7 h-7 object-contain shrink-0" />
+            <Link 
+              to="/student/dashboard"
+              aria-label="MR TECHNOLOGIES Student Dashboard"
+              className="flex items-center gap-2.5 min-w-0 group cursor-pointer rounded-xl p-1 -m-1 hover:bg-white/5 active:opacity-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              <img 
+                src="/mr-logo-icon.png" 
+                alt="MR Technologies" 
+                className="w-7 h-7 object-contain shrink-0 brand-logo-preserve transition-transform duration-150 group-hover:scale-105" 
+                style={{ filter: "none", mixBlendMode: "normal", opacity: 1 }}
+              />
               <div className="min-w-0">
                 <span 
-                  style={{ color: "var(--theme-text)" }}
-                  className="font-bold text-sm tracking-tight truncate block"
+                  style={{ color: "var(--color-text-primary)" }}
+                  className="font-bold text-sm tracking-tight truncate block group-hover:opacity-95 transition-opacity"
                 >
                   MR TECHNOLOGIES
                 </span>
                 <span 
-                  style={{ color: "var(--theme-sidebar-muted)" }}
+                  style={{ color: "var(--color-text-muted)" }}
                   className="text-[9px] font-mono uppercase tracking-widest block"
                 >
                   Student Portal
                 </span>
               </div>
-            </div>
+            </Link>
           </div>
 
           <div className="flex items-center gap-2">

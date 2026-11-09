@@ -21,7 +21,12 @@ export function AdminRegister() {
       >
         <Link to="/" className="flex items-center gap-2.5 text-xs font-semibold hover:opacity-80 transition" style={{ color: "var(--theme-text)" }}>
           <ArrowLeft className="w-4 h-4" />
-          <img src="/mr-logo-icon.png" alt="MR Logo" className="w-5 h-5 object-contain" />
+          <img 
+            src="/mr-logo-icon.png" 
+            alt="MR Logo" 
+            className="w-5 h-5 object-contain brand-logo-preserve" 
+            style={{ filter: "none", mixBlendMode: "normal", opacity: 1 }}
+          />
           <span>Back to Portals</span>
         </Link>
         <ThemeQuickControls />

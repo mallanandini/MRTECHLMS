@@ -9,6 +9,7 @@ import { useAuth } from "../../context/AuthContext.js";
 import { CodingCatalog } from "../../components/coding/CodingCatalog.js";
 import { CodingWorkspace } from "../../components/coding/CodingWorkspace.js";
 import { CodePlayground } from "../../components/coding/CodePlayground.js";
+import { ThemeQuickControls } from "../../components/ThemeQuickControls.js";
 
 export function CodingPracticePage() {
   const { authToken, currentUser } = useAuth();
@@ -48,6 +49,9 @@ export function CodingPracticePage() {
   // 3. Coding Practice Curriculum & Challenge Catalog
   return (
     <div className="p-4 sm:p-6 lg:p-7 xl:p-8 max-w-[1440px] w-full min-w-0 font-sans mx-auto flex-1">
+      <div className="flex justify-end mb-4">
+        <ThemeQuickControls />
+      </div>
       <CodingCatalog
         authToken={authToken}
         onSelectChallenge={(id) => navigate(`/student/coding-practice/${id}`)}

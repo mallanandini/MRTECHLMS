@@ -201,15 +201,15 @@ export function StudentDashboard({
       {/* ========================================================================= */}
       {/* 2. DYNAMIC WELCOME BANNER & LEARNING STREAK */}
       {/* ========================================================================= */}
-      <div className="relative overflow-hidden hero-gradient text-black rounded-3xl p-5 sm:p-6 md:p-8 shadow-md min-w-0">
+      <div className="relative overflow-hidden bg-white dark:bg-[#111c30] border border-slate-200 dark:border-[#263449] rounded-3xl p-5 sm:p-6 md:p-8 shadow-sm min-w-0">
         <div className="relative z-10 space-y-4 max-w-3xl min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/75 dark:bg-slate-900/80 text-slate-800 dark:text-slate-200 text-[10px] font-bold tracking-wider uppercase font-mono backdrop-blur-xs border border-blue-200 dark:border-slate-700">
-              <Calendar className="w-3 h-3 shrink-0 text-blue-600 dark:text-blue-400" />
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[10px] font-bold tracking-wider uppercase font-mono border border-slate-200 dark:border-slate-700">
+              <Calendar className="w-3 h-3 shrink-0 text-[var(--theme-primary)]" />
               <span>{formattedDate}</span>
             </div>
             {progress.learningStreakDays > 0 && (
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700/60 text-[10px] font-bold tracking-wider uppercase font-mono backdrop-blur-xs">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800/80 text-[10px] font-bold tracking-wider uppercase font-mono">
                 <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
                 <span>{progress.learningStreakDays}-Day Streak</span>
               </div>
@@ -217,37 +217,37 @@ export function StudentDashboard({
           </div>
 
           <div className="space-y-1.5 min-w-0">
-            <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-slate-950 dark:text-white flex flex-wrap items-center gap-2">
-              <span>Welcome Back, {currentUser.name}!</span> <span>👋</span>
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white flex flex-wrap items-center gap-2">
+              <span>Learning Journey & Daily Goals</span> <span>🎯</span>
             </h2>
-            <p className="text-slate-800 dark:text-slate-200 text-xs sm:text-sm leading-relaxed max-w-2xl font-medium">
+            <p className="text-slate-600 dark:text-slate-300 text-xs sm:text-sm leading-relaxed max-w-2xl font-medium">
               Keep your momentum moving forward today. Track assigned courses, tackle upcoming assessments, or consult your personal AI Mentor.
             </p>
           </div>
 
           {/* Quick Metrics Pills */}
           <div className="flex flex-wrap gap-2.5 sm:gap-4 pt-2">
-            <div className="bg-white/75 dark:bg-slate-900/80 rounded-xl px-3.5 py-2 border border-blue-200 dark:border-slate-700 backdrop-blur-xs shadow-2xs">
-              <span className="text-[10px] font-semibold text-slate-800 dark:text-slate-300 block uppercase tracking-wider font-mono">
+            <div className="bg-slate-50 dark:bg-[#16243d] rounded-xl px-3.5 py-2 border border-slate-200 dark:border-[#263449] shadow-2xs">
+              <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block uppercase tracking-wider font-mono">
                 Completion Rate
               </span>
-              <span className="text-base sm:text-lg font-bold font-mono text-slate-950 dark:text-white">
+              <span className="text-base sm:text-lg font-bold font-mono text-slate-900 dark:text-white">
                 {progress.overallCompletionRate}%
               </span>
             </div>
-            <div className="bg-white/75 dark:bg-slate-900/80 rounded-xl px-3.5 py-2 border border-blue-200 dark:border-slate-700 backdrop-blur-xs shadow-2xs">
-              <span className="text-[10px] font-semibold text-slate-800 dark:text-slate-300 block uppercase tracking-wider font-mono">
+            <div className="bg-slate-50 dark:bg-[#16243d] rounded-xl px-3.5 py-2 border border-slate-200 dark:border-[#263449] shadow-2xs">
+              <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block uppercase tracking-wider font-mono">
                 Courses In Progress
               </span>
-              <span className="text-base sm:text-lg font-bold font-mono text-slate-950 dark:text-white">
+              <span className="text-base sm:text-lg font-bold font-mono text-slate-900 dark:text-white">
                 {progress.inProgressCourses || (progress.totalAssignedCourses - progress.completedCourses)}
               </span>
             </div>
-            <div className="bg-white/75 dark:bg-slate-900/80 rounded-xl px-3.5 py-2 border border-blue-200 dark:border-slate-700 backdrop-blur-xs shadow-2xs">
-              <span className="text-[10px] font-semibold text-slate-800 dark:text-slate-300 block uppercase tracking-wider font-mono">
+            <div className="bg-slate-50 dark:bg-[#16243d] rounded-xl px-3.5 py-2 border border-slate-200 dark:border-[#263449] shadow-2xs">
+              <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block uppercase tracking-wider font-mono">
                 Certificates Earned
               </span>
-              <span className="text-base sm:text-lg font-bold font-mono text-slate-950 dark:text-white">
+              <span className="text-base sm:text-lg font-bold font-mono text-slate-900 dark:text-white">
                 {progress.totalCertificates || certificates.length}
               </span>
             </div>

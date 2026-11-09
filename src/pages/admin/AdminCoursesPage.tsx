@@ -13,6 +13,7 @@ import {
 import { CourseAuthoringStudio } from "../../components/admin/CourseAuthoringStudio.js";
 import { ThemeQuickControls } from "../../components/ThemeQuickControls.js";
 import { useAuth } from "../../context/AuthContext.js";
+import { useToast, useConfirm } from "../../context/NotificationContext.js";
 import { Course } from "../../types.js";
 
 interface AdminStats {
@@ -25,6 +26,8 @@ interface AdminStats {
 export function AdminCoursesPage() {
   const { authToken } = useAuth();
   const navigate = useNavigate();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Primary authoritative navigation parameters
@@ -84,21 +87,59 @@ export function AdminCoursesPage() {
 
   // Status & Featured toggles
   const handleToggleCourseStatus = async (courseId: string, currentStatus: string) => {
-    const nextStatus = currentStatus === "published" ? "draft" : "published";
-    try {
-      const res = await fetch(`/api/admin/courses/${courseId}/status`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${authToken}`
-        },
-        body: JSON.stringify({ status: nextStatus })
+    if (currentStatus === "published") {
+      const ok = await confirm({
+        title: "Revert Course to Draft?",
+        message: "Enrolled students will temporarily lose access to this course until it is published again. Are you sure you wish to continue?",
+        confirmText: "Yes, Revert to Draft",
+        cancelText: "Keep Published",
+        variant: "warning"
       });
-      if (res.ok) {
-        fetchCoursesAndStats();
+      if (!ok) return;
+
+      try {
+        const res = await fetch(`/api/admin/courses/${courseId}/status`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${authToken}`
+          },
+          body: JSON.stringify({ status: "draft" })
+        });
+        if (res.ok) {
+          toast.info("Course reverted to draft mode.");
+          fetchCoursesAndStats();
+        } else {
+          const err = await res.json().catch(() => ({}));
+          toast.error(err.error || "Failed to update course status");
+        }
+      } catch (err: any) {
+        toast.error(err.message || "Error updating course status");
       }
-    } catch (err) {
-      console.error("Error toggling course approval", err);
+    } else {
+      // Admin is publishing a draft course: run publication with validation guard
+      try {
+        const res = await fetch(`/api/admin/courses/${courseId}/publish`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${authToken}`
+          },
+          body: JSON.stringify({ incrementVersion: false })
+        });
+
+        if (res.ok) {
+          toast.success("Course published successfully! It is now live in the student catalog.");
+          fetchCoursesAndStats();
+        } else {
+          const data = await res.json().catch(() => ({}));
+          toast.error(data.error || "Course cannot be published until all content requirements are met.");
+          // Direct admin to authoring studio Step 4 to review and fix the validation issues
+          navigate(`/admin/courses?courseId=${courseId}&step=publish`);
+        }
+      } catch (err: any) {
+        toast.error(err.message || "Error during course publication");
+      }
     }
   };
 
@@ -113,30 +154,38 @@ export function AdminCoursesPage() {
         body: JSON.stringify({ isFeatured: !isFeatured })
       });
       if (res.ok) {
+        toast.success(isFeatured ? "Course removed from featured list" : "Course marked as featured");
         fetchCoursesAndStats();
       }
-    } catch (err) {
-      console.error("Error toggling course featured", err);
+    } catch (err: any) {
+      toast.error(err.message || "Error toggling course featured status");
     }
   };
 
   const handleDeleteCourse = async (courseId: string, courseTitle: string) => {
-    if (!window.confirm(`Are you sure you want to delete "${courseTitle}" and all its modules, lessons, and tests? This cannot be undone.`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: "Delete Course?",
+      message: `Are you sure you want to delete "${courseTitle}" and all its modules, lessons, and tests? This cannot be undone.`,
+      confirmText: "Delete Course",
+      cancelText: "Cancel",
+      variant: "danger"
+    });
+    if (!ok) return;
+
     try {
       const res = await fetch(`/api/admin/courses/${courseId}`, {
         method: "DELETE",
         headers: { "Authorization": `Bearer ${authToken}` }
       });
       if (res.ok) {
+        toast.success("Course deleted successfully.");
         fetchCoursesAndStats();
       } else {
         const err = await res.json().catch(() => ({}));
-        alert(err.error || "Failed to delete course");
+        toast.error(err.error || "Failed to delete course");
       }
-    } catch (err) {
-      console.error("Error deleting course", err);
+    } catch (err: any) {
+      toast.error(err.message || "Error deleting course");
     }
   };
 

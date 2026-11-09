@@ -25,7 +25,8 @@ export function HomeFooter({ onScrollTo }: HomeFooterProps) {
               <img 
                 src="/mr-logo-icon.png" 
                 alt="MR Technologies" 
-                className="w-10 h-10 object-contain drop-shadow-xs" 
+                className="w-10 h-10 object-contain brand-logo-preserve" 
+                style={{ filter: "none", mixBlendMode: "normal", opacity: 1 }}
               />
               <div>
                 <span className="font-extrabold text-base tracking-tight text-[#F1F5F9] block">

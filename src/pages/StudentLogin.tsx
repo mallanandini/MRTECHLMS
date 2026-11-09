@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
-import { GraduationCap, ArrowLeft, ArrowRight, ShieldAlert, Lock, Mail } from "lucide-react";
+import { GraduationCap, ArrowLeft, ArrowRight, ShieldAlert, Lock, Mail, Loader2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.js";
 import { UserRole } from "../types.js";
 import { ThemeQuickControls } from "../components/ThemeQuickControls.js";
@@ -63,7 +63,12 @@ export function StudentLogin() {
       >
         <Link to="/" className="flex items-center gap-2.5 text-xs font-semibold hover:opacity-80 transition" style={{ color: "var(--theme-text)" }}>
           <ArrowLeft className="w-4 h-4" />
-          <img src="/mr-logo-icon.png" alt="MR Logo" className="w-5 h-5 object-contain" />
+          <img 
+            src="/mr-logo-icon.png" 
+            alt="MR Logo" 
+            className="w-5 h-5 object-contain brand-logo-preserve" 
+            style={{ filter: "none", mixBlendMode: "normal", opacity: 1 }}
+          />
           <span>Back to Home</span>
         </Link>
         <ThemeQuickControls />
@@ -75,7 +80,12 @@ export function StudentLogin() {
           {/* Logo & Header */}
           <div className="text-center mb-8">
             <div className="inline-flex p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl shadow-blue-500/10 mb-4 hover:scale-105 transition-transform">
-              <img src="/mr-logo-icon.png" alt="MR Technologies" className="w-16 h-16 object-contain" />
+              <img 
+                src="/mr-logo-icon.png" 
+                alt="MR Technologies" 
+                className="w-16 h-16 object-contain brand-logo-preserve" 
+                style={{ filter: "none", mixBlendMode: "normal", opacity: 1 }}
+              />
             </div>
             <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight" style={{ color: "var(--theme-text)" }}>
               Student Portal Sign In
@@ -139,10 +149,13 @@ export function StudentLogin() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full btn-theme-primary hover:opacity-90 disabled:opacity-60 text-white font-bold text-xs py-3.5 rounded-xl transition duration-150 shadow-md cursor-pointer flex items-center justify-center gap-2"
+                className="w-full btn-primary btn-theme-primary font-bold text-xs py-3.5 rounded-xl transition duration-150 shadow-md cursor-pointer flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (
-                  <span>Authenticating...</span>
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Authenticating...</span>
+                  </span>
                 ) : (
                   <>
                     <span>Sign In to Student Portal</span>

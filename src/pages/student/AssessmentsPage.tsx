@@ -18,13 +18,22 @@ export function AssessmentsPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-7 xl:p-8 space-y-6 lg:space-y-8 max-w-[1440px] w-full min-w-0 font-sans">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200/60 pb-5 min-w-0">
+      <div 
+        className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-5 min-w-0"
+        style={{ borderColor: "var(--color-border)" }}
+      >
         <div className="min-w-0 flex-1">
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight truncate flex items-center gap-2.5">
-            <Award className="w-6 h-6 text-rose-500" />
+          <h1 
+            className="text-xl sm:text-2xl font-bold tracking-tight truncate flex items-center gap-2.5"
+            style={{ color: "var(--color-text-primary)" }}
+          >
+            <Award className="w-6 h-6 text-[var(--color-primary)]" />
             <span>My Assessments</span>
           </h1>
-          <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider mt-1 truncate font-mono">
+          <p 
+            className="text-xs font-semibold uppercase tracking-wider mt-1 truncate font-mono"
+            style={{ color: "var(--color-text-muted)" }}
+          >
             Track Quizzes, Knowledge Tests & Certifications
           </p>
         </div>

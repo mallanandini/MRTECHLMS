@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.js";
 import { Certificate, CertificateStyle } from "../../types.js";
+import { ThemeQuickControls } from "../../components/ThemeQuickControls.js";
 
 interface EligibleToClaim {
   id: string;
@@ -265,15 +266,18 @@ export function StudentCertificatesPage() {
           </p>
         </div>
 
-        <a
-          href="/verify-certificate"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-xs transition"
-        >
-          <ExternalLink className="w-4 h-4 text-amber-500 dark:text-amber-400" />
-          <span>Public Verification Portal</span>
-        </a>
+        <div className="flex items-center gap-3">
+          <a
+            href="/verify-certificate"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-xs transition"
+          >
+            <ExternalLink className="w-4 h-4 text-amber-500 dark:text-amber-400" />
+            <span>Public Verification Portal</span>
+          </a>
+          <ThemeQuickControls />
+        </div>
       </div>
 
       {/* Notifications */}

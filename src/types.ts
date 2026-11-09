@@ -599,12 +599,21 @@ export interface Review {
   createdAt: string;
 }
 
-export type ThemeId = 
-  | "default-blue" 
-  | "purple-royal" 
-  | "emerald-green" 
-  | "sunset-orange" 
-  | "cyber-dark" 
+export type ThemeId =
+  | "default-blue"
+  | "ocean-teal"
+  | "royal-indigo"
+  | "emerald-green"
+  | "graphite"
+  | "royal-purple"
+  | "sunset-orange"
+  | "ruby-red"
+  | "midnight-navy"
+  | "rose-pink"
+  // Backward-compatible aliases
+  | "emerald"
+  | "purple-royal"
+  | "cyber-dark"
   | "high-contrast";
 
 export type ThemeMode = "light" | "dark";
@@ -629,6 +638,78 @@ export interface ThemeColors {
   backgroundColor: string;
   surfaceColor: string;
   textColor: string;
+  // Semantic CSS tokens (WCAG 2.2 AA compliant)
+  colorPrimary?: string;
+  colorPrimaryHover?: string;
+  colorPrimaryForeground?: string;
+  colorSecondary?: string;
+  colorAccent?: string;
+  colorBackground?: string;
+  colorSurface?: string;
+  colorSurfaceElevated?: string;
+  colorSidebar?: string;
+  colorSidebarText?: string;
+  colorSidebarForeground?: string;
+  colorSidebarMuted?: string;
+  colorSidebarActive?: string;
+  colorSidebarActiveForeground?: string;
+  colorButtonPrimary?: string;
+  colorButtonPrimaryForeground?: string;
+  colorButtonSecondary?: string;
+  colorButtonSecondaryForeground?: string;
+  colorButtonOutline?: string;
+  colorButtonOutlineForeground?: string;
+  colorButtonDanger?: string;
+  colorButtonDangerForeground?: string;
+  colorHeader?: string;
+  colorTextPrimary?: string;
+  colorTextSecondary?: string;
+  colorTextMuted?: string;
+  colorBorder?: string;
+  colorInputBackground?: string;
+  colorInputBorder?: string;
+  colorFocusRing?: string;
+  colorSuccess?: string;
+  colorWarning?: string;
+  colorDanger?: string;
+  colorInfo?: string;
+}
+
+export interface SemanticThemeTokens {
+  colorPrimary: string;
+  colorPrimaryHover: string;
+  colorPrimaryForeground: string;
+  colorSecondary: string;
+  colorAccent: string;
+  colorBackground: string;
+  colorSurface: string;
+  colorSurfaceElevated: string;
+  colorSidebar: string;
+  colorSidebarText: string;
+  colorSidebarForeground: string;
+  colorSidebarMuted: string;
+  colorSidebarActive: string;
+  colorSidebarActiveForeground: string;
+  colorButtonPrimary: string;
+  colorButtonPrimaryForeground: string;
+  colorButtonSecondary: string;
+  colorButtonSecondaryForeground: string;
+  colorButtonOutline: string;
+  colorButtonOutlineForeground: string;
+  colorButtonDanger: string;
+  colorButtonDangerForeground: string;
+  colorHeader: string;
+  colorTextPrimary: string;
+  colorTextSecondary: string;
+  colorTextMuted: string;
+  colorBorder: string;
+  colorInputBackground: string;
+  colorInputBorder: string;
+  colorFocusRing: string;
+  colorSuccess: string;
+  colorWarning: string;
+  colorDanger: string;
+  colorInfo: string;
 }
 
 export interface ThemeDefinition {

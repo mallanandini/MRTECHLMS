@@ -457,7 +457,12 @@ export function CodePlayground({
           <div className="h-4 w-px bg-slate-700 hidden sm:block" />
 
           <div className="flex items-center gap-2.5">
-            <img src="/mr-logo-icon.png" alt="MR Technologies" className="w-8 h-8 object-contain shrink-0 drop-shadow-xs" />
+            <img 
+              src="/mr-logo-icon.png" 
+              alt="MR Technologies" 
+              className="w-8 h-8 object-contain shrink-0 brand-logo-preserve" 
+              style={{ filter: "none", mixBlendMode: "normal", opacity: 1 }}
+            />
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-bold text-sm text-white">{programTitle}</span>

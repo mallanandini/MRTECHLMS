@@ -8,22 +8,11 @@ import {
   Play, FileText, Code, CheckCircle2, ChevronRight, ChevronLeft, Sparkles, 
   ThumbsUp, Star, MessageSquare, ArrowLeft, Download, Send, ShieldAlert,
   Award, ExternalLink, X, Check, Clock, AlertCircle, Image as ImageIcon,
-  Lock, RotateCcw, BookOpen, GripVertical, Copy
+  Lock, RotateCcw, BookOpen, GripVertical, Copy, Eye, EyeOff
 } from "lucide-react";
 import { Course, Module, Lesson, LessonType, Review, Assessment, Question, QuestionType } from "../types.js";
-
-function getEmbedVideo(url?: string) {
-  if (!url) return null;
-  const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
-  if (ytMatch && ytMatch[1]) {
-    return { type: "youtube", embedUrl: `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=0&rel=0` };
-  }
-  const vimeoMatch = url.match(/vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/(?:[^\/]*)\/videos\/|video\/|)(\d+)/);
-  if (vimeoMatch && vimeoMatch[1]) {
-    return { type: "vimeo", embedUrl: `https://player.vimeo.com/video/${vimeoMatch[1]}` };
-  }
-  return { type: "native", videoUrl: url };
-}
+import { getEmbedVideo } from "../utils/youtube.js";
+import { PDFViewer } from "./PDFViewer.js";
 
 interface CoursePlayerProps {
   courseId: string;
@@ -45,6 +34,9 @@ export function CoursePlayer({
   const [accessDenied, setAccessDenied] = useState(false);
   const [resumeData, setResumeData] = useState<{ lastLessonId: string | null; lastPositionSeconds: number } | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [showAttachedPdf, setShowAttachedPdf] = useState(false);
+  const [iframeLoading, setIframeLoading] = useState(true);
+  const [playerKey, setPlayerKey] = useState(0);
   
   // Interactive Assessment Runner State
   const [takingAssessmentId, setTakingAssessmentId] = useState<string | null>(null);
@@ -231,6 +223,13 @@ export function CoursePlayer({
       setExpandedModules(map);
     }
   }, [modules]);
+
+  // Reset attached PDF preview and media loading state when switching lessons
+  useEffect(() => {
+    setShowAttachedPdf(false);
+    setIframeLoading(true);
+    setPlayerKey(0);
+  }, [activeLesson?.id]);
 
   // Track consumption time for reading, PDF, image, and coding activities
   useEffect(() => {
@@ -960,35 +959,148 @@ export function CoursePlayer({
           {activeLesson ? (
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
               {/* Media Segment with Smart Embeds */}
-              {activeLesson.type === LessonType.VIDEO && activeLesson.videoUrl && (() => {
-                const embed = getEmbedVideo(activeLesson.videoUrl);
-                if (embed?.type === "youtube" || embed?.type === "vimeo") {
+              {activeLesson.type === LessonType.VIDEO && (() => {
+                if (!activeLesson.videoUrl) {
                   return (
-                    <div className="aspect-video bg-black relative">
+                    <div className="aspect-video bg-slate-900 border-b border-slate-800 flex flex-col items-center justify-center p-6 text-center">
+                      <div className="w-12 h-12 bg-slate-800 text-slate-400 rounded-2xl flex items-center justify-center mb-3">
+                        <Play className="w-6 h-6" />
+                      </div>
+                      <p className="text-sm font-semibold text-white">No Video URL Attached</p>
+                      <p className="text-xs text-slate-400 mt-1 max-w-sm">This video lesson does not currently have a video attached by the instructor.</p>
+                    </div>
+                  );
+                }
+
+                const embed = getEmbedVideo(activeLesson.videoUrl);
+
+                if (embed?.type === "youtube") {
+                  return (
+                    <div className="aspect-video bg-black relative rounded-t-2xl overflow-hidden group">
+                      {iframeLoading && (
+                        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-950 text-white">
+                          <div className="w-10 h-10 border-3 border-red-500 border-t-transparent rounded-full animate-spin mb-3" />
+                          <p className="text-xs font-semibold text-slate-300">Loading YouTube Player...</p>
+                        </div>
+                      )}
                       <iframe 
+                        key={`yt-player-${activeLesson.id}-${playerKey}`}
                         src={embed.embedUrl} 
                         className="w-full h-full border-0" 
+                        referrerPolicy="strict-origin-when-cross-origin"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                        title={activeLesson.title}
+                        onLoad={() => setIframeLoading(false)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIframeLoading(true);
+                          setPlayerKey(k => k + 1);
+                        }}
+                        title="Reload player"
+                        aria-label="Reload video player"
+                        className="absolute top-3 right-3 z-20 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg bg-black/70 hover:bg-black/90 text-white/80 hover:text-white backdrop-blur text-xs flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Reload</span>
+                      </button>
+                    </div>
+                  );
+                }
+
+                if (embed?.type === "vimeo") {
+                  return (
+                    <div className="aspect-video bg-black relative rounded-t-2xl overflow-hidden group">
+                      {iframeLoading && (
+                        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-950 text-white">
+                          <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
+                          <p className="text-xs font-semibold text-slate-300">Loading Vimeo Player...</p>
+                        </div>
+                      )}
+                      <iframe 
+                        key={`vimeo-player-${activeLesson.id}-${playerKey}`}
+                        src={embed.embedUrl} 
+                        className="w-full h-full border-0" 
+                        referrerPolicy="strict-origin-when-cross-origin"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         allowFullScreen
                         title={activeLesson.title}
+                        onLoad={() => setIframeLoading(false)}
                       />
                     </div>
                   );
                 }
+
+                if (embed?.type === "native") {
+                  return (
+                    <div className="aspect-video bg-black relative rounded-t-2xl overflow-hidden">
+                      <video 
+                        ref={videoRef}
+                        src={embed.videoUrl} 
+                        className="w-full h-full object-contain" 
+                        controls 
+                        poster={course.thumbnail}
+                        onTimeUpdate={handleVideoTimeUpdate}
+                        onEnded={handleVideoEnded}
+                      />
+                    </div>
+                  );
+                }
+
                 return (
-                  <div className="aspect-video bg-black relative">
-                    <video 
-                      ref={videoRef}
-                      src={activeLesson.videoUrl} 
-                      className="w-full h-full object-contain" 
-                      controls 
-                      poster={course.thumbnail}
-                      onTimeUpdate={handleVideoTimeUpdate}
-                      onEnded={handleVideoEnded}
-                    />
+                  <div className="aspect-video bg-slate-900 border-b border-slate-800 flex flex-col items-center justify-center p-6 text-center">
+                    <div className="w-12 h-12 bg-amber-500/10 text-amber-400 rounded-2xl flex items-center justify-center mb-3">
+                      <AlertCircle className="w-6 h-6" />
+                    </div>
+                    <p className="text-sm font-semibold text-white">Unrecognized Video Format</p>
+                    <p className="text-xs text-slate-400 mt-1 max-w-md font-mono break-all">{activeLesson.videoUrl}</p>
+                    <div className="mt-4 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIframeLoading(true);
+                          setPlayerKey(k => k + 1);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition cursor-pointer"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Retry</span>
+                      </button>
+                      <a
+                        href={activeLesson.videoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition cursor-pointer"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Open Link</span>
+                      </a>
+                    </div>
                   </div>
                 );
               })()}
+
+              {/* Embedded Primary PDF Lesson Viewer */}
+              {activeLesson.type === LessonType.PDF && (
+                <div className="bg-slate-900 border-b border-slate-800">
+                  <PDFViewer
+                    url={`/api/student/courses/${courseId}/lessons/${activeLesson.id}/pdf`}
+                    authToken={authToken}
+                    title={activeLesson.materialTitle || activeLesson.title || "Lesson Study Document"}
+                    onPageChange={(page, total) => {
+                      if (total > 0 && page >= total && !completedLessons.includes(activeLesson.id)) {
+                        reportLessonProgress(activeLesson.id, {
+                          progressPercent: 100,
+                          timeSpentSeconds: activeTimeSpentRef.current || 10,
+                          event: "material_read"
+                        });
+                      }
+                    }}
+                  />
+                </div>
+              )}
 
               {/* Image Activity Viewer */}
               {activeLesson.type === LessonType.IMAGE && (activeLesson.fileUrl || activeLesson.materialUrl) && (
@@ -1131,40 +1243,48 @@ export function CoursePlayer({
                 )}
                 
                 {/* Embedded Study Material PDF attachments if available */}
-                {(activeLesson.materialUrl || activeLesson.fileUrl) && (
-                  <div className="mt-6 p-4 sm:p-5 bg-amber-50/60 border border-amber-200/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2.5 bg-amber-100 text-amber-800 rounded-xl shrink-0">
-                        <FileText className="w-5 h-5" />
+                {(activeLesson.materialUrl || activeLesson.fileUrl) && activeLesson.type !== LessonType.PDF && (
+                  <div className="mt-6 border border-amber-200/80 dark:border-amber-900/50 rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 overflow-hidden shadow-xs">
+                    <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 rounded-xl shrink-0">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-900 dark:text-white">
+                            {activeLesson.materialTitle || "Lesson Study Material / Notes (PDF)"}
+                          </p>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                            Interactive lecture slides and reference notes directly inside the LMS
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-xs font-bold text-slate-900">
-                          {activeLesson.materialTitle || "Lesson Study Material / Notes (PDF)"}
-                        </p>
-                        <p className="text-[11px] text-slate-500 font-mono">
-                          Downloadable lecture slides and reference documents
-                        </p>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button 
+                          type="button"
+                          onClick={() => setShowAttachedPdf(!showAttachedPdf)}
+                          className={`flex items-center gap-1.5 px-3.5 py-2 border rounded-xl text-xs font-semibold transition shadow-xs cursor-pointer ${
+                            showAttachedPdf 
+                              ? "bg-amber-600 text-white border-amber-600" 
+                              : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700"
+                          }`}
+                        >
+                          <BookOpen className="w-3.5 h-3.5" />
+                          <span>{showAttachedPdf ? "Hide Document" : "View Inside LMS"}</span>
+                        </button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <a 
-                        href={activeLesson.materialUrl || activeLesson.fileUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 bg-white text-slate-700 hover:bg-slate-50 px-3.5 py-2 border border-slate-200 rounded-xl text-xs font-semibold transition shadow-xs"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        <span>View Document</span>
-                      </a>
-                      <a 
-                        href={activeLesson.materialUrl || activeLesson.fileUrl} 
-                        download
-                        className="flex items-center gap-1.5 bg-amber-600 text-white hover:bg-amber-700 px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-xs"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>Download</span>
-                      </a>
-                    </div>
+
+                    {/* Inline Embedded PDF Viewer */}
+                    {showAttachedPdf && (
+                      <div className="p-4 pt-0 border-t border-amber-200/50 dark:border-amber-900/30">
+                        <PDFViewer
+                          url={`/api/student/courses/${courseId}/lessons/${activeLesson.id}/pdf`}
+                          authToken={authToken}
+                          title={activeLesson.materialTitle || `${activeLesson.title} - Study Material`}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1276,28 +1396,32 @@ export function CoursePlayer({
                     <p className="text-sm text-gray-600 dark:text-slate-300 mt-2 leading-relaxed">{course.description}</p>
                   </div>
 
-                  <div>
-                    <h4 className="font-bold text-gray-900 dark:text-white text-md">Prerequisites</h4>
-                    <ul className="mt-2 space-y-1.5">
-                      {course.requirements.map((req, i) => (
-                        <li key={i} className="text-sm text-gray-600 dark:text-slate-300 flex items-center gap-2.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                          {req}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h4 className="font-bold text-gray-900 dark:text-white text-md">Key Skills Covered</h4>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {course.skillsCovered.map((skill, i) => (
-                        <span key={i} className="text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 px-2.5 py-1 rounded-md">
-                          {skill}
-                        </span>
-                      ))}
+                  {Array.isArray(course.requirements) && course.requirements.length > 0 && (
+                    <div>
+                      <h4 className="font-bold text-gray-900 dark:text-white text-md">Prerequisites</h4>
+                      <ul className="mt-2 space-y-1.5">
+                        {course.requirements.map((req, i) => (
+                          <li key={i} className="text-sm text-gray-600 dark:text-slate-300 flex items-center gap-2.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                            {req}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
-                  </div>
+                  )}
+
+                  {Array.isArray(course.skillsCovered) && course.skillsCovered.length > 0 && (
+                    <div>
+                      <h4 className="font-bold text-gray-900 dark:text-white text-md">Key Skills Covered</h4>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {course.skillsCovered.map((skill, i) => (
+                          <span key={i} className="text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 px-2.5 py-1 rounded-md">
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-8">

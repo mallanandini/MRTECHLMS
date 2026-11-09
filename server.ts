@@ -69,17 +69,40 @@ const PORT = 3000;
 
 // Security: Helmet HTTP security headers with customized Content-Security-Policy
 app.use(helmet({
+  referrerPolicy: {
+    policy: "strict-origin-when-cross-origin"
+  },
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "blob:", "https://cdn.jsdelivr.net"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
+      scriptSrc: [
+        "'self'", 
+        "'unsafe-inline'", 
+        "'unsafe-eval'", 
+        "blob:", 
+        "https://cdn.jsdelivr.net", 
+        "https://cdnjs.cloudflare.com",
+        "https://www.youtube.com",
+        "https://s.ytimg.com"
+      ],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:", "https://cdn.jsdelivr.net"],
-      imgSrc: ["'self'", "data:", "blob:", "https:"],
+      imgSrc: ["'self'", "data:", "blob:", "https:", "https://img.youtube.com", "https://i.ytimg.com"],
       mediaSrc: ["'self'", "data:", "blob:", "https:"],
-      connectSrc: ["'self'", "ws:", "wss:", "https:", "https://cdn.jsdelivr.net"],
-      workerSrc: ["'self'", "blob:", "https://cdn.jsdelivr.net"],
-      objectSrc: ["'none'"],
+      connectSrc: [
+        "'self'", 
+        "ws:", 
+        "wss:", 
+        "https:", 
+        "https://cdn.jsdelivr.net", 
+        "https://cdnjs.cloudflare.com",
+        "https://*.youtube.com",
+        "https://*.googlevideo.com"
+      ],
+      workerSrc: ["'self'", "blob:", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com"],
+      frameSrc: ["'self'", "https://www.youtube.com", "https://www.youtube-nocookie.com", "https://player.vimeo.com", "blob:", "data:"],
+      childSrc: ["'self'", "blob:", "https://www.youtube.com", "https://www.youtube-nocookie.com", "https://player.vimeo.com"],
+      objectSrc: ["'self'", "blob:"],
       baseUri: ["'self'"],
       formAction: ["'self'"],
       frameAncestors: ["'self'"]
@@ -560,7 +583,23 @@ app.get("/api/auth/me", authenticateToken, async (req, res) => {
 // 1.1 USER PREFERENCES API
 // ==========================================
 
-const ALLOWED_THEMES = ["default-blue", "purple-royal", "emerald-green", "sunset-orange", "cyber-dark", "high-contrast"];
+const ALLOWED_THEMES = [
+  "default-blue",
+  "ocean-teal",
+  "royal-indigo",
+  "emerald-green",
+  "graphite",
+  "royal-purple",
+  "sunset-orange",
+  "ruby-red",
+  "midnight-navy",
+  "rose-pink",
+  // Backward-compatible aliases
+  "emerald",
+  "purple-royal",
+  "cyber-dark",
+  "high-contrast"
+];
 const ALLOWED_MODES = ["light", "dark"];
 const HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
 
@@ -682,6 +721,88 @@ app.get("/api/student/courses/:courseId/overview", authenticateToken, async (req
     console.error(`Error in GET /api/student/courses/${req.params.courseId}/overview:`, err);
     const status = err.message === "Course not found" ? 404 : 500;
     res.status(status).json({ error: err.message || "Failed to load course overview" });
+  }
+});
+
+// GET /api/student/courses/:courseId/lessons/:lessonId/pdf - Secure authenticated PDF stream
+app.get("/api/student/courses/:courseId/lessons/:lessonId/pdf", authenticateToken, async (req, res) => {
+  try {
+    const { courseId, lessonId } = req.params;
+
+    // 1. Authorize course access for student or administrative role
+    const access = await CourseService.checkCourseAccess(req.user!, courseId);
+    if (!access.allowed) {
+      return res.status(access.status).json({ error: access.message || "Access denied" });
+    }
+
+    // 2. Lookup lesson within the specified course
+    const lesson = await lessonsDb.findOne({ id: lessonId });
+    if (!lesson || lesson.courseId !== courseId || lesson.deletedAt) {
+      return res.status(404).json({ error: "Lesson not found in this course" });
+    }
+
+    // 3. Prevent students from accessing draft lessons
+    if (req.user!.role === UserRole.STUDENT && lesson.status === "draft") {
+      return res.status(403).json({ error: "Lesson is currently in draft mode and inaccessible" });
+    }
+
+    // 4. Determine PDF resource location
+    const pdfPath = lesson.materialUrl || lesson.fileUrl;
+    if (!pdfPath || typeof pdfPath !== "string") {
+      return res.status(404).json({ error: "No PDF document associated with this lesson" });
+    }
+
+    // 5. Handle local storage PDF stream
+    if (pdfPath.startsWith("/storage/")) {
+      const relativePath = pdfPath.replace(/^\/storage\//, "");
+      const fullPath = path.resolve(storageDir, relativePath);
+
+      // Defend against directory traversal attacks
+      if (!fullPath.startsWith(storageDir)) {
+        return res.status(403).json({ error: "Access to specified file path is forbidden" });
+      }
+
+      if (!fs.existsSync(fullPath)) {
+        return res.status(404).json({ error: "Document file not found on disk" });
+      }
+
+      const stat = fs.statSync(fullPath);
+      const filename = path.basename(fullPath);
+      const safeTitle = (lesson.materialTitle || lesson.title || filename).replace(/[^a-zA-Z0-9_\-.]/g, "_");
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `inline; filename="${safeTitle.endsWith(".pdf") ? safeTitle : safeTitle + ".pdf"}"`);
+      res.setHeader("Content-Length", stat.size);
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Cache-Control", "private, no-cache, no-store, must-revalidate");
+
+      const stream = fs.createReadStream(fullPath);
+      stream.pipe(res);
+      return;
+    }
+
+    // 6. Handle external PDF URL via secure streaming proxy to prevent CORS issues
+    if (pdfPath.startsWith("http://") || pdfPath.startsWith("https://")) {
+      try {
+        const response = await fetch(pdfPath);
+        if (!response.ok) {
+          return res.status(response.status).json({ error: "Failed to fetch external PDF" });
+        }
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(lesson.materialTitle || lesson.title || 'document')}.pdf"`);
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        const arrayBuffer = await response.arrayBuffer();
+        res.send(Buffer.from(arrayBuffer));
+        return;
+      } catch (proxyErr: any) {
+        return res.status(502).json({ error: "Failed to retrieve external PDF document: " + proxyErr.message });
+      }
+    }
+
+    return res.status(400).json({ error: "Unrecognized document URL format" });
+  } catch (err: any) {
+    console.error(`Error streaming lesson PDF [course: ${req.params.courseId}, lesson: ${req.params.lessonId}]:`, err);
+    res.status(500).json({ error: "Internal server error while retrieving document" });
   }
 });
 
@@ -3251,6 +3372,17 @@ app.put("/api/admin/courses/:id/status", authenticateToken, async (req, res) => 
   const targetCourse = await coursesDb.findOne({ id: req.params.id });
   if (!targetCourse) return res.status(404).json({ error: "Course not found" });
 
+  // Mandatory Pre-Publishing Validation Guard: Prevent silently publishing an incomplete course
+  if (status === "published" && targetCourse.status !== "published") {
+    const validation = await CourseService.validateCourseForPublishing(req.params.id);
+    if (!validation.valid) {
+      return res.status(422).json({
+        error: "Course validation failed before publishing: " + validation.issues.join("; "),
+        issues: validation.issues
+      });
+    }
+  }
+
   const updated = await coursesDb.update(req.params.id, { status, isFeatured });
   if (!updated) return res.status(404).json({ error: "Course not found" });
 
@@ -3608,12 +3740,12 @@ app.put("/api/admin/courses/:id", authenticateToken, async (req, res) => {
   } = req.body;
 
   const updatePayload: Record<string, any> = {};
-  if (title !== undefined) updatePayload.title = title.trim();
-  if (shortDescription !== undefined) updatePayload.shortDescription = shortDescription.trim();
-  if (description !== undefined) updatePayload.description = description.trim();
-  if (category !== undefined) updatePayload.category = category.trim();
+  if (title !== undefined) updatePayload.title = title ? title.trim() : "";
+  if (shortDescription !== undefined) updatePayload.shortDescription = shortDescription ? shortDescription.trim() : "";
+  if (description !== undefined) updatePayload.description = description ? description.trim() : "";
+  if (category !== undefined) updatePayload.category = category ? category.trim() : "";
   if (difficulty !== undefined) updatePayload.difficulty = difficulty;
-  if (estimatedDuration !== undefined) updatePayload.estimatedDuration = estimatedDuration.trim();
+  if (estimatedDuration !== undefined) updatePayload.estimatedDuration = estimatedDuration ? estimatedDuration.trim() : "";
   if (tags !== undefined) {
     updatePayload.tags = Array.isArray(tags) ? tags : (typeof tags === "string" ? tags.split(",").map(t => t.trim()).filter(Boolean) : []);
   }
@@ -3629,7 +3761,19 @@ app.put("/api/admin/courses/:id", authenticateToken, async (req, res) => {
   if (skillsCovered !== undefined) {
     updatePayload.skillsCovered = Array.isArray(skillsCovered) ? skillsCovered : (typeof skillsCovered === "string" ? skillsCovered.split(",").map(s => s.trim()).filter(Boolean) : []);
   }
-  if (status !== undefined) updatePayload.status = status;
+  if (status !== undefined) {
+    if (status === "published") {
+      const validation = await CourseService.validateCourseForPublishing(req.params.id);
+      if (!validation.valid) {
+        return res.status(422).json({
+          error: "Course does not satisfy publishing prerequisites",
+          issues: validation.issues,
+          validation
+        });
+      }
+    }
+    updatePayload.status = status;
+  }
   if (isFeatured !== undefined) updatePayload.isFeatured = !!isFeatured;
   if (certificateEnabled !== undefined) updatePayload.certificateEnabled = !!certificateEnabled;
   if (certificateTemplateId !== undefined) updatePayload.certificateTemplateId = certificateTemplateId || null;
@@ -4336,15 +4480,15 @@ app.put("/api/admin/assessments/:id", authenticateToken, async (req, res) => {
   const validArchitecturalTypes = ['lesson_practice', 'course_final', 'path_practice', 'path_final', 'standalone'];
   const payload: Record<string, any> = { updatedAt: new Date().toISOString() };
   if (title !== undefined) {
-    if (!title.trim()) {
+    if (!title || !title.trim()) {
       return res.status(400).json({ error: "Assessment title cannot be empty" });
     }
     payload.title = title.trim();
   }
-  if (description !== undefined) payload.description = description.trim();
-  if (shortDescription !== undefined) payload.shortDescription = shortDescription.trim();
-  if (instructions !== undefined) payload.instructions = instructions.trim();
-  if (category !== undefined) payload.category = category.trim();
+  if (description !== undefined) payload.description = description ? description.trim() : "";
+  if (shortDescription !== undefined) payload.shortDescription = shortDescription ? shortDescription.trim() : "";
+  if (instructions !== undefined) payload.instructions = instructions ? instructions.trim() : "";
+  if (category !== undefined) payload.category = category ? category.trim() : "General";
   if (difficulty !== undefined) payload.difficulty = difficulty;
   if (type !== undefined) {
     if (validArchitecturalTypes.includes(type)) {
@@ -7231,16 +7375,18 @@ app.post("/api/assessments/:id/submit", authenticateToken, async (req, res) => {
 
   // Find or resolve the attempt
   let attempt: any = null;
-  if (requestedAttemptId) {
+  if (requestedAttemptId && requestedAttemptId !== "pending") {
     attempt = await assessmentAttemptsDb.findOne({ id: requestedAttemptId });
     if (attempt && attempt.studentId !== studentId) {
       return res.status(403).json({ error: "Access denied: you cannot submit an attempt belonging to another student." });
     }
-    if (!attempt || attempt.assessmentId !== id) {
-      return res.status(400).json({ error: "Invalid attempt specified." });
+    if (attempt && attempt.assessmentId !== id) {
+      attempt = null;
     }
-  } else {
-    // Look for active in_progress attempt
+  }
+
+  if (!attempt) {
+    // Look for active in_progress attempt for this student and assessment
     const activeAttempts = await assessmentAttemptsDb.find({ assessmentId: id, studentId, status: "in_progress" });
     if (activeAttempts.length > 0) {
       attempt = activeAttempts[0];
@@ -7249,6 +7395,26 @@ app.post("/api/assessments/:id/submit", authenticateToken, async (req, res) => {
 
   if (attempt) {
     if (attempt.status === "submitted") {
+      const existingSubmission = await submissionsDb.findOne({ attemptId: attempt.id });
+      if (existingSubmission) {
+        const questions = await questionsDb.find({ assessmentId: id });
+        questions.sort((a, b) => (a.order || 0) - (b.order || 0));
+        return res.json({
+          submission: existingSubmission,
+          attempt,
+          questions,
+          score: existingSubmission.score,
+          totalPoints: existingSubmission.totalPoints,
+          percentage: existingSubmission.percentage,
+          correctCount: existingSubmission.correctCount,
+          incorrectCount: existingSubmission.incorrectCount,
+          unansweredCount: existingSubmission.unansweredCount,
+          passed: existingSubmission.passed,
+          status: "submitted",
+          alreadySubmitted: true,
+          message: "Assessment was already submitted."
+        });
+      }
       return res.status(400).json({ error: "This attempt has already been submitted. Duplicate submission rejected." });
     }
   } else {
@@ -7297,25 +7463,50 @@ app.post("/api/assessments/:id/submit", authenticateToken, async (req, res) => {
   let unansweredCount = 0;
 
   questions.forEach(q => {
-    const rawStudentAns = answers[q.id];
-    const studentAnswer = Array.isArray(rawStudentAns) 
-      ? rawStudentAns.filter(v => v !== null && v !== undefined && String(v).trim() !== "") 
-      : [];
-    const correctOnes = Array.isArray(q.correctAnswers) ? q.correctAnswers : [];
+    const rawStudentAns: any = (answers as any)[q.id];
+    let studentAnswer: string[] = [];
+    if (Array.isArray(rawStudentAns)) {
+      studentAnswer = rawStudentAns.filter(v => v !== null && v !== undefined && String(v).trim() !== "").map(String);
+    } else if (typeof rawStudentAns === "string" && rawStudentAns.trim() !== "") {
+      studentAnswer = [rawStudentAns.trim()];
+    }
+    const correctOnes: string[] = Array.isArray(q.correctAnswers) ? q.correctAnswers.map(String) : [];
 
     if (studentAnswer.length === 0) {
       unansweredCount++;
     } else {
-      const isCorrect = studentAnswer.length === correctOnes.length && 
-                        studentAnswer.every(val => correctOnes.includes(val));
-
-      if (isCorrect) {
+      const qType = String(q.type || "").toLowerCase();
+      if (qType === "subjective" || qType === "code") {
+        // Written subjective or coding answer provided
         earnedScore += q.points;
         correctCount++;
+      } else if (qType === "fill_blanks") {
+        // Fill in blanks: check case-insensitive match against any accepted answers
+        const isCorrect = correctOnes.length > 0
+          ? correctOnes.some(c => studentAnswer.some(a => String(a).toLowerCase().trim() === String(c).toLowerCase().trim()))
+          : true;
+        if (isCorrect) {
+          earnedScore += q.points;
+          correctCount++;
+        } else {
+          incorrectCount++;
+          if (q.negativePoints && q.negativePoints > 0) {
+            earnedScore -= q.negativePoints;
+          }
+        }
       } else {
-        incorrectCount++;
-        if (q.negativePoints && q.negativePoints > 0) {
-          earnedScore -= q.negativePoints;
+        // MCQ single, MCQ multi, True/False
+        const isCorrect = studentAnswer.length === correctOnes.length && 
+                          studentAnswer.every(val => correctOnes.includes(val));
+
+        if (isCorrect) {
+          earnedScore += q.points;
+          correctCount++;
+        } else {
+          incorrectCount++;
+          if (q.negativePoints && q.negativePoints > 0) {
+            earnedScore -= q.negativePoints;
+          }
         }
       }
     }
@@ -7526,22 +7717,36 @@ app.post("/api/assessments/:id/save-answers", authenticateToken, async (req, res
   const { id } = req.params;
   const { attemptId, answers } = req.body;
 
-  if (!attemptId || typeof answers !== "object") {
-    return res.status(400).json({ error: "Invalid attemptId or answers payload" });
+  if (typeof answers !== "object" || answers === null) {
+    return res.status(400).json({ error: "Invalid answers payload" });
   }
 
-  const attempt = await assessmentAttemptsDb.findOne({ id: attemptId });
-  if (!attempt || attempt.assessmentId !== id || attempt.studentId !== studentId) {
-    return res.status(403).json({ error: "Attempt not found or access denied" });
+  let attempt: any = null;
+  if (attemptId && attemptId !== "pending") {
+    attempt = await assessmentAttemptsDb.findOne({ id: attemptId });
+    if (attempt && (attempt.assessmentId !== id || attempt.studentId !== studentId)) {
+      attempt = null;
+    }
+  }
+
+  if (!attempt) {
+    const activeAttempts = await assessmentAttemptsDb.find({ assessmentId: id, studentId, status: "in_progress" });
+    if (activeAttempts.length > 0) {
+      attempt = activeAttempts[0];
+    }
+  }
+
+  if (!attempt) {
+    return res.status(200).json({ success: true, savedLocallyOnly: true });
   }
 
   if (attempt.status !== "in_progress") {
-    return res.status(400).json({ error: "Cannot save answers for an attempt that is not in progress" });
+    return res.status(200).json({ success: true, alreadyFinalized: true });
   }
 
   const now = Date.now();
   const expiresMs = new Date(attempt.expiresAt).getTime();
-  if (now > expiresMs + 15000) {
+  if (now > expiresMs + 30000) {
     await assessmentAttemptsDb.update(attempt.id, {
       status: "timed_out",
       updatedAt: new Date().toISOString()
@@ -7554,7 +7759,7 @@ app.post("/api/assessments/:id/save-answers", authenticateToken, async (req, res
     updatedAt: new Date().toISOString()
   });
 
-  return res.json({ success: true, savedAt: new Date().toISOString() });
+  return res.json({ success: true, savedAt: new Date().toISOString(), attemptId: attempt.id });
 });
 
 // Record proctoring events during active assessment
@@ -7563,13 +7768,27 @@ app.post("/api/assessments/:id/proctoring-event", authenticateToken, async (req,
   const { id } = req.params;
   const { attemptId, eventType, details, timestamp, severity } = req.body;
 
-  if (!attemptId || !eventType) {
-    return res.status(400).json({ error: "Missing attemptId or eventType" });
+  if (!eventType) {
+    return res.status(400).json({ error: "Missing eventType" });
   }
 
-  const attempt = await assessmentAttemptsDb.findOne({ id: attemptId });
-  if (!attempt || attempt.assessmentId !== id || attempt.studentId !== studentId) {
-    return res.status(403).json({ error: "Attempt not found or access denied" });
+  let attempt: any = null;
+  if (attemptId && attemptId !== "pending") {
+    attempt = await assessmentAttemptsDb.findOne({ id: attemptId });
+    if (attempt && (attempt.assessmentId !== id || attempt.studentId !== studentId)) {
+      attempt = null;
+    }
+  }
+
+  if (!attempt) {
+    const activeAttempts = await assessmentAttemptsDb.find({ assessmentId: id, studentId, status: "in_progress" });
+    if (activeAttempts.length > 0) {
+      attempt = activeAttempts[0];
+    }
+  }
+
+  if (!attempt) {
+    return res.json({ success: true, noted: true });
   }
 
   const currentEvents = Array.isArray(attempt.proctoringEvents) ? [...attempt.proctoringEvents] : [];

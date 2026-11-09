@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, Link } from "react-router-dom";
 import { 
   BookOpen, GraduationCap, Award, PenSquare, Users, 
   Settings, LogOut, Code, ShieldAlert, User as UserIcon, X, 
@@ -67,8 +67,9 @@ export function Sidebar({
   const { startTour, expandedSubmenuRequest, clearSubmenuRequest } = useTour();
 
   const isAdmin = userRole === UserRole.ADMIN || userRole === UserRole.SUPER_ADMIN;
+  const isStudent = userRole === UserRole.STUDENT;
 
-  // Compact sidebar state for desktop (persisted in localStorage, disabled for Admin Portal)
+  // Compact sidebar state for desktop (persisted in localStorage, disabled for Admin and Student Portals)
   const [internalCompact, setInternalCompact] = useState<boolean>(() => {
     try {
       return localStorage.getItem(SIDEBAR_COMPACT_KEY) === "true";
@@ -77,11 +78,11 @@ export function Sidebar({
     }
   });
 
-  const effectiveCompact = isAdmin ? false : (externalCompact !== undefined ? externalCompact : internalCompact);
+  const effectiveCompact = (isAdmin || isStudent) ? false : (externalCompact !== undefined ? externalCompact : internalCompact);
   const desktopWidth = isAdmin ? "280px" : (effectiveCompact ? "72px" : "260px");
 
   const toggleCompact = () => {
-    if (isAdmin) return; // Fixed width on desktop for Admin Portal
+    if (isAdmin || isStudent) return; // Fixed normal expanded width for Admin and Student Portals
     if (externalToggleCompact) {
       externalToggleCompact();
     } else {
@@ -397,6 +398,19 @@ export function Sidebar({
     }
   };
 
+  const dashboardPath = isAdmin 
+    ? "/admin/dashboard" 
+    : (userRole === UserRole.MANAGER ? "/manager/dashboard" : "/student/dashboard");
+
+  const dashboardItemId = isAdmin 
+    ? "admin-dashboard" 
+    : (userRole === UserRole.MANAGER ? "dashboard" : "dashboard");
+
+  const handleLogoClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    handleNavigate(dashboardPath, dashboardItemId);
+  };
+
   // Filter groups and items based on search query
   const filteredGroups = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -444,26 +458,26 @@ export function Sidebar({
         <div className="px-3 pt-3 pb-2 shrink-0">
           <div 
             style={{ 
-              backgroundColor: "var(--theme-sidebar-card)", 
-              borderColor: "var(--theme-sidebar-border)" 
+              backgroundColor: "rgba(255, 255, 255, 0.08)", 
+              borderColor: "rgba(255, 255, 255, 0.18)" 
             }}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl border focus-within:ring-2 focus-within:ring-[var(--theme-primary)] transition"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl border focus-within:ring-2 focus-within:ring-[var(--color-sidebar-active)] transition"
           >
-            <Search className="w-3.5 h-3.5 shrink-0 text-[var(--theme-sidebar-muted)]" />
+            <Search className="w-3.5 h-3.5 shrink-0 text-[var(--color-sidebar-muted)]" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Find a page..."
-              style={{ color: "var(--theme-text)" }}
-              className="w-full bg-transparent text-xs placeholder:text-[var(--theme-sidebar-muted)] focus:outline-none"
+              style={{ color: "var(--color-sidebar-foreground)" }}
+              className="w-full bg-transparent text-xs placeholder:text-[var(--color-sidebar-muted)] focus:outline-none"
               aria-label="Find a page in navigation"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery("")}
-                className="p-0.5 text-[var(--theme-sidebar-muted)] hover:text-[var(--theme-text)] transition cursor-pointer"
+                className="p-0.5 text-[var(--color-sidebar-muted)] hover:text-[var(--color-sidebar-foreground)] transition cursor-pointer"
                 aria-label="Clear search"
               >
                 <X className="w-3.5 h-3.5" />
@@ -477,10 +491,11 @@ export function Sidebar({
             type="button"
             onClick={toggleCompact}
             style={{ 
-              backgroundColor: "var(--theme-sidebar-card)", 
-              borderColor: "var(--theme-sidebar-border)" 
+              backgroundColor: "rgba(255, 255, 255, 0.08)", 
+              borderColor: "rgba(255, 255, 255, 0.18)",
+              color: "var(--color-sidebar-muted)"
             }}
-            className="p-2 rounded-xl border text-[var(--theme-sidebar-muted)] hover:text-[var(--theme-primary)] transition cursor-pointer"
+            className="p-2 rounded-xl border hover:text-white transition cursor-pointer"
             title="Search pages (Expand sidebar)"
             aria-label="Expand sidebar to search"
           >
@@ -493,15 +508,15 @@ export function Sidebar({
       <nav className="flex-1 px-3 py-2 space-y-4 overflow-y-auto custom-scrollbar">
         {filteredGroups.length === 0 ? (
           <div className="text-center py-8 px-2">
-            <Search className="w-6 h-6 mx-auto mb-2 text-[var(--theme-sidebar-muted)] opacity-60" />
-            <p className="text-xs font-semibold text-[var(--theme-sidebar-muted)]">No pages found</p>
-            <p className="text-[11px] text-[var(--theme-sidebar-muted)] opacity-75 mt-0.5">
+            <Search className="w-6 h-6 mx-auto mb-2 text-[var(--color-sidebar-muted)] opacity-60" />
+            <p className="text-xs font-semibold text-[var(--color-sidebar-foreground)]">No pages found</p>
+            <p className="text-[11px] text-[var(--color-sidebar-muted)] mt-0.5">
               No results for &ldquo;{searchQuery}&rdquo;
             </p>
             <button
               type="button"
               onClick={() => setSearchQuery("")}
-              className="mt-3 px-3 py-1 rounded-lg text-xs font-semibold border border-[var(--theme-sidebar-border)] bg-[var(--theme-sidebar-card)] hover:bg-[var(--theme-sidebar-hover)] text-[var(--theme-primary)] transition cursor-pointer"
+              className="mt-3 px-3 py-1 rounded-lg text-xs font-semibold border border-white/20 bg-white/10 hover:bg-white/20 text-white transition cursor-pointer"
             >
               Clear search
             </button>
@@ -513,16 +528,16 @@ export function Sidebar({
               {!compactView ? (
                 <div className="px-2 pt-2 pb-1 flex items-center justify-between">
                   <span 
-                    style={{ color: "var(--theme-sidebar-muted)" }}
+                    style={{ color: "var(--color-sidebar-muted)" }}
                     className="text-[10px] font-mono font-bold uppercase tracking-wider select-none flex items-center gap-1.5"
                   >
-                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--theme-primary)] opacity-40" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-sidebar-muted)] opacity-60" />
                     <span>{group.title}</span>
                   </span>
                 </div>
               ) : (
                 <div className="py-1 flex justify-center">
-                  <span className="w-1 h-1 rounded-full bg-[var(--theme-sidebar-border)]" />
+                  <span className="w-1 h-1 rounded-full bg-[var(--color-border)]" />
                 </div>
               )}
 
@@ -550,24 +565,24 @@ export function Sidebar({
                           }}
                           data-tour={item.dataTour}
                           style={{
-                            backgroundColor: isActive ? "var(--theme-primary-light)" : undefined,
-                            color: "var(--theme-text)",
-                            borderColor: isActive ? "var(--theme-primary)" : "transparent",
+                            backgroundColor: isActive ? "var(--color-sidebar-active)" : "transparent",
+                            color: isActive ? "var(--color-sidebar-active-foreground)" : "var(--color-sidebar-foreground)",
+                            borderColor: isActive ? "var(--color-sidebar-active)" : "transparent",
                           }}
                           className={`w-10 h-10 rounded-xl flex items-center justify-center border transition duration-150 cursor-pointer relative ${
-                            isActive ? "shadow-xs font-bold" : "hover:bg-[var(--theme-sidebar-hover)] hover:text-[var(--theme-text)]"
+                            isActive ? "shadow-xs font-bold" : "hover:bg-white/10 hover:text-white"
                           }`}
                           aria-label={item.label}
                           title={item.label}
                         >
                           <Icon 
-                            className="w-4 h-4 shrink-0" 
-                            style={{ color: isActive ? "var(--theme-primary)" : "var(--theme-sidebar-muted)" }} 
-                          />
+                              className="w-4 h-4 shrink-0"
+                              style={{ color: isActive && !hasChildren ? "var(--color-sidebar-active-foreground)" : "var(--color-sidebar-muted)" }}
+                            />
                           {isActive && (
                             <span 
                               className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r-full"
-                              style={{ backgroundColor: "var(--theme-primary)" }}
+                              style={{ backgroundColor: "var(--color-primary)" }}
                             />
                           )}
                         </button>
@@ -590,20 +605,20 @@ export function Sidebar({
                           }}
                           data-tour={item.dataTour}
                           style={{
-                            backgroundColor: isActive && !hasChildren ? "var(--theme-primary-light)" : undefined,
-                            color: "var(--theme-text)",
-                            borderColor: isActive && !hasChildren ? "var(--theme-primary)" : "transparent",
+                            backgroundColor: isActive && !hasChildren ? "var(--color-sidebar-active)" : "transparent",
+                            color: isActive && !hasChildren ? "var(--color-sidebar-active-foreground)" : "var(--color-sidebar-foreground)",
+                            borderColor: isActive && !hasChildren ? "var(--color-sidebar-active)" : "transparent",
                           }}
                           className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition duration-150 border cursor-pointer select-none ${
                             isActive && !hasChildren 
                               ? "shadow-2xs font-bold" 
-                              : "hover:bg-[var(--theme-sidebar-hover)] hover:text-[var(--theme-text)]"
+                              : "hover:bg-white/10 hover:text-white"
                           }`}
                         >
                           <div className="flex items-center gap-2.5 min-w-0">
                             <Icon 
                               className="w-4 h-4 shrink-0"
-                              style={{ color: isActive ? "var(--theme-primary)" : "var(--theme-sidebar-muted)" }}
+                              style={{ color: (isActive && !hasChildren) ? "var(--color-sidebar-active-foreground)" : "var(--color-sidebar-muted)" }}
                             />
                             <span className="truncate">{item.label}</span>
                           </div>
@@ -615,7 +630,7 @@ export function Sidebar({
                                 e.stopPropagation();
                                 toggleSubmenu(item.id);
                               }}
-                              className="p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/5 text-[var(--theme-sidebar-muted)] transition"
+                              className="p-1 rounded-md hover:bg-white/10 text-[var(--color-sidebar-muted)] transition"
                               aria-label={isExpanded ? "Collapse submenu" : "Expand submenu"}
                             >
                               {isExpanded ? (
@@ -627,8 +642,8 @@ export function Sidebar({
                           ) : item.badge ? (
                             <span 
                               style={{ 
-                                backgroundColor: "var(--theme-primary-light)", 
-                                color: "var(--theme-primary)" 
+                                backgroundColor: isActive ? "var(--color-sidebar-active-foreground)" : "rgba(255, 255, 255, 0.15)", 
+                                color: isActive ? "var(--color-sidebar-active)" : "var(--color-sidebar-foreground)" 
                               }}
                               className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full"
                             >
@@ -640,7 +655,7 @@ export function Sidebar({
 
                       {/* Submenu Child Items */}
                       {hasChildren && isExpanded && (
-                        <div className="ml-4 pl-2.5 my-1 border-l-2 border-[var(--theme-sidebar-border)] space-y-1 animate-in fade-in duration-150">
+                        <div className="ml-4 pl-2.5 my-1 border-l-2 border-white/20 space-y-1 animate-in fade-in duration-150">
                           {item.children!.map((child) => {
                             const isChildActive = isPathActive(child.path);
                             return (
@@ -650,19 +665,19 @@ export function Sidebar({
                                 onClick={() => handleNavigate(child.path, child.id)}
                                 data-tour={child.dataTour}
                                 style={{
-                                  backgroundColor: isChildActive ? "var(--theme-primary-light)" : undefined,
-                                  color: "var(--theme-text)",
+                                  backgroundColor: isChildActive ? "var(--color-sidebar-active)" : "transparent",
+                                  color: isChildActive ? "var(--color-sidebar-active-foreground)" : "var(--color-sidebar-foreground)",
                                   fontWeight: isChildActive ? "700" : "500",
                                 }}
                                 className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition duration-150 text-left cursor-pointer ${
                                   isChildActive 
-                                    ? "shadow-2xs" 
-                                    : "hover:bg-[var(--theme-sidebar-hover)] hover:text-[var(--theme-text)]"
+                                    ? "shadow-2xs font-bold" 
+                                    : "opacity-85 hover:opacity-100 hover:bg-white/10 hover:text-white"
                                 }`}
                               >
                                 <span 
                                   className={`w-1.5 h-1.5 rounded-full shrink-0 transition ${
-                                    isChildActive ? "bg-[var(--theme-primary)] scale-110" : "bg-[var(--theme-sidebar-muted)] opacity-40"
+                                    isChildActive ? "bg-[var(--color-sidebar-active-foreground)] scale-110" : "bg-[var(--color-sidebar-muted)] opacity-50"
                                   }`} 
                                 />
                                 <span className="leading-snug break-words">{child.label}</span>
@@ -680,10 +695,10 @@ export function Sidebar({
         )}
       </nav>
 
-      {/* Theme & Display Quick Controls Tier (Student & Manager only) */}
-      {!isAdmin && (
+      {/* Theme & Display Quick Controls Tier (Manager only - moved to header for Students) */}
+      {!isAdmin && !isStudent && (
         <div 
-          style={{ borderColor: "var(--theme-sidebar-border)" }}
+          style={{ borderColor: "var(--color-border)" }}
           className={`px-3 py-2 border-t shrink-0 flex ${compactView ? "justify-center" : "items-center justify-between"}`}
         >
           <ThemeQuickControls 
@@ -695,8 +710,8 @@ export function Sidebar({
 
       {/* Compact Bottom Utility Tier (Tour & Sign Out) */}
       <div 
-        style={{ borderColor: "var(--theme-sidebar-border)" }}
-        className="p-3 border-t shrink-0 space-y-2 bg-[var(--theme-sidebar)]"
+        style={{ borderColor: "var(--color-border)" }}
+        className="p-3 border-t shrink-0 space-y-2 bg-[var(--color-sidebar)]"
       >
         {/* Take a Tour */}
         <button
@@ -704,11 +719,11 @@ export function Sidebar({
           data-tour="sidebar-tour-launcher"
           onClick={() => startTour(true)}
           style={{ 
-            backgroundColor: "var(--theme-sidebar-card)", 
-            borderColor: "var(--theme-sidebar-border)",
-            color: "var(--theme-text)"
+            backgroundColor: "rgba(255, 255, 255, 0.08)", 
+            borderColor: "rgba(255, 255, 255, 0.15)",
+            color: "var(--color-sidebar-foreground)"
           }}
-          className={`w-full flex items-center ${compactView ? "justify-center p-2.5" : "justify-between px-3 py-2"} border rounded-xl hover:border-[var(--theme-primary)] hover:bg-[var(--theme-sidebar-hover)] transition group cursor-pointer shadow-2xs`}
+          className={`w-full flex items-center ${compactView ? "justify-center p-2.5" : "justify-between px-3 py-2"} border rounded-xl hover:bg-white/15 transition group cursor-pointer shadow-2xs`}
           title="Take an Interactive Product Tour"
           aria-label="Take an Interactive Product Tour"
         >
@@ -717,13 +732,13 @@ export function Sidebar({
             {!compactView && (
               <div className="text-left min-w-0">
                 <p className="text-xs font-bold leading-tight truncate">Take a Tour</p>
-                <p className="text-[10px] text-[var(--theme-sidebar-muted)] font-mono leading-tight">Interactive Guide</p>
+                <p className="text-[10px] text-[var(--color-sidebar-muted)] font-mono leading-tight">Interactive Guide</p>
               </div>
             )}
           </div>
           {!compactView && (
             <span 
-              style={{ backgroundColor: "var(--theme-primary-light)", color: "var(--theme-primary)" }}
+              style={{ backgroundColor: "var(--color-secondary)", color: "var(--color-primary)" }}
               className="text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded-md shrink-0"
             >
               Start
@@ -736,11 +751,11 @@ export function Sidebar({
           type="button"
           onClick={onLogout}
           style={{ 
-            backgroundColor: "var(--theme-sidebar-card)", 
-            borderColor: "var(--theme-sidebar-border)",
-            color: "var(--theme-sidebar-text)"
+            backgroundColor: "rgba(220, 38, 38, 0.15)", 
+            borderColor: "rgba(220, 38, 38, 0.35)",
+            color: "#fecaca"
           }}
-          className={`w-full flex items-center ${compactView ? "justify-center p-2.5" : "justify-center gap-2 px-3 py-2"} hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/20 border rounded-xl text-xs font-semibold transition duration-150 cursor-pointer shadow-2xs`}
+          className={`w-full flex items-center ${compactView ? "justify-center p-2.5" : "justify-center gap-2 px-3 py-2"} hover:bg-red-600 hover:text-white hover:border-red-600 border rounded-xl text-xs font-bold transition duration-150 cursor-pointer shadow-2xs`}
           title="Sign Out of MRTECHLMS"
           aria-label="Sign Out"
         >
@@ -748,13 +763,13 @@ export function Sidebar({
           {!compactView && <span>Sign Out</span>}
         </button>
 
-        {/* Compact Toggle on Desktop (ONLY for !isAdmin) */}
-        {!isAdmin && (
+        {/* Compact Toggle on Desktop (Disabled for Admin and Student Portals) */}
+        {!isAdmin && !isStudent && (
           <button
             type="button"
             onClick={toggleCompact}
-            style={{ color: "var(--theme-sidebar-muted)" }}
-            className="hidden lg:flex w-full items-center justify-center gap-1.5 py-1 text-[11px] font-medium hover:text-[var(--theme-text)] transition cursor-pointer"
+            style={{ color: "var(--color-sidebar-muted)" }}
+            className="hidden lg:flex w-full items-center justify-center gap-1.5 py-1 text-[11px] font-medium hover:text-[var(--color-sidebar-foreground)] transition cursor-pointer"
             aria-label={compactView ? "Expand navigation sidebar" : "Collapse navigation sidebar"}
             title={compactView ? "Expand navigation sidebar" : "Collapse navigation sidebar"}
           >
@@ -789,44 +804,50 @@ export function Sidebar({
             style={{ 
               width: "280px", 
               maxWidth: "85vw", 
-              backgroundColor: "var(--theme-sidebar)", 
-              color: "var(--theme-sidebar-text)",
-              borderColor: "var(--theme-sidebar-border)" 
+              backgroundColor: "var(--color-sidebar)", 
+              color: "var(--color-sidebar-text)",
+              borderColor: "var(--color-border)" 
             }}
             className="fixed inset-y-0 left-0 z-50 border-r flex flex-col h-full shadow-2xl select-none animate-in slide-in-from-left duration-200"
           >
             {/* Brand Header */}
             <div 
-              style={{ borderColor: "var(--theme-sidebar-border)" }}
+              style={{ borderColor: "var(--color-border)" }}
               className="p-4 border-b flex items-center justify-between shrink-0"
             >
-              <div className="flex items-center gap-2.5 min-w-0">
+              <Link
+                to={dashboardPath}
+                onClick={handleLogoClick}
+                aria-label={`MR TECHNOLOGIES ${userRole} Dashboard`}
+                className="flex items-center gap-2.5 min-w-0 group cursor-pointer rounded-xl p-1 -m-1 hover:bg-white/5 active:opacity-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
                 <img 
                   src="/mr-logo-icon.png" 
                   alt="MR Technologies" 
-                  className="w-8 h-8 object-contain shrink-0 drop-shadow-xs" 
+                  className="w-8 h-8 object-contain shrink-0 brand-logo-preserve transition-transform duration-150 group-hover:scale-105" 
+                  style={{ filter: "none", mixBlendMode: "normal", opacity: 1 }}
                 />
                 <div className="min-w-0">
                   <h1 
-                    style={{ color: "var(--theme-text)" }}
-                    className="font-bold text-sm tracking-tight leading-none truncate"
+                    style={{ color: "var(--color-sidebar-foreground)" }}
+                    className="font-bold text-sm tracking-tight leading-none truncate group-hover:opacity-95 transition-opacity"
                   >
                     MR TECHNOLOGIES
                   </h1>
                   <span 
-                    style={{ color: "var(--theme-sidebar-muted)" }}
+                    style={{ color: "var(--color-sidebar-muted)" }}
                     className="text-[9px] font-mono font-bold uppercase tracking-widest block mt-1 truncate capitalize"
                   >
                     {userRole} Portal • Medha
                   </span>
                 </div>
-              </div>
+              </Link>
 
               <button
                 type="button"
                 onClick={onMobileClose}
-                style={{ color: "var(--theme-sidebar-muted)" }}
-                className="p-1.5 rounded-lg hover:bg-[var(--theme-sidebar-hover)] hover:text-[var(--theme-text)] transition cursor-pointer"
+                style={{ color: "var(--color-sidebar-muted)" }}
+                className="p-1.5 rounded-lg hover:bg-white/10 hover:text-white transition cursor-pointer"
                 aria-label="Close sidebar"
               >
                 <X className="w-5 h-5" />
@@ -835,12 +856,12 @@ export function Sidebar({
 
             {/* User Profile Info */}
             <div 
-              style={{ backgroundColor: "var(--theme-sidebar-card)", borderColor: "var(--theme-sidebar-border)" }}
+              style={{ backgroundColor: "rgba(255, 255, 255, 0.05)", borderColor: "rgba(255, 255, 255, 0.12)" }}
               className="p-3.5 border-b flex items-center gap-3 shrink-0"
             >
               <div 
                 className="w-9 h-9 rounded-full border flex items-center justify-center font-bold text-sm shadow-xs shrink-0 overflow-hidden"
-                style={{ backgroundColor: "var(--theme-sidebar)", borderColor: "var(--theme-sidebar-border)", color: "var(--theme-sidebar-text)" }}
+                style={{ backgroundColor: "var(--color-button-primary)", borderColor: "rgba(255, 255, 255, 0.2)", color: "var(--color-button-primary-foreground)" }}
               >
                 {userAvatar ? (
                   <img src={userAvatar} alt={userName} className="w-full h-full object-cover" />
@@ -850,13 +871,13 @@ export function Sidebar({
               </div>
               <div className="min-w-0 flex-1">
                 <p 
-                  style={{ color: "var(--theme-text)" }}
+                  style={{ color: "var(--color-sidebar-foreground)" }}
                   className="text-xs font-bold truncate"
                 >
                   {userName}
                 </p>
                 <p 
-                  style={{ color: "var(--theme-text-muted)" }}
+                  style={{ color: "var(--color-sidebar-muted)" }}
                   className="text-[10px] truncate font-mono mt-0.5"
                 >
                   {userEmail}
@@ -876,48 +897,56 @@ export function Sidebar({
           width: desktopWidth, 
           minWidth: desktopWidth, 
           maxWidth: desktopWidth, 
-          backgroundColor: "var(--theme-sidebar)", 
-          color: "var(--theme-sidebar-text)",
-          borderColor: "var(--theme-sidebar-border)" 
+          backgroundColor: "var(--color-sidebar)", 
+          color: "var(--color-sidebar-text)",
+          borderColor: "var(--color-border)" 
         }}
         className="hidden lg:flex border-r flex-col h-screen sticky top-0 shrink-0 select-none z-30 transition-[width,min-width,max-width] duration-200 ease-in-out overflow-hidden"
       >
         {/* Brand Header */}
         <div 
-          style={{ borderColor: "var(--theme-sidebar-border)" }}
-          className={`p-4 border-b flex items-center shrink-0 ${effectiveCompact ? "justify-center" : "gap-3"}`}
+          style={{ borderColor: "var(--color-border)" }}
+          className="p-4 border-b flex items-center shrink-0"
         >
-          <img 
-            src="/mr-logo-icon.png" 
-            alt="MR Technologies" 
-            className="w-8 h-8 object-contain shrink-0 drop-shadow-xs" 
-          />
-          {!effectiveCompact && (
-            <div className="min-w-0 flex-1">
-              <h1 
-                style={{ color: "var(--theme-text)" }}
-                className="font-bold text-sm tracking-tight leading-none truncate"
-              >
-                MR TECHNOLOGIES
-              </h1>
-              <span 
-                style={{ color: "var(--theme-sidebar-muted)" }}
-                className="text-[9px] font-mono font-bold uppercase tracking-widest block mt-1 truncate capitalize"
-              >
-                {userRole} Portal • Medha
-              </span>
-            </div>
-          )}
+          <Link
+            to={dashboardPath}
+            onClick={handleLogoClick}
+            aria-label={`MR TECHNOLOGIES ${userRole} Dashboard`}
+            className={`flex items-center min-w-0 group cursor-pointer rounded-xl p-1 -m-1 hover:bg-white/5 active:opacity-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${effectiveCompact ? "justify-center w-full" : "gap-3 flex-1"}`}
+          >
+            <img 
+              src="/mr-logo-icon.png" 
+              alt="MR Technologies" 
+              className="w-8 h-8 object-contain shrink-0 brand-logo-preserve transition-transform duration-150 group-hover:scale-105" 
+              style={{ filter: "none", mixBlendMode: "normal", opacity: 1 }}
+            />
+            {!effectiveCompact && (
+              <div className="min-w-0 flex-1">
+                <h1 
+                  style={{ color: "var(--color-sidebar-foreground)" }}
+                  className="font-bold text-sm tracking-tight leading-none truncate group-hover:opacity-95 transition-opacity"
+                >
+                  MR TECHNOLOGIES
+                </h1>
+                <span 
+                  style={{ color: "var(--color-sidebar-muted)" }}
+                  className="text-[9px] font-mono font-bold uppercase tracking-widest block mt-1 truncate capitalize"
+                >
+                  {userRole} Portal • Medha
+                </span>
+              </div>
+            )}
+          </Link>
         </div>
 
         {/* User Status Profile */}
         <div 
-          style={{ backgroundColor: "var(--theme-sidebar-card)", borderColor: "var(--theme-sidebar-border)" }}
+          style={{ backgroundColor: "rgba(255, 255, 255, 0.05)", borderColor: "rgba(255, 255, 255, 0.12)" }}
           className={`p-3 border-b flex items-center shrink-0 ${effectiveCompact ? "justify-center" : "gap-3"}`}
         >
           <div 
             className="w-8 h-8 rounded-full border flex items-center justify-center font-bold text-xs shadow-xs shrink-0 overflow-hidden"
-            style={{ backgroundColor: "var(--theme-sidebar)", borderColor: "var(--theme-sidebar-border)", color: "var(--theme-sidebar-text)" }}
+            style={{ backgroundColor: "var(--color-button-primary)", borderColor: "rgba(255, 255, 255, 0.2)", color: "var(--color-button-primary-foreground)" }}
             title={`${userName} (${userEmail})`}
           >
             {userAvatar ? (
@@ -929,13 +958,13 @@ export function Sidebar({
           {!effectiveCompact && (
             <div className="min-w-0 flex-1">
               <p 
-                style={{ color: "var(--theme-text)" }}
+                style={{ color: "var(--color-sidebar-foreground)" }}
                 className="text-xs font-bold truncate leading-tight"
               >
                 {userName}
               </p>
               <p 
-                style={{ color: "var(--theme-text-muted)" }}
+                style={{ color: "var(--color-sidebar-muted)" }}
                 className="text-[10px] truncate font-mono mt-0.5 leading-tight"
               >
                 {userEmail}

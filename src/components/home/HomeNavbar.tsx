@@ -92,7 +92,8 @@ export function HomeNavbar({ onScrollTo }: HomeNavbarProps) {
               <img 
                 src="/mr-logo-icon.png" 
                 alt="MR Technologies Logo" 
-                className="w-8 h-8 sm:w-8.5 sm:h-8.5 2xl:w-9 2xl:h-9 object-contain shrink-0 transition-transform duration-200 group-hover:scale-105" 
+                className="w-8 h-8 sm:w-8.5 sm:h-8.5 2xl:w-9 2xl:h-9 object-contain shrink-0 transition-transform duration-200 group-hover:scale-105 brand-logo-preserve" 
+                style={{ filter: "none", mixBlendMode: "normal", opacity: 1 }}
               />
             </div>
             <div className="flex flex-col">

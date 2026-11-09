@@ -273,9 +273,14 @@ export function CodingCatalog({
           <img src="/mr-logo-icon.png" alt="" className="w-48 h-48 object-contain transform translate-x-12 translate-y-6" />
         </div>
         <div className="relative z-10 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-          <div className="space-y-2 max-w-2xl">
+          <div className="space-y-2 max-w-2xl flex-1 min-w-0">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-              <img src="/mr-logo-icon.png" alt="MR Logo" className="w-4 h-4 object-contain" />
+              <img 
+                src="/mr-logo-icon.png" 
+                alt="MR Logo" 
+                className="w-4 h-4 object-contain brand-logo-preserve" 
+                style={{ filter: "none", mixBlendMode: "normal", opacity: 1 }}
+              />
               <span>MR TECHNOLOGIES • Coding Practice & DSA Curriculum</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
@@ -312,43 +317,43 @@ export function CodingCatalog({
           </div>
 
           {/* Metrics Pills */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full lg:w-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4 gap-3 w-full lg:w-auto shrink-0 self-stretch sm:self-auto items-stretch">
             <div 
               style={{ backgroundColor: "var(--theme-bg-muted, #f8fafc)", borderColor: "var(--theme-border, #e2e8f0)" }}
-              className="p-3.5 rounded-xl border flex flex-col items-center justify-center text-center min-w-[100px]"
+              className="p-3 sm:p-3.5 rounded-xl border flex flex-col items-center justify-center text-center min-w-[105px] sm:min-w-[110px] shadow-2xs"
             >
-              <div className="text-2xl font-black text-slate-900 dark:text-white">{totalCount}</div>
-              <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mt-0.5">Problems</div>
+              <div className="text-2xl font-black text-slate-900 dark:text-white leading-none">{totalCount}</div>
+              <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mt-1 whitespace-nowrap">Problems</div>
             </div>
 
             <div 
               style={{ backgroundColor: "var(--theme-bg-muted, #f8fafc)", borderColor: "var(--theme-border, #e2e8f0)" }}
-              className="p-3.5 rounded-xl border flex flex-col items-center justify-center text-center min-w-[100px]"
+              className="p-3 sm:p-3.5 rounded-xl border flex flex-col items-center justify-center text-center min-w-[105px] sm:min-w-[110px] shadow-2xs"
             >
-              <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                <CheckCircle2 className="w-5 h-5" />
+              <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1.5 leading-none">
+                <CheckCircle2 className="w-5 h-5 shrink-0" />
                 <span>{solvedCount}</span>
               </div>
-              <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mt-0.5">Solved</div>
+              <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mt-1 whitespace-nowrap">Solved</div>
             </div>
 
             <div 
               style={{ backgroundColor: "var(--theme-bg-muted, #f8fafc)", borderColor: "var(--theme-border, #e2e8f0)" }}
-              className="p-3.5 rounded-xl border flex flex-col items-center justify-center text-center min-w-[100px]"
+              className="p-3 sm:p-3.5 rounded-xl border flex flex-col items-center justify-center text-center min-w-[105px] sm:min-w-[110px] shadow-2xs"
             >
-              <div className="text-2xl font-black text-amber-500 flex items-center gap-1">
-                <Clock className="w-5 h-5" />
+              <div className="text-2xl font-black text-amber-500 flex items-center justify-center gap-1.5 leading-none">
+                <Clock className="w-5 h-5 shrink-0" />
                 <span>{inProgressCount}</span>
               </div>
-              <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mt-0.5">In Progress</div>
+              <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mt-1 whitespace-nowrap">In Progress</div>
             </div>
 
             <div 
               style={{ backgroundColor: "var(--theme-bg-muted, #f8fafc)", borderColor: "var(--theme-border, #e2e8f0)" }}
-              className="p-3.5 rounded-xl border flex flex-col items-center justify-center text-center min-w-[100px]"
+              className="p-3 sm:p-3.5 rounded-xl border flex flex-col items-center justify-center text-center min-w-[105px] sm:min-w-[110px] shadow-2xs"
             >
-              <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{successRate}%</div>
-              <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mt-0.5">Success Rate</div>
+              <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400 leading-none">{successRate}%</div>
+              <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mt-1 whitespace-nowrap">Success Rate</div>
             </div>
           </div>
         </div>

@@ -91,6 +91,7 @@ function AppWithTheme() {
               <Route path="learning-path/:pathId" element={<Navigate to="/student/courses" replace />} />
               <Route path="certificates" element={<StudentCertificatesPage />} />
               <Route path="assessments" element={<AssessmentsPage />} />
+              <Route path="assessments/:assessmentId" element={<AssessmentViewerPage />} />
               <Route path="assessment" element={<Navigate to="/student/assessments" replace />} />
               <Route path="assessment/:assessmentId" element={<AssessmentViewerPage />} />
               <Route path="coding-practice" element={<CodingPracticePage />} />

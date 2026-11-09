@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { 
   BookOpen, Layers, Video, FileText, Award, Users, CheckCircle2, 
-  AlertCircle, Trash2, Plus, Edit3, Save, Upload, Eye, ArrowLeft, 
+  AlertCircle, Trash2, Plus, Edit3, Save, Upload, Eye, ArrowLeft, ArrowRight,
   ExternalLink, Clock, HelpCircle, X, ChevronDown, ChevronRight, 
   MoveUp, MoveDown, File, Play, Sparkles, Check, CheckSquare, 
   Square, CircleDot, Circle, RefreshCw, Download, FileSpreadsheet,
@@ -15,7 +15,9 @@ import {
 import { Course, Module, Lesson, LessonType, Assessment, Question, QuestionType, User, UserRole } from "../../types.js";
 import { useToast, useConfirm } from "../../context/NotificationContext.js";
 import { AssessmentExcelImportModal } from "./AssessmentExcelImportModal.js";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import { parseYouTubeVideo } from "../../utils/youtube.js";
+import { ThemeQuickControls } from "../ThemeQuickControls.js";
 
 export type StudioStep = "info" | "curriculum" | "assessments" | "publish" | "access";
 
@@ -37,6 +39,7 @@ export function CourseAuthoringStudio({
   const toast = useToast();
   const confirm = useConfirm();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const [currentCourseId, setCurrentCourseId] = useState<string | null>(
     initialCourseId && initialCourseId !== "new" ? initialCourseId : null
@@ -84,10 +87,11 @@ export function CourseAuthoringStudio({
 
   const [loading, setLoading] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
-  const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [isPublishing, setIsPublishing] = useState<boolean>(false);
 
   // Course Information Form
   const [courseTitle, setCourseTitle] = useState("");
+  const [courseInstructorName, setCourseInstructorName] = useState("");
   const [courseShortDesc, setCourseShortDesc] = useState("");
   const [courseDescription, setCourseDescription] = useState("");
   const [courseCategory, setCourseCategory] = useState("Web Development");
@@ -190,13 +194,11 @@ export function CourseAuthoringStudio({
   const [assignSearch, setAssignSearch] = useState<string>("");
 
   const showToast = (text: string, type: "success" | "error" = "success") => {
-    setToastMessage({ type, text });
     if (type === "success") {
       toast.success(text);
     } else {
       toast.error(text);
     }
-    setTimeout(() => setToastMessage(null), 4000);
   };
 
   // Load Course Details if editing
@@ -211,6 +213,7 @@ export function CourseAuthoringStudio({
 
       const c: Course = data.course;
       setCourseTitle(c.title || "");
+      setCourseInstructorName(c.instructorName || "");
       setCourseShortDesc(c.shortDescription || "");
       setCourseDescription(c.description || "");
       setCourseCategory(c.category || "General");
@@ -334,21 +337,17 @@ export function CourseAuthoringStudio({
         }
         const created: Course = await res.json();
         setCurrentCourseId(created.id);
-        showToast("Course created successfully as Draft! Now build your curriculum.", "success");
+        showToast("Course created successfully. Complete the course setup and publish it to make it available to students.", "success");
         if (onCourseSaved) onCourseSaved(created);
 
-        const targetStep = nextTab !== undefined ? nextTab : "curriculum";
+        const targetStep = nextTab !== undefined && nextTab !== null ? nextTab : "curriculum";
         const action = searchParams.get("action") || (initialCourseId === "new" ? "new" : null);
-        const newParams: Record<string, string> = { courseId: created.id, step: targetStep || "info" };
+        const newParams: Record<string, string> = { courseId: created.id, step: targetStep };
         if (action) {
           newParams.action = action;
         }
-        if (targetStep) {
-          setActiveTabState(targetStep);
-          setSearchParams(newParams, { replace: true });
-        } else {
-          setSearchParams(newParams, { replace: true });
-        }
+        setActiveTabState(targetStep);
+        setSearchParams(newParams, { replace: true });
         return created.id;
       } else {
         // Update existing course
@@ -430,7 +429,7 @@ export function CourseAuthoringStudio({
     { id: "info", number: 1, title: "1. Course Information", shortTitle: "Info", icon: BookOpen },
     { id: "curriculum", number: 2, title: "2. Curriculum & Content Builder", shortTitle: "Curriculum", icon: Layers },
     { id: "assessments", number: 3, title: "3. Practice Tests & Exam Studio", shortTitle: "Practice Tests", icon: Award },
-    { id: "publish", number: 4, title: "4. Review & Publish", shortTitle: "Review & Publish", icon: CheckCircle2 },
+    { id: "publish", number: 4, title: "4. Review & Publish (Mandatory)", shortTitle: "Review & Publish", icon: CheckCircle2 },
     { id: "access", number: 5, title: "5. Student Access Allocation", shortTitle: "Access", icon: Users }
   ];
 
@@ -799,7 +798,8 @@ export function CourseAuthoringStudio({
 
   // Publish Course with Verification Guard
   const handlePublishCourse = async (incrementVersion = false) => {
-    if (!currentCourseId) return;
+    if (!currentCourseId || isPublishing) return;
+    setIsPublishing(true);
     try {
       const res = await fetch(`/api/admin/courses/${currentCourseId}/publish`, {
         method: "POST",
@@ -813,20 +813,28 @@ export function CourseAuthoringStudio({
       if (!res.ok) {
         setValidationResults({ 
           valid: false, 
-          issues: data.issues || [data.error], 
+          issues: data.issues || [data.error || "Publishing validation failed"], 
           moduleCount: modules.length, 
           lessonCount: totalLessons 
         });
         throw new Error(data.error || "Publishing validation failed");
       }
-      showToast("Course successfully published to active student catalog!", "success");
+      showToast("Course published successfully! It is now live and available to students.", "success");
       setCourseStatus("published");
       if (data.course) {
         setCourseVersion(data.course.version || 1);
       }
-      loadCourse(currentCourseId);
+      setValidationResults({
+        valid: true,
+        issues: [],
+        moduleCount: modules.length,
+        lessonCount: totalLessons
+      });
+      await loadCourse(currentCourseId);
     } catch (e: any) {
       showToast(e.message || "Publishing failed", "error");
+    } finally {
+      setIsPublishing(false);
     }
   };
 
@@ -1210,6 +1218,10 @@ export function CourseAuthoringStudio({
   // PUBLISH / DRAFT TOGGLE
   const handleUpdateCourseStatus = async (newStatus: "draft" | "review" | "published" | "archived") => {
     if (!currentCourseId) return;
+    if (newStatus === "published") {
+      // If publishing, route to handlePublishCourse to enforce validation
+      return handlePublishCourse(bumpVersionOnPublish);
+    }
     try {
       const res = await fetch(`/api/admin/courses/${currentCourseId}`, {
         method: "PUT",
@@ -1219,9 +1231,12 @@ export function CourseAuthoringStudio({
         },
         body: JSON.stringify({ status: newStatus })
       });
-      if (!res.ok) throw new Error("Failed to update status");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to update status");
+      }
       setCourseStatus(newStatus);
-      showToast(`Course is now ${newStatus.toUpperCase()}`);
+      showToast(`Course status updated to ${newStatus.toUpperCase()}`, "success");
       loadCourse(currentCourseId);
     } catch (err: any) {
       showToast(err.message || "Status error", "error");
@@ -1255,103 +1270,143 @@ export function CourseAuthoringStudio({
 
   return (
     <div className="bg-slate-50 min-h-screen text-slate-800 pb-16">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-xl shadow-lg border flex items-center gap-2.5 text-xs font-semibold animate-in slide-in-from-top duration-200 ${
-          toastMessage.type === "success" 
-            ? "bg-emerald-50 border-emerald-200 text-emerald-800" 
-            : "bg-rose-50 border-rose-200 text-rose-800"
-        }`}>
-          {toastMessage.type === "success" ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertCircle className="w-4 h-4 text-rose-600" />}
-          <span>{toastMessage.text}</span>
-        </div>
-      )}
-
       {/* Top Authoring Header */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 sticky top-0 z-40 px-4 sm:px-6 py-3.5 sm:py-4 shadow-xs">
-        <div className="max-w-[1600px] w-full mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
+      <header className="bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 sticky top-0 z-40 px-4 sm:px-6 py-3.5 shadow-xs transition-colors">
+        <div className="max-w-[1700px] w-full mx-auto flex flex-col xl:flex-row xl:items-center justify-between gap-3.5 xl:gap-6">
+          
+          {/* LEFT SECTION: Back Button, Full Title, Status Badge, Instructor & Course Metadata */}
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
             <button
               onClick={onBack}
-              className="px-3 py-1.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl transition cursor-pointer shrink-0 flex items-center gap-1.5 text-xs font-semibold"
-              title={backButtonLabel || (searchParams.get("action") === "content" ? "Return to course selection" : "Return to courses list")}
-              aria-label={backButtonLabel || (searchParams.get("action") === "content" ? "Return to course selection" : "Return to courses list")}
+              type="button"
+              className="h-10 px-3.5 text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 rounded-xl transition cursor-pointer shrink-0 flex items-center gap-2 text-xs font-semibold shadow-2xs"
+              title={backButtonLabel || (searchParams.get("action") === "content" ? "Return to course selection" : "Return to course catalog")}
+              aria-label={backButtonLabel || (searchParams.get("action") === "content" ? "Return to course selection" : "Return to course catalog")}
             >
-              <ArrowLeft className="w-4 h-4 shrink-0" />
-              <span className="hidden sm:inline">{backButtonLabel || (searchParams.get("action") === "content" ? "Back to Course Selection" : "Back to Courses")}</span>
+              <ArrowLeft className="w-4 h-4 shrink-0 text-slate-500 dark:text-slate-400" />
+              <span className="hidden sm:inline font-medium">
+                {backButtonLabel || (searchParams.get("action") === "content" ? "Back to Course Selection" : "Back to Course Catalog")}
+              </span>
             </button>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2 min-w-0">
+
+            <div className="hidden sm:block h-8 w-[1px] bg-slate-200 dark:bg-slate-800 shrink-0" />
+
+            <div className="min-w-0 flex-1 flex flex-col justify-center">
+              {/* Row 1: Course Title + Status Badge */}
+              <div className="flex items-center gap-2.5 min-w-0">
                 <h1 
-                  className="text-base sm:text-lg font-bold text-slate-900 dark:text-white truncate max-w-xl xl:max-w-2xl"
+                  className="text-base sm:text-lg font-bold text-slate-900 dark:text-white truncate tracking-tight"
                   title={courseTitle ? courseTitle : "New Course Authoring Studio"}
                 >
                   {courseTitle ? courseTitle : "New Course Authoring Studio"}
                 </h1>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono uppercase tracking-wider shrink-0 ${
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono uppercase tracking-wider shrink-0 border shadow-2xs ${
                   courseStatus === "published"
-                    ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                    ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
                     : courseStatus === "draft"
-                    ? "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
-                    : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+                    ? "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
                 }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${courseStatus === "published" ? "bg-emerald-500" : courseStatus === "draft" ? "bg-amber-500 animate-pulse" : "bg-slate-400"}`} />
                   {courseStatus}
                 </span>
               </div>
-              <p className="text-xs text-slate-400 dark:text-slate-500 font-medium truncate">
-                Admin Course Authoring & Learning Path Builder
-              </p>
+
+              {/* Row 2: Instructor / Owner Info and Course Category */}
+              <div className="flex items-center gap-2 sm:gap-3 text-xs text-slate-500 dark:text-slate-400 font-medium truncate mt-0.5">
+                {courseInstructorName && (
+                  <span className="flex items-center gap-1.5 truncate">
+                    <span className="text-slate-400 dark:text-slate-500">Instructor:</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300 truncate">{courseInstructorName}</span>
+                  </span>
+                )}
+                {courseInstructorName && courseCategory && (
+                  <span className="text-slate-300 dark:text-slate-700">•</span>
+                )}
+                {courseCategory && (
+                  <span className="truncate">{courseCategory}</span>
+                )}
+                {courseEstimatedDuration && (
+                  <>
+                    <span className="text-slate-300 dark:text-slate-700 hidden md:inline">•</span>
+                    <span className="hidden md:inline text-slate-400 dark:text-slate-500">{courseEstimatedDuration}</span>
+                  </>
+                )}
+                {!courseInstructorName && !courseCategory && (
+                  <span>Admin Course Authoring Studio & Curriculum Studio</span>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Quick Metrics & Actions */}
-          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 shrink-0 w-full md:w-auto justify-start md:justify-end">
+          {/* RIGHT SECTION: Modules, Lessons, Tests Stats, Publish Action, Save Changes */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 shrink-0 justify-start xl:justify-end">
             {currentCourseId && (
-              <div className="hidden lg:flex items-center gap-3 text-xs font-mono text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-200/60 dark:border-slate-700/60 whitespace-nowrap">
-                <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-200">
+              <div className="flex items-center gap-2 sm:gap-3 text-xs font-mono text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/80 px-3 h-10 rounded-xl border border-slate-200 dark:border-slate-700/80 whitespace-nowrap shadow-2xs">
+                <span className="flex items-center gap-1.5 font-semibold text-slate-700 dark:text-slate-200" title={`${modules.length} Modules in course`}>
                   <Layers className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                  {modules.length} Modules
+                  <span>{modules.length} <span className="font-normal text-slate-500">Mod</span></span>
                 </span>
                 <span className="text-slate-300 dark:text-slate-600">|</span>
-                <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-200">
+                <span className="flex items-center gap-1.5 font-semibold text-slate-700 dark:text-slate-200" title={`${totalLessons} Lessons in curriculum`}>
                   <Video className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                  {totalLessons} Lessons
+                  <span>{totalLessons} <span className="font-normal text-slate-500">Les</span></span>
                 </span>
                 <span className="text-slate-300 dark:text-slate-600">|</span>
-                <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-200">
+                <span className="flex items-center gap-1.5 font-semibold text-slate-700 dark:text-slate-200" title={`${assessments.length} Tests (${totalQuestions} Questions)`}>
                   <Award className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                  {assessments.length} Tests ({totalQuestions} Qs)
+                  <span>{assessments.length} <span className="font-normal text-slate-500">Tests</span></span>
                 </span>
               </div>
             )}
 
             {currentCourseId && (
               <button
-                onClick={() => handleUpdateCourseStatus(courseStatus === "published" ? "draft" : "published")}
-                className={`px-3 py-2 text-xs font-bold rounded-xl border transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                type="button"
+                onClick={() => {
+                  if (courseStatus === "published") {
+                    handleUpdateCourseStatus("draft");
+                  } else if (activeTab === "publish") {
+                    handlePublishCourse(bumpVersionOnPublish);
+                  } else {
+                    setActiveTab("publish");
+                  }
+                }}
+                disabled={isPublishing}
+                className={`h-10 px-3.5 text-xs font-bold rounded-xl border transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-2xs disabled:opacity-50 shrink-0 ${
                   courseStatus === "published"
-                    ? "bg-amber-50 dark:bg-amber-950/50 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 hover:bg-amber-100"
-                    : "bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
+                    ? "bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/40 border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300"
+                    : "bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white shadow-emerald-600/20"
                 }`}
               >
                 <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                <span>{courseStatus === "published" ? "Unpublish to Draft" : "Publish Course"}</span>
+                <span>
+                  {courseStatus === "published"
+                    ? "Unpublish to Draft"
+                    : activeTab === "publish"
+                    ? isPublishing
+                      ? "Publishing..."
+                      : "Publish Now"
+                    : "Publish Course"}
+                </span>
               </button>
             )}
 
             <button
+              type="button"
               onClick={() => handleSaveCourseInfo(null)}
               disabled={saving}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-blue-500/10 cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
+              className="h-10 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-2 shadow-xs shadow-blue-500/20 cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
             >
               <Save className="w-3.5 h-3.5 shrink-0" />
               <span>{saving ? "Saving..." : currentCourseId ? "Save Changes" : "Create Course"}</span>
             </button>
+            <ThemeQuickControls onOpenPreferences={() => navigate("/admin/profile")} />
           </div>
         </div>
 
         {/* Studio Navigation Stepper (5-Step Workflow) */}
-        <div className="max-w-[1600px] w-full mx-auto mt-3 sm:mt-4 border-t border-slate-100 dark:border-slate-800 pt-3">
+        <div className="max-w-[1700px] w-full mx-auto mt-3 border-t border-slate-100 dark:border-slate-800 pt-3">
           <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pb-1 min-w-0">
             {STEPS.map((s, idx) => {
               const isActive = activeTab === s.id;
@@ -1427,14 +1482,14 @@ export function CourseAuthoringStudio({
                     )}
 
                     {s.id === "publish" && (
-                      <span className={`px-1.5 py-0.2 rounded-md text-[9.5px] uppercase font-mono shrink-0 ${
+                      <span className={`px-1.5 py-0.2 rounded-md text-[9.5px] uppercase font-bold shrink-0 ${
                         isActive
                           ? "bg-white/20 text-white"
                           : courseStatus === "published"
                           ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
                           : "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"
                       }`}>
-                        {courseStatus}
+                        {courseStatus === "published" ? "✓ Live" : "Mandatory"}
                       </span>
                     )}
 
@@ -1456,10 +1511,73 @@ export function CourseAuthoringStudio({
             })}
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Main Studio Body */}
       <div className="max-w-[1600px] w-full mx-auto px-4 sm:px-6 pt-6">
+
+        {/* Workflow Lifecycle & Mandatory Publishing Banner */}
+        {currentCourseId && (
+          courseStatus === "published" ? (
+            <div className="mb-6 p-4 rounded-2xl bg-emerald-50/90 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex flex-col md:flex-row md:items-center justify-between gap-3 text-emerald-900 dark:text-emerald-100 shadow-2xs">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/60 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm">Course Is Published & Live (v{courseVersion})</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-emerald-200 uppercase tracking-wide">Live</span>
+                  </div>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">
+                    This course is active in the student catalog. Enrolled learners can access modules, lessons, and take assessments.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {activeTab !== "access" && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("access")}
+                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                  >
+                    <span>Manage Student Access (Step 5)</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="mb-6 p-4 rounded-2xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex flex-col md:flex-row md:items-center justify-between gap-3 text-amber-900 dark:text-amber-100 shadow-2xs">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/60 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm">Course In Draft Mode — Publishing Required</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 uppercase tracking-wide">Draft</span>
+                  </div>
+                  <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                    This course is hidden from students. Complete content setup and publish in <strong>Step 4: Review & Publish</strong> to make it accessible to learners.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {activeTab !== "publish" && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("publish")}
+                    className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                  >
+                    <span>Proceed to Step 4: Publish Course</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        )}
 
         {/* ======================================================== */}
         {/* TAB 1: COURSE INFORMATION                                 */}
@@ -2501,15 +2619,74 @@ export function CourseAuthoringStudio({
               </div>
 
               {/* Primary Publish Action */}
-              <button
-                type="button"
-                onClick={() => handlePublishCourse(bumpVersionOnPublish)}
-                disabled={saving || validating || !currentCourseId}
-                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-sm shadow-emerald-500/20 cursor-pointer disabled:opacity-50"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Publish Course to Active Catalog (Enrolled Students Can Access)</span>
-              </button>
+              {courseStatus === "published" ? (
+                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                    <div>
+                      <h5 className="font-bold text-xs text-emerald-900">Course Is Live & Published (v{courseVersion})</h5>
+                      <p className="text-[11px] text-emerald-700 mt-0.5">
+                        Students can now access this course. You can manage access in Step 5 or publish an updated version.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("access")}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <span>Manage Student Access (Step 5)</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handlePublishCourse(bumpVersionOnPublish)}
+                      disabled={isPublishing || validating}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isPublishing ? "animate-spin" : ""}`} />
+                      <span>{isPublishing ? "Publishing Update..." : "Publish Update"}</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {validationResults && !validationResults.valid && (
+                    <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span className="font-semibold">Publishing blocked: Complete the {validationResults.issues.length} missing curriculum requirement(s) first.</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("curriculum")}
+                        className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-lg shrink-0 cursor-pointer transition"
+                      >
+                        Go to Step 2: Add Content →
+                      </button>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handlePublishCourse(bumpVersionOnPublish)}
+                    disabled={saving || validating || isPublishing || !currentCourseId || (validationResults !== null && !validationResults.valid)}
+                    className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-sm shadow-emerald-500/20 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isPublishing ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Publishing Course to Student Catalog...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Publish Course to Active Catalog (Make Live to Students)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
 
               {/* Secondary Status Buttons */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
@@ -2576,6 +2753,28 @@ export function CourseAuthoringStudio({
         {/* ======================================================== */}
         {activeTab === "access" && (
           <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Draft Warning Banner */}
+            {courseStatus !== "published" && (
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                  <div>
+                    <h5 className="font-bold text-xs">Publishing Required for Student Portal Access</h5>
+                    <p className="text-[11px] text-amber-700 mt-0.5">
+                      This course is currently in <strong>Draft</strong> mode. While you can assign students and cohorts now, enrolled learners cannot view or start this course until you publish it in Step 4.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("publish")}
+                  className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shrink-0 cursor-pointer shadow-xs"
+                >
+                  <span>Publish in Step 4</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
             {/* STATS METRIC SUMMARY BAR */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
@@ -3307,14 +3506,27 @@ export function CourseAuthoringStudio({
                 <span>{accessMatrix.length} total roster records</span>
               </div>
 
-              <button
-                type="button"
-                onClick={onBack}
-                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-sm shadow-emerald-500/20 cursor-pointer"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Finish & Return to Course Catalog</span>
-              </button>
+              <div className="flex items-center gap-2">
+                {courseStatus !== "published" ? (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("publish")}
+                    className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-sm shadow-amber-500/20 cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Proceed to Step 4: Publish Course (Mandatory)</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onBack}
+                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-sm shadow-emerald-500/20 cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Finish & Return to Course Catalog</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -3525,11 +3737,22 @@ export function CourseAuthoringStudio({
                       </label>
                     </div>
 
-                    {lessonVideoUrl && (
-                      <div className="text-[11px] text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg font-mono">
-                        ✓ Video attached: {lessonVideoUrl}
-                      </div>
-                    )}
+                    {lessonVideoUrl && (() => {
+                      const yt = parseYouTubeVideo(lessonVideoUrl);
+                      if (yt.isValid && yt.videoId) {
+                        return (
+                          <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg font-mono flex items-center justify-between">
+                            <span>✓ Valid YouTube Video (ID: {yt.videoId})</span>
+                            <span className="text-[10px] text-emerald-600 font-sans">Embedded player active</span>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg font-mono">
+                          ✓ Video attached: {lessonVideoUrl}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
 

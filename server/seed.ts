@@ -222,6 +222,7 @@ export async function initializeDatabase() {
       status ENUM('in_progress', 'submitted', 'timed_out', 'abandoned') NOT NULL DEFAULT 'in_progress',
       questionOrder JSON NULL,
       answers JSON NULL,
+      proctoringEvents JSON NULL,
       score INT NULL,
       totalPoints INT NULL,
       percentage DECIMAL(5,2) NULL,

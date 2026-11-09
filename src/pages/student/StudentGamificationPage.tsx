@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useToast } from "../../context/NotificationContext.js";
 import { useAuth } from "../../context/AuthContext.js";
+import { ThemeQuickControls } from "../../components/ThemeQuickControls.js";
 
 interface GamificationOverview {
   isEnabled: boolean;
@@ -409,30 +410,33 @@ export function StudentGamificationPage({ defaultTab = "overview" }: StudentGami
           </button>
         </div>
 
-        {/* Privacy Anonymity Switch */}
-        <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl text-xs">
-          {overview.profile.leaderboardAnonymous ? (
-            <EyeOff className="w-4 h-4 text-purple-500" />
-          ) : (
-            <Eye className="w-4 h-4 text-slate-500" />
-          )}
-          <span className="text-slate-700 dark:text-slate-300">
-            {overview.profile.leaderboardAnonymous ? "Anonymous on Leaderboard" : "Visible Real Name"}
-          </span>
-          <button
-            type="button"
-            disabled={updatingPrivacy}
-            onClick={() => handleTogglePrivacy(!overview.profile.leaderboardAnonymous)}
-            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ml-1 ${
-              overview.profile.leaderboardAnonymous ? "bg-purple-600" : "bg-slate-300 dark:bg-slate-600"
-            }`}
-          >
-            <span
-              className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-                overview.profile.leaderboardAnonymous ? "translate-x-4" : "translate-x-1"
+        {/* Controls: Privacy Anonymity Switch & Theme Controls */}
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl text-xs">
+            {overview.profile.leaderboardAnonymous ? (
+              <EyeOff className="w-4 h-4 text-purple-500" />
+            ) : (
+              <Eye className="w-4 h-4 text-slate-500" />
+            )}
+            <span className="text-slate-700 dark:text-slate-300">
+              {overview.profile.leaderboardAnonymous ? "Anonymous" : "Public Name"}
+            </span>
+            <button
+              type="button"
+              disabled={updatingPrivacy}
+              onClick={() => handleTogglePrivacy(!overview.profile.leaderboardAnonymous)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ml-1 ${
+                overview.profile.leaderboardAnonymous ? "bg-purple-600" : "bg-slate-300 dark:bg-slate-600"
               }`}
-            />
-          </button>
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                  overview.profile.leaderboardAnonymous ? "translate-x-4" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
+          <ThemeQuickControls />
         </div>
       </div>
 

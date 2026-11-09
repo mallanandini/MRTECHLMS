@@ -29,11 +29,11 @@ export function AdminAssessmentsPage() {
   const toast = useToast();
   const confirm = useConfirm();
 
-  // Category & Filter State
+  // Category & Filter State - default to "all" so admin immediately sees full catalog
   const [categories, setCategories] = useState<string[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState<string>("");
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [activeCategory, setActiveCategory] = useState<string | null>("all");
   const [categoryValidationError, setCategoryValidationError] = useState<string | null>(null);
 
   // Assessments Data State
@@ -73,10 +73,6 @@ export function AdminAssessmentsPage() {
       setLoadingCategories(false);
     }
   }, [authToken]);
-
-  useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
 
   // 2. Fetch assessments for a specific category (or all if specified)
   const loadAssessmentsForCategory = useCallback(async (cat: string) => {
@@ -118,23 +114,24 @@ export function AdminAssessmentsPage() {
     }
   }, [authToken, toast]);
 
+  useEffect(() => {
+    fetchCategories();
+    loadAssessmentsForCategory("all");
+  }, [fetchCategories, loadAssessmentsForCategory]);
+
   // 3. Handle GO button
   const handleGo = () => {
-    if (!selectedCategory || !selectedCategory.trim()) {
-      setCategoryValidationError("Please select a category.");
-      toast.warning("Please select a category.");
-      return;
-    }
+    const cat = selectedCategory || "all";
     setCategoryValidationError(null);
-    setActiveCategory(selectedCategory);
-    loadAssessmentsForCategory(selectedCategory);
+    setActiveCategory(cat);
+    loadAssessmentsForCategory(cat);
   };
 
   // 4. Handle CLEAR button
   const handleClear = () => {
-    setSelectedCategory("");
-    setActiveCategory(null);
-    setAssessments([]);
+    setSelectedCategory("all");
+    setActiveCategory("all");
+    loadAssessmentsForCategory("all");
     setCategoryValidationError(null);
     setSearchQuery("");
     setStatusFilter("all");
@@ -388,7 +385,7 @@ export function AdminAssessmentsPage() {
                     : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
                 }`}
               >
-                <option value="">Choose a category...</option>
+                <option value="all">All Categories</option>
                 {categories.map(cat => (
                   <option key={cat} value={cat}>
                     {cat}
@@ -457,7 +454,7 @@ export function AdminAssessmentsPage() {
               Loading assessments...
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Fetching assessments in &quot;{activeCategory}&quot; from database
+              Fetching assessments in {activeCategory === "all" ? "All Categories" : `"${activeCategory}"`} from database
             </p>
           </div>
         </div>
@@ -470,7 +467,7 @@ export function AdminAssessmentsPage() {
           </h3>
           <p className="text-xs text-slate-500">{fetchError}</p>
           <button
-            onClick={() => loadAssessmentsForCategory(activeCategory)}
+            onClick={() => loadAssessmentsForCategory(activeCategory || "all")}
             className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition"
           >
             Retry
@@ -483,10 +480,12 @@ export function AdminAssessmentsPage() {
             <Award className="w-6 h-6" />
           </div>
           <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-            No assessments found in this category.
+            {activeCategory === "all" ? "No assessments found." : "No assessments found in this category."}
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
-            There are currently no assessment records filed under &quot;{activeCategory}&quot;. You can create one now.
+            {activeCategory === "all" 
+              ? "There are currently no assessment records in the system. You can create one now." 
+              : `There are currently no assessment records filed under "${activeCategory}". You can create one now.`}
           </p>
           <button
             type="button"
@@ -506,7 +505,7 @@ export function AdminAssessmentsPage() {
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
-                placeholder={`Search ${activeCategory} assessments...`}
+                placeholder={activeCategory === "all" ? "Search all assessments..." : `Search ${activeCategory} assessments...`}
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-3.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500 transition"

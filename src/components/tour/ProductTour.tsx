@@ -39,11 +39,6 @@ export function ProductTour() {
   const [targetRect, setTargetRect] = useState<TargetRect | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  // Suppress tour modals and overlays completely during full-screen exams
-  if (location.pathname.startsWith("/student/assessment/")) {
-    return null;
-  }
-
   // Measure target element position
   const updateTargetRect = useCallback(() => {
     if (!isTourActive || !currentStep?.target) {
@@ -107,6 +102,11 @@ export function ProductTour() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isTourActive, isFirstTimeModalOpen, stopTour, dismissFirstTimeModal, nextStep, prevStep]);
+
+  // Suppress tour modals and overlays completely during full-screen exams
+  if (location.pathname.startsWith("/student/assessment/")) {
+    return null;
+  }
 
   // If neither tour nor welcome modal is active, render nothing
   if (!isTourActive && !isFirstTimeModalOpen) {

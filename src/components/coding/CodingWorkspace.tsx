@@ -420,7 +420,12 @@ export function CodingWorkspace({
           </button>
 
           <div className="flex items-center gap-2 shrink-0 hidden sm:flex">
-            <img src="/mr-logo-icon.png" alt="MR Technologies" className="w-7 h-7 object-contain shrink-0 drop-shadow-xs" />
+            <img 
+              src="/mr-logo-icon.png" 
+              alt="MR Technologies" 
+              className="w-7 h-7 object-contain shrink-0 brand-logo-preserve" 
+              style={{ filter: "none", mixBlendMode: "normal", opacity: 1 }}
+            />
             <span className="font-extrabold text-sm tracking-tight text-white font-mono">
               MR-<span className="text-blue-500">TECH</span>
             </span>

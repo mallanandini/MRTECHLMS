@@ -59,12 +59,21 @@ export function StudentDashboardPage() {
   return (
     <div className="p-4 sm:p-6 lg:p-7 space-y-6 w-full max-w-[1600px] mx-auto min-w-0 font-sans pb-16">
       {/* Header banner */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200/60 pb-5 min-w-0">
+      <div 
+        style={{ borderColor: "var(--color-border)" }}
+        className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-5 min-w-0"
+      >
         <div className="min-w-0 flex-1">
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight truncate">
+          <h1 
+            style={{ color: "var(--color-text-primary)" }}
+            className="text-xl sm:text-2xl font-bold tracking-tight truncate"
+          >
             Welcome back, {currentUser.name}!
           </h1>
-          <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider mt-1 truncate font-mono">
+          <p 
+            style={{ color: "var(--color-text-muted)" }}
+            className="text-xs font-semibold uppercase tracking-wider mt-1 truncate font-mono"
+          >
             Student Portal — Learning Schedule & Progress
           </p>
         </div>

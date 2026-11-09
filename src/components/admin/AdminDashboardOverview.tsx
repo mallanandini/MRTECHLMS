@@ -32,8 +32,12 @@ import {
   Plus,
   Search,
   Check,
-  X
+  X,
+  Download,
+  Upload,
+  FileSpreadsheet
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { useAuth } from "../../context/AuthContext.js";
 import { ThemeQuickControls } from "../ThemeQuickControls.js";
 
@@ -221,6 +225,146 @@ export function AdminDashboardOverview({ authToken }: AdminDashboardOverviewProp
   const [userSubmitting, setUserSubmitting] = useState(false);
   const [userError, setUserError] = useState<string | null>(null);
   const [userSuccess, setUserSuccess] = useState<string | null>(null);
+  const [userModalTab, setUserModalTab] = useState<"single" | "bulk">("single");
+
+  // Bulk Excel Upload State
+  const [bulkFileName, setBulkFileName] = useState("");
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkSuccess, setBulkSuccess] = useState<string | null>(null);
+  const [bulkValidationResult, setBulkValidationResult] = useState<{
+    total: number;
+    validCount: number;
+    invalidCount: number;
+    duplicateCount: number;
+    rows: Array<{
+      rowNumber: number;
+      fullName: string;
+      email: string;
+      phoneNumber?: string;
+      location?: string;
+      password?: string;
+      status: string;
+      batchCodes: string;
+      isValid: boolean;
+      errors: string[];
+    }>;
+  } | null>(null);
+  const bulkFileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  // Download official Excel template for bulk users import
+  const handleDownloadTemplate = async () => {
+    try {
+      setBulkError(null);
+      const res = await fetch("/api/admin/users/template", {
+        headers: { Authorization: `Bearer ${authToken}` }
+      });
+      if (!res.ok) throw new Error("Failed to generate student import template");
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "student_import_template.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error("Error downloading template", err);
+      setBulkError("Error downloading template spreadsheet.");
+    }
+  };
+
+  // Parse & Authoritatively Validate Uploaded Excel File
+  const handleBulkFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setBulkFileName(file.name);
+    setBulkError(null);
+    setBulkSuccess(null);
+    setBulkLoading(true);
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const firstSheetName = workbook.SheetNames[0];
+      if (!firstSheetName) {
+        setBulkError("Spreadsheet has no sheets.");
+        setBulkLoading(false);
+        return;
+      }
+
+      const worksheet = workbook.Sheets[firstSheetName];
+      const rawRows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+      if (rawRows.length === 0) {
+        setBulkError("Spreadsheet is empty. Please add student rows to import.");
+        setBulkLoading(false);
+        return;
+      }
+
+      const res = await fetch("/api/admin/users/bulk-validate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ rows: rawRows })
+      });
+
+      if (res.ok) {
+        const valData = await res.json();
+        setBulkValidationResult(valData);
+      } else {
+        const err = await res.json();
+        setBulkError(err.error || "Failed to validate spreadsheet rows.");
+      }
+    } catch (err) {
+      console.error("Error parsing spreadsheet", err);
+      setBulkError("Could not read Excel file. Please ensure it is a valid .xlsx file.");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  // Execute Bulk Import of Validated Rows
+  const handleExecuteBulkImport = async () => {
+    if (!bulkValidationResult || bulkValidationResult.validCount === 0) return;
+
+    const validRows = bulkValidationResult.rows.filter(r => r.isValid);
+    setBulkLoading(true);
+    setBulkError(null);
+    setBulkSuccess(null);
+
+    try {
+      const res = await fetch("/api/admin/users/bulk-import", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ rows: validRows })
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        setBulkSuccess(`Successfully imported and created ${result.importedCount} student account(s) with batch assignment!`);
+        setBulkValidationResult(null);
+        setBulkFileName("");
+        if (bulkFileInputRef.current) bulkFileInputRef.current.value = "";
+        fetchDashboardData(true);
+      } else {
+        const err = await res.json();
+        setBulkError(err.error || "Bulk import failed.");
+      }
+    } catch (err) {
+      setBulkError("Network error during bulk import. Please try again.");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
 
   const hasNoActiveBatches = useMemo(() => {
     if (data?.activeBatchesCount !== undefined) {
@@ -446,7 +590,7 @@ export function AdminDashboardOverview({ authToken }: AdminDashboardOverviewProp
       title: "Create Assessment",
       description: "Build evaluations & questions",
       icon: Award,
-      color: "text-purple-600 dark:text-purple-400",
+      color: "text-[var(--color-primary)]",
       bg: "bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-900/60",
       onClick: () => navigate("/admin/assessments/new")
     },
@@ -531,8 +675,8 @@ export function AdminDashboardOverview({ authToken }: AdminDashboardOverviewProp
       subtext: `${data?.assessments?.total ?? 0} total assessments`,
       icon: Award,
       badge: "Evaluations",
-      accent: "text-purple-600 dark:text-purple-400",
-      accentBg: "bg-purple-50 dark:bg-purple-950/60 border-purple-200 dark:border-purple-800/60",
+      accent: "text-[var(--color-primary)]",
+      accentBg: "bg-[var(--color-secondary)] border-purple-200 dark:border-purple-800/60",
       link: "/admin/assessments"
     },
     {
@@ -587,7 +731,12 @@ export function AdminDashboardOverview({ authToken }: AdminDashboardOverviewProp
             </span>
           </div>
           <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5 break-words">
-            <img src="/mr-logo-icon.png" alt="MR Technologies" className="w-7 h-7 object-contain shrink-0 drop-shadow-xs" />
+            <img 
+              src="/mr-logo-icon.png" 
+              alt="MR Technologies" 
+              className="w-7 h-7 object-contain shrink-0 brand-logo-preserve" 
+              style={{ filter: "none", mixBlendMode: "normal", opacity: 1 }}
+            />
             <span>Welcome back, {user?.name || "Administrator"}</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-3xl leading-relaxed">
@@ -613,50 +762,18 @@ export function AdminDashboardOverview({ authToken }: AdminDashboardOverviewProp
       </div>
 
       {/* ========================================================================= */}
-      {/* SECTION: PRIMARY LMS ACTIONS — BATCH & USER MANAGEMENT                   */}
+      {/* SECTION: TOP PRIMARY ACTIONS — CREATE BATCH & CREATE USER                 */}
       {/* ========================================================================= */}
-      <div className="bg-slate-900 dark:bg-slate-900 text-white rounded-2xl p-4 sm:p-6 shadow-md border border-slate-800 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-              <h2 className="text-xs font-bold uppercase tracking-widest text-slate-300 font-mono">
-                Primary Actions: Cohort & User Management
-              </h2>
-            </div>
-            <p className="text-xs text-slate-400 mt-1">
-              Organize student cohorts with mandatory multi-batch enrollment and provision new user accounts.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => navigate("/admin/batches")}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition cursor-pointer"
-            >
-              <GraduationCap className="w-3.5 h-3.5 text-purple-400" />
-              <span>Batch Hub</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate("/admin/users")}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition cursor-pointer"
-            >
-              <Users className="w-3.5 h-3.5 text-blue-400" />
-              <span>User Directory</span>
-            </button>
-          </div>
-        </div>
-
+      <section aria-label="Top Administrative Actions" className="space-y-4 min-w-0 w-full">
         {/* Guidance Alert if No Active Batches Exist */}
         {hasNoActiveBatches && (
-          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-200">
+          <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-900 dark:text-amber-200 shadow-xs">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <div>
-                <p className="text-xs font-bold text-amber-300">Action Required: No Active Batches Configured</p>
-                <p className="text-xs text-amber-200/90 mt-0.5">
-                  MRTECHLMS requires all user accounts to belong to at least one active batch cohort. User creation is disabled until an active batch is created.
+                <p className="text-xs font-bold text-amber-950 dark:text-amber-200">Action Required: No Active Batches Configured</p>
+                <p className="text-xs text-amber-800/90 dark:text-amber-300/90 mt-0.5">
+                  MRTECHLMS requires all user accounts to belong to at least one active batch cohort. Create your first batch to enable student and trainer onboarding.
                 </p>
               </div>
             </div>
@@ -667,90 +784,186 @@ export function AdminDashboardOverview({ authToken }: AdminDashboardOverviewProp
                 setBatchSuccess(null);
                 setShowCreateBatchModal(true);
               }}
-              className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg transition shrink-0 cursor-pointer shadow-sm"
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white font-bold text-xs rounded-xl transition shrink-0 cursor-pointer shadow-xs focus:outline-none focus:ring-2 focus:ring-amber-400"
             >
               Create First Batch Now
             </button>
           </div>
         )}
 
-        {/* Primary Action Buttons Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Action 1: Create Batch */}
-          <button
-            type="button"
+        {/* 2-Column Responsive Action Cards Grid (Side-by-side on desktop, stacked on mobile) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 min-w-0">
+          {/* Action Card 1: Create Batch */}
+          <div
+            role="button"
+            tabIndex={0}
             onClick={() => {
               setBatchError(null);
               setBatchSuccess(null);
               setShowCreateBatchModal(true);
             }}
-            className="flex items-center gap-4 p-4 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 hover:border-purple-500/50 transition-all duration-150 text-left cursor-pointer group shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setBatchError(null);
+                setBatchSuccess(null);
+                setShowCreateBatchModal(true);
+              }
+            }}
+            className="group relative flex flex-col justify-between p-5 sm:p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-[var(--color-primary)] transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--color-focus-ring)] text-left min-w-0"
           >
-            <div className="p-3 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/30 group-hover:bg-purple-500/30 transition shrink-0">
-              <GraduationCap className="w-6 h-6" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-white group-hover:text-purple-200 transition">Create Batch</h3>
-                <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-purple-900/60 text-purple-300 border border-purple-700/60">
+            <div>
+              {/* Header row with icon, titles, badge */}
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="p-3 rounded-2xl bg-[var(--color-secondary)] text-[var(--color-primary)] border border-[var(--color-border)] group-hover:bg-purple-100 dark:group-hover:bg-purple-900/40 group-hover:scale-105 transition-all shrink-0">
+                    <GraduationCap className="w-6 h-6" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-mono font-bold tracking-wider uppercase text-[var(--color-primary)] bg-[var(--color-secondary)] px-2 py-0.5 rounded border border-[var(--color-border)] inline-block">
+                      Cohort Management
+                    </span>
+                    <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white group-hover:text-[var(--color-primary)] transition-colors mt-0.5">
+                      Create Batch
+                    </h3>
+                  </div>
+                </div>
+
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shrink-0">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                   {data?.activeBatchesCount ?? activeBatches.length} Active
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-1 line-clamp-1">
-                Define academic year cohort, maximum capacity & target course curriculum
+
+              {/* Description */}
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed mb-4">
+                Create and manage student batches.
               </p>
             </div>
-            <Plus className="w-5 h-5 text-slate-400 group-hover:text-white shrink-0 transition" />
-          </button>
 
-          {/* Action 2: Create User */}
-          <button
-            type="button"
+            {/* Bottom Actions Row */}
+            <div className="pt-3.5 border-t border-slate-100 dark:border-slate-800/90 flex items-center justify-between text-xs">
+              <span className="font-bold text-[var(--color-primary)] group-hover:translate-x-0.5 transition-transform inline-flex items-center gap-1.5">
+                <Plus className="w-4 h-4" />
+                <span>Create Batch</span>
+                <ArrowRight className="w-3.5 h-3.5 opacity-70 group-hover:opacity-100" />
+              </span>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate("/admin/batches");
+                }}
+                className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 font-medium px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                Batch Hub &rarr;
+              </button>
+            </div>
+          </div>
+
+          {/* Action Card 2: Create User */}
+          <div
+            role="button"
+            tabIndex={0}
             onClick={() => {
               if (hasNoActiveBatches) return;
               setUserError(null);
               setUserSuccess(null);
+              setUserModalTab("single");
               fetchActiveBatches();
               setShowCreateUserModal(true);
             }}
-            disabled={hasNoActiveBatches}
-            className={`flex items-center gap-4 p-4 rounded-xl border transition-all duration-150 text-left shadow-sm ${
+            onKeyDown={(e) => {
+              if (hasNoActiveBatches) return;
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setUserError(null);
+                setUserSuccess(null);
+                setUserModalTab("single");
+                fetchActiveBatches();
+                setShowCreateUserModal(true);
+              }
+            }}
+            className={`group relative flex flex-col justify-between p-5 sm:p-6 rounded-2xl border transition-all duration-200 text-left min-w-0 ${
               hasNoActiveBatches
-                ? "bg-slate-800/30 border-slate-800 opacity-50 cursor-not-allowed text-slate-500"
-                : "bg-slate-800/80 hover:bg-slate-800 border-slate-700/80 hover:border-blue-500/50 text-white cursor-pointer group focus:outline-none focus:ring-2 focus:ring-blue-400"
+                ? "bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 opacity-60 cursor-not-allowed"
+                : "bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-[var(--color-primary)] cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--color-focus-ring)]"
             }`}
-            title={hasNoActiveBatches ? "Create an active batch first before adding users" : "Create new user account"}
           >
-            <div className={`p-3 rounded-xl border shrink-0 transition ${
-              hasNoActiveBatches
-                ? "bg-slate-800 text-slate-500 border-slate-700"
-                : "bg-blue-500/20 text-blue-300 border border-blue-500/30 group-hover:bg-blue-500/30"
-            }`}>
-              <UserPlus className="w-6 h-6" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between">
-                <h3 className={`text-sm font-bold transition ${hasNoActiveBatches ? "text-slate-400" : "text-white group-hover:text-blue-200"}`}>
-                  Create User
-                </h3>
-                <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded border ${
-                  hasNoActiveBatches 
-                    ? "bg-slate-800 text-slate-500 border-slate-700"
-                    : "bg-blue-900/60 text-blue-300 border border-blue-700/60"
-                }`}>
-                  Multi-Batch
+            <div>
+              {/* Header row with icon, titles, badge */}
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="p-3 rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/60 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/40 group-hover:scale-105 transition-all shrink-0">
+                    <UserPlus className="w-6 h-6" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-mono font-bold tracking-wider uppercase text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded border border-blue-200/60 dark:border-blue-800/40 inline-block">
+                      User Provisioning
+                    </span>
+                    <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white group-hover:text-[var(--color-primary)] transition-colors mt-0.5">
+                      Create User
+                    </h3>
+                  </div>
+                </div>
+
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 shrink-0">
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  Single / Excel
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-1 line-clamp-1">
-                {hasNoActiveBatches 
-                  ? "Disabled: Create an active batch first before adding users"
-                  : "Provision student or trainer account with mandatory cohort membership"}
+
+              {/* Description */}
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed mb-4">
+                Add individual students or bulk upload users using Excel.
               </p>
             </div>
-            <Plus className={`w-5 h-5 shrink-0 transition ${hasNoActiveBatches ? "text-slate-600" : "text-slate-400 group-hover:text-white"}`} />
-          </button>
+
+            {/* Bottom Actions Row */}
+            <div className="pt-3.5 border-t border-slate-100 dark:border-slate-800/90 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-blue-600 dark:text-blue-400 group-hover:translate-x-0.5 transition-transform inline-flex items-center gap-1.5">
+                  <Plus className="w-4 h-4" />
+                  <span>Create User</span>
+                  <ArrowRight className="w-3.5 h-3.5 opacity-70 group-hover:opacity-100" />
+                </span>
+
+                <span className="text-slate-300 dark:text-slate-700">•</span>
+
+                <button
+                  type="button"
+                  disabled={hasNoActiveBatches}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (hasNoActiveBatches) return;
+                    setUserError(null);
+                    setUserSuccess(null);
+                    setUserModalTab("bulk");
+                    fetchActiveBatches();
+                    setShowCreateUserModal(true);
+                  }}
+                  className="text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 font-bold inline-flex items-center gap-1 hover:underline cursor-pointer bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/60"
+                >
+                  <Upload className="w-3 h-3" />
+                  <span>Bulk Excel</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate("/admin/users");
+                }}
+                className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 font-medium px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                User Directory &rarr;
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
 
       {/* ========================================================================= */}
       {/* SECTION B: PLATFORM STATISTICS GRID (6 METRIC CARDS)                      */}
@@ -804,7 +1017,7 @@ export function AdminDashboardOverview({ authToken }: AdminDashboardOverviewProp
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate font-medium min-w-0 flex-1" title={card.subtext}>
                     {card.subtext}
                   </p>
-                  <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:translate-x-0.5 transition shrink-0" />
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-[var(--color-primary)] group-hover:translate-x-0.5 transition shrink-0" />
                 </div>
               </div>
             );
@@ -844,7 +1057,7 @@ export function AdminDashboardOverview({ authToken }: AdminDashboardOverviewProp
                   <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-200 group-hover:translate-x-0.5 transition shrink-0" />
                 </div>
                 <div className="min-w-0 w-full space-y-0.5">
-                  <h3 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition truncate" title={action.title}>
+                  <h3 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-[var(--color-primary)] transition truncate" title={action.title}>
                     {action.title}
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 break-words" title={action.description}>
@@ -960,7 +1173,7 @@ export function AdminDashboardOverview({ authToken }: AdminDashboardOverviewProp
                     {data?.assessmentStats?.averageScore ?? 0} pts
                   </p>
                 </div>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 shrink-0 font-mono">
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950 text-[var(--color-primary)] shrink-0 font-mono">
                   Benchmarked
                 </span>
               </div>
@@ -1009,7 +1222,7 @@ export function AdminDashboardOverview({ authToken }: AdminDashboardOverviewProp
                   <div key={c.id} className="py-3 flex items-center justify-between gap-3 group min-w-0">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xs font-semibold text-slate-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition" title={c.title}>
+                        <span className="text-xs font-semibold text-slate-900 dark:text-white truncate group-hover:text-[var(--color-primary)] transition" title={c.title}>
                           {c.title}
                         </span>
                         <span
@@ -1063,7 +1276,7 @@ export function AdminDashboardOverview({ authToken }: AdminDashboardOverviewProp
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 gap-2">
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="p-2 bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 rounded-lg border border-purple-200 dark:border-purple-800/60 shrink-0">
+                <div className="p-2 bg-[var(--color-secondary)] text-[var(--color-primary)] rounded-lg border border-purple-200 dark:border-purple-800/60 shrink-0">
                   <Award className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
@@ -1089,7 +1302,7 @@ export function AdminDashboardOverview({ authToken }: AdminDashboardOverviewProp
                   <div key={a.id} className="py-3 flex items-center justify-between gap-3 group min-w-0">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xs font-semibold text-slate-900 dark:text-white truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition" title={a.title}>
+                        <span className="text-xs font-semibold text-slate-900 dark:text-white truncate group-hover:text-[var(--color-primary)] transition" title={a.title}>
                           {a.title}
                         </span>
                         <span
@@ -1132,7 +1345,7 @@ export function AdminDashboardOverview({ authToken }: AdminDashboardOverviewProp
               onClick={() => navigate("/admin/assessments/new")}
               className="w-full py-2.5 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/60 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold border border-slate-200/80 dark:border-slate-700 flex items-center justify-center gap-2 transition cursor-pointer"
             >
-              <PlusCircle className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+              <PlusCircle className="w-3.5 h-3.5 text-[var(--color-primary)]" />
               <span>Create New Assessment</span>
             </button>
           </div>
@@ -1220,7 +1433,7 @@ export function AdminDashboardOverview({ authToken }: AdminDashboardOverviewProp
             {/* Modal Header */}
             <div className="shrink-0 p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/40">
               <div className="flex items-center gap-2.5 text-slate-900 dark:text-white font-bold text-sm">
-                <div className="p-2 bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 rounded-xl border border-purple-200 dark:border-purple-800/60">
+                <div className="p-2 bg-[var(--color-secondary)] text-[var(--color-primary)] rounded-xl border border-purple-200 dark:border-purple-800/60">
                   <GraduationCap className="w-5 h-5" />
                 </div>
                 <div>
@@ -1357,10 +1570,10 @@ export function AdminDashboardOverview({ authToken }: AdminDashboardOverviewProp
         </div>
       )}
 
-      {/* MODAL 2: CREATE USER MODAL WITH MANDATORY MULTI-BATCH PICKER */}
+      {/* MODAL 2: CREATE USER MODAL WITH DUAL-MODE (INDIVIDUAL & BULK EXCEL UPLOAD) */}
       {showCreateUserModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl w-[min(100%-1rem,720px)] max-h-[calc(100dvh-2rem)] shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col min-h-0 min-w-0 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl w-[min(100%-1rem,780px)] max-h-[calc(100dvh-2rem)] shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col min-h-0 min-w-0 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
             <div className="shrink-0 p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/40">
               <div className="flex items-center gap-2.5 text-slate-900 dark:text-white font-bold text-sm">
@@ -1368,8 +1581,8 @@ export function AdminDashboardOverview({ authToken }: AdminDashboardOverviewProp
                   <UserPlus className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base">Create New User Account</h3>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-normal">Mandatory enrollment in at least one active cohort batch</p>
+                  <h3 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base">Create User</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-normal">Add individual students or bulk upload users using Excel</p>
                 </div>
               </div>
               <button
@@ -1378,6 +1591,10 @@ export function AdminDashboardOverview({ authToken }: AdminDashboardOverviewProp
                   setShowCreateUserModal(false);
                   setUserError(null);
                   setUserSuccess(null);
+                  setBulkError(null);
+                  setBulkSuccess(null);
+                  setBulkValidationResult(null);
+                  setBulkFileName("");
                 }}
                 className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
               >
@@ -1385,236 +1602,444 @@ export function AdminDashboardOverview({ authToken }: AdminDashboardOverviewProp
               </button>
             </div>
 
-            {/* Modal Form */}
-            <form onSubmit={handleCreateUserSubmit} className="flex flex-col min-h-0 flex-1 overflow-hidden">
-              {/* Scrollable Form Body */}
-              <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0 text-xs">
-                {userError && (
-                  <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 text-xs font-semibold rounded-xl flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
-                    <span>{userError}</span>
-                  </div>
-                )}
+            {/* Mode Tab Switcher */}
+            <div className="shrink-0 flex border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 pt-2 bg-slate-50/70 dark:bg-slate-800/40 gap-3">
+              <button
+                type="button"
+                onClick={() => setUserModalTab("single")}
+                className={`pb-2.5 px-3 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition cursor-pointer ${
+                  userModalTab === "single"
+                    ? "border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400"
+                    : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                }`}
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>Individual User</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setUserModalTab("bulk")}
+                className={`pb-2.5 px-3 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition cursor-pointer ${
+                  userModalTab === "bulk"
+                    ? "border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400"
+                    : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                }`}
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Bulk Excel Upload (.xlsx)</span>
+              </button>
+            </div>
 
-                {userSuccess && (
-                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-200 text-xs font-semibold rounded-xl flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                    <span>{userSuccess}</span>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  <div className="sm:col-span-1">
-                    <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">
-                      Full Name *
-                    </label>
-                    <input
-                      type="text"
-                      value={userForm.name}
-                      onChange={(e) => setUserForm(prev => ({ ...prev, name: e.target.value }))}
-                      placeholder="e.g. Maya Patel"
-                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                      required
-                    />
-                  </div>
-
-                  <div className="sm:col-span-1">
-                    <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">
-                      Email Address *
-                    </label>
-                    <input
-                      type="email"
-                      value={userForm.email}
-                      onChange={(e) => setUserForm(prev => ({ ...prev, email: e.target.value }))}
-                      placeholder="e.g. maya@example.com"
-                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-mono font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                      required
-                    />
-                  </div>
-
-                  <div className="sm:col-span-1">
-                    <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">
-                      Password * (Min 8 Characters)
-                    </label>
-                    <input
-                      type="password"
-                      value={userForm.password}
-                      onChange={(e) => setUserForm(prev => ({ ...prev, password: e.target.value }))}
-                      placeholder="Min 8 characters (auto-hashed with bcrypt)"
-                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                      required
-                    />
-                  </div>
-
-                  <div className="sm:col-span-1">
-                    <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">
-                      Platform Role
-                    </label>
-                    <select
-                      value={userForm.role}
-                      onChange={(e) => setUserForm(prev => ({ ...prev, role: e.target.value as any }))}
-                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    >
-                      <option value="student">Student</option>
-                      <option value="trainer">Trainer</option>
-                      <option value="admin">Administrator</option>
-                    </select>
-                  </div>
-
-                  <div className="sm:col-span-1">
-                    <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">
-                      Status
-                    </label>
-                    <select
-                      value={userForm.status}
-                      onChange={(e) => setUserForm(prev => ({ ...prev, status: e.target.value as any }))}
-                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    >
-                      <option value="active">Active</option>
-                      <option value="suspended">Suspended</option>
-                    </select>
-                  </div>
-
-                  <div className="sm:col-span-1">
-                    <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">
-                      Phone Number {userForm.role === "student" ? <span className="text-rose-500">*</span> : <span className="text-slate-400 font-normal">(Optional)</span>}
-                    </label>
-                    <input
-                      type="tel"
-                      value={userForm.phone}
-                      onChange={(e) => setUserForm(prev => ({ ...prev, phone: e.target.value }))}
-                      placeholder="+91 9876543210"
-                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">
-                      Location {userForm.role === "student" ? <span className="text-rose-500">*</span> : <span className="text-slate-400 font-normal">(Optional)</span>}
-                    </label>
-                    <input
-                      type="text"
-                      value={userForm.location}
-                      onChange={(e) => setUserForm(prev => ({ ...prev, location: e.target.value }))}
-                      placeholder="e.g. Bangalore, India"
-                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    />
-                  </div>
-                </div>
-
-                {/* MANDATORY MULTI-BATCH MEMBERSHIP SELECTOR */}
-                <div className="p-3.5 sm:p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-2.5">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <GraduationCap className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
-                      <label className="font-bold text-slate-800 dark:text-slate-200 uppercase font-mono text-[11px] tracking-wider">
-                        Assign Cohort Batches <span className="text-rose-500">*</span>
-                      </label>
+            {/* TAB 1: SINGLE USER FORM */}
+            {userModalTab === "single" ? (
+              <form onSubmit={handleCreateUserSubmit} className="flex flex-col min-h-0 flex-1 overflow-hidden">
+                {/* Scrollable Form Body */}
+                <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0 text-xs">
+                  {userError && (
+                    <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 text-xs font-semibold rounded-xl flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+                      <span>{userError}</span>
                     </div>
-                    <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
-                      userForm.batchIds.length > 0 
-                        ? "bg-purple-100 dark:bg-purple-950/80 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
-                        : "bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
-                    }`}>
-                      {userForm.batchIds.length} {userForm.batchIds.length === 1 ? "Batch" : "Batches"} Selected
-                    </span>
-                  </div>
+                  )}
 
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
-                    Every user must belong to at least 1 batch. Users can be assigned to multiple batches simultaneously.
-                  </p>
+                  {userSuccess && (
+                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-200 text-xs font-semibold rounded-xl flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                      <span>{userSuccess}</span>
+                    </div>
+                  )}
 
-                  {activeBatches.length > 3 && (
-                    <div className="relative">
-                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div className="sm:col-span-1">
+                      <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">
+                        Full Name *
+                      </label>
                       <input
                         type="text"
-                        value={userBatchSearch}
-                        onChange={(e) => setUserBatchSearch(e.target.value)}
-                        placeholder="Filter batches by name, code or year..."
-                        className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
+                        value={userForm.name}
+                        onChange={(e) => setUserForm(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder="e.g. Maya Patel"
+                        className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        required
                       />
+                    </div>
+
+                    <div className="sm:col-span-1">
+                      <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">
+                        Email Address *
+                      </label>
+                      <input
+                        type="email"
+                        value={userForm.email}
+                        onChange={(e) => setUserForm(prev => ({ ...prev, email: e.target.value }))}
+                        placeholder="e.g. maya@example.com"
+                        className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-mono font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        required
+                      />
+                    </div>
+
+                    <div className="sm:col-span-1">
+                      <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">
+                        Password * (Min 8 Characters)
+                      </label>
+                      <input
+                        type="password"
+                        value={userForm.password}
+                        onChange={(e) => setUserForm(prev => ({ ...prev, password: e.target.value }))}
+                        placeholder="Min 8 characters (auto-hashed with bcrypt)"
+                        className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        required
+                      />
+                    </div>
+
+                    <div className="sm:col-span-1">
+                      <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">
+                        Platform Role
+                      </label>
+                      <select
+                        value={userForm.role}
+                        onChange={(e) => setUserForm(prev => ({ ...prev, role: e.target.value as any }))}
+                        className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      >
+                        <option value="student">Student</option>
+                        <option value="trainer">Trainer</option>
+                        <option value="admin">Administrator</option>
+                      </select>
+                    </div>
+
+                    <div className="sm:col-span-1">
+                      <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">
+                        Status
+                      </label>
+                      <select
+                        value={userForm.status}
+                        onChange={(e) => setUserForm(prev => ({ ...prev, status: e.target.value as any }))}
+                        className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      >
+                        <option value="active">Active</option>
+                        <option value="suspended">Suspended</option>
+                      </select>
+                    </div>
+
+                    <div className="sm:col-span-1">
+                      <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">
+                        Phone Number {userForm.role === "student" ? <span className="text-rose-500">*</span> : <span className="text-slate-400 font-normal">(Optional)</span>}
+                      </label>
+                      <input
+                        type="tel"
+                        value={userForm.phone}
+                        onChange={(e) => setUserForm(prev => ({ ...prev, phone: e.target.value }))}
+                        placeholder="+91 9876543210"
+                        className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider block mb-1">
+                        Location {userForm.role === "student" ? <span className="text-rose-500">*</span> : <span className="text-slate-400 font-normal">(Optional)</span>}
+                      </label>
+                      <input
+                        type="text"
+                        value={userForm.location}
+                        onChange={(e) => setUserForm(prev => ({ ...prev, location: e.target.value }))}
+                        placeholder="e.g. Bangalore, India"
+                        className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      />
+                    </div>
+                  </div>
+
+                  {/* MANDATORY MULTI-BATCH MEMBERSHIP SELECTOR */}
+                  <div className="p-3.5 sm:p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <GraduationCap className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
+                        <label className="font-bold text-slate-800 dark:text-slate-200 uppercase font-mono text-[11px] tracking-wider">
+                          Assign Cohort Batches <span className="text-rose-500">*</span>
+                        </label>
+                      </div>
+                      <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                        userForm.batchIds.length > 0 
+                          ? "bg-purple-100 dark:bg-purple-950/80 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
+                          : "bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
+                      }`}>
+                        {userForm.batchIds.length} {userForm.batchIds.length === 1 ? "Batch" : "Batches"} Selected
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
+                      Every user must belong to at least 1 batch. Users can be assigned to multiple batches simultaneously.
+                    </p>
+
+                    {activeBatches.length > 3 && (
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                        <input
+                          type="text"
+                          value={userBatchSearch}
+                          onChange={(e) => setUserBatchSearch(e.target.value)}
+                          placeholder="Filter batches by name, code or year..."
+                          className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
+                        />
+                      </div>
+                    )}
+
+                    <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1 divide-y divide-slate-100 dark:divide-slate-700/50">
+                      {activeBatches
+                        .filter(b => {
+                          if (!userBatchSearch.trim()) return true;
+                          const q = userBatchSearch.toLowerCase();
+                          return b.name.toLowerCase().includes(q) || b.code.toLowerCase().includes(q) || b.academicYear.toLowerCase().includes(q);
+                        })
+                        .map((batch) => {
+                          const isChecked = userForm.batchIds.includes(batch.id);
+                          return (
+                            <label
+                              key={batch.id}
+                              className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition select-none ${
+                                isChecked
+                                  ? "bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800/80"
+                                  : "hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setUserForm(prev => ({ ...prev, batchIds: [...prev.batchIds, batch.id] }));
+                                    } else {
+                                      setUserForm(prev => ({ ...prev, batchIds: prev.batchIds.filter(id => id !== batch.id) }));
+                                    }
+                                  }}
+                                  className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 w-4 h-4 cursor-pointer shrink-0"
+                                />
+                                <div className="min-w-0">
+                                  <p className="font-semibold text-slate-800 dark:text-slate-200 text-xs truncate">
+                                    {batch.name}
+                                  </p>
+                                  <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                                    Code: {batch.code}
+                                  </p>
+                                </div>
+                              </div>
+                              <span className="shrink-0 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-200/70 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                                {batch.academicYear}
+                              </span>
+                            </label>
+                          );
+                        })}
+                    </div>
+
+                    {userForm.batchIds.length === 0 && (
+                      <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5" /> Please check at least one batch above.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Pinned Modal Footer */}
+                <div className="shrink-0 p-3.5 sm:p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/40 flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCreateUserModal(false);
+                      setUserError(null);
+                      setUserSuccess(null);
+                    }}
+                    className="w-full sm:w-auto px-4 py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl transition cursor-pointer text-xs"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={userSubmitting || userForm.batchIds.length === 0}
+                    className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl transition shadow-sm shadow-blue-500/20 cursor-pointer text-xs"
+                  >
+                    {userSubmitting ? "Creating..." : "Create User"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              /* TAB 2: BULK EXCEL UPLOAD WORKFLOW */
+              <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
+                <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0 text-xs">
+                  {bulkError && (
+                    <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 text-xs font-semibold rounded-xl flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+                      <span>{bulkError}</span>
                     </div>
                   )}
 
-                  <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1 divide-y divide-slate-100 dark:divide-slate-700/50">
-                    {activeBatches
-                      .filter(b => {
-                        if (!userBatchSearch.trim()) return true;
-                        const q = userBatchSearch.toLowerCase();
-                        return b.name.toLowerCase().includes(q) || b.code.toLowerCase().includes(q) || b.academicYear.toLowerCase().includes(q);
-                      })
-                      .map((batch) => {
-                        const isChecked = userForm.batchIds.includes(batch.id);
-                        return (
-                          <label
-                            key={batch.id}
-                            className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition select-none ${
-                              isChecked
-                                ? "bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800/80"
-                                : "hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setUserForm(prev => ({ ...prev, batchIds: [...prev.batchIds, batch.id] }));
-                                  } else {
-                                    setUserForm(prev => ({ ...prev, batchIds: prev.batchIds.filter(id => id !== batch.id) }));
-                                  }
-                                }}
-                                className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 w-4 h-4 cursor-pointer shrink-0"
-                              />
-                              <div className="min-w-0">
-                                <p className="font-semibold text-slate-800 dark:text-slate-200 text-xs truncate">
-                                  {batch.name}
-                                </p>
-                                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
-                                  Code: {batch.code}
-                                </p>
-                              </div>
-                            </div>
-                            <span className="shrink-0 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-200/70 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                              {batch.academicYear}
-                            </span>
-                          </label>
-                        );
-                      })}
+                  {bulkSuccess && (
+                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-200 text-xs font-semibold rounded-xl flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                      <span>{bulkSuccess}</span>
+                    </div>
+                  )}
+
+                  {/* Step 1 & Step 2 Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl space-y-2">
+                      <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase font-mono tracking-wider bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800">
+                        Step 1
+                      </span>
+                      <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs">Download Template</h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                        Get the official Excel spreadsheet with pre-formatted columns (<code className="text-slate-700 dark:text-slate-300 font-mono">fullName</code>, <code className="text-slate-700 dark:text-slate-300 font-mono">email</code>, <code className="text-slate-700 dark:text-slate-300 font-mono">Batch Codes</code>) and active batch codes pre-filled.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleDownloadTemplate}
+                        className="mt-2 w-full py-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                      >
+                        <Download className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                        <span>Download .xlsx Template</span>
+                      </button>
+                    </div>
+
+                    <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl space-y-2">
+                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase font-mono tracking-wider bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                        Step 2
+                      </span>
+                      <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs">Upload Spreadsheet</h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                        Upload your completed workbook (.xlsx). The system validates emails, format, uniqueness, and cohort batch assignments in real-time.
+                      </p>
+                      <label className="mt-2 w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{bulkFileName ? "Choose Another File" : "Select .xlsx File"}</span>
+                        <input
+                          ref={bulkFileInputRef}
+                          type="file"
+                          accept=".xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                          onChange={handleBulkFileUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
                   </div>
 
-                  {userForm.batchIds.length === 0 && (
-                    <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium flex items-center gap-1">
-                      <AlertTriangle className="w-3.5 h-3.5" /> Please check at least one batch above.
-                    </p>
+                  {bulkLoading && (
+                    <div className="p-6 text-center text-slate-500 dark:text-slate-400">
+                      <RefreshCw className="w-6 h-6 animate-spin mx-auto text-emerald-600 dark:text-emerald-400 mb-2" />
+                      <p className="text-xs font-semibold">Validating and checking database records...</p>
+                    </div>
+                  )}
+
+                  {/* Validation Preview */}
+                  {bulkValidationResult && (
+                    <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs uppercase tracking-wider font-mono">
+                          Validation Preview: {bulkFileName}
+                        </h4>
+                        <span className="text-[11px] text-slate-400 font-mono">
+                          {bulkValidationResult.total} rows parsed
+                        </span>
+                      </div>
+
+                      {/* Summary Badges */}
+                      <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                        <div className="p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl">
+                          <p className="text-[10px] uppercase font-bold text-slate-400 font-mono">Total</p>
+                          <p className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white font-mono">{bulkValidationResult.total}</p>
+                        </div>
+                        <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-xl">
+                          <p className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 font-mono">Valid</p>
+                          <p className="text-base sm:text-lg font-extrabold text-emerald-800 dark:text-emerald-300 font-mono">{bulkValidationResult.validCount}</p>
+                        </div>
+                        <div className="p-2.5 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 rounded-xl">
+                          <p className="text-[10px] uppercase font-bold text-rose-600 dark:text-rose-400 font-mono">Invalid</p>
+                          <p className="text-base sm:text-lg font-extrabold text-rose-800 dark:text-rose-300 font-mono">{bulkValidationResult.invalidCount}</p>
+                        </div>
+                        <div className="p-2.5 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 rounded-xl">
+                          <p className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400 font-mono">Duplicates</p>
+                          <p className="text-base sm:text-lg font-extrabold text-amber-800 dark:text-amber-300 font-mono">{bulkValidationResult.duplicateCount}</p>
+                        </div>
+                      </div>
+
+                      {/* Parsed Rows Table */}
+                      <div className="max-h-56 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead className="bg-slate-50 dark:bg-slate-800 sticky top-0 border-b border-slate-200 dark:border-slate-700">
+                            <tr className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase font-mono">
+                              <th className="py-2 px-3">Row</th>
+                              <th className="py-2 px-3">Full Name</th>
+                              <th className="py-2 px-3">Email</th>
+                              <th className="py-2 px-3">Batch Codes</th>
+                              <th className="py-2 px-3">Status</th>
+                              <th className="py-2 px-3">Validation Result</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                            {bulkValidationResult.rows.map((row) => (
+                              <tr key={row.rowNumber} className={row.isValid ? "hover:bg-slate-50/50 dark:hover:bg-slate-800/40" : "bg-rose-50/40 dark:bg-rose-950/30"}>
+                                <td className="py-2 px-3 font-mono text-slate-400">{row.rowNumber}</td>
+                                <td className="py-2 px-3 font-bold text-slate-800 dark:text-slate-200">{row.fullName || "—"}</td>
+                                <td className="py-2 px-3 font-mono text-slate-600 dark:text-slate-300 text-[11px]">{row.email || "—"}</td>
+                                <td className="py-2 px-3 font-mono text-[var(--color-primary)] text-[11px] font-semibold">{row.batchCodes || "—"}</td>
+                                <td className="py-2 px-3">
+                                  <span className="capitalize px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                                    {row.status}
+                                  </span>
+                                </td>
+                                <td className="py-2 px-3">
+                                  {row.isValid ? (
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Ready
+                                    </span>
+                                  ) : (
+                                    <div className="space-y-0.5">
+                                      {row.errors.map((err, errIdx) => (
+                                        <p key={errIdx} className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold flex items-center gap-1">
+                                          <AlertTriangle className="w-3 h-3 shrink-0" /> {err}
+                                        </p>
+                                      ))}
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
                   )}
                 </div>
-              </div>
 
-              {/* Pinned Modal Footer */}
-              <div className="shrink-0 p-3.5 sm:p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/40 flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCreateUserModal(false);
-                    setUserError(null);
-                    setUserSuccess(null);
-                  }}
-                  className="w-full sm:w-auto px-4 py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl transition cursor-pointer text-xs"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={userSubmitting || userForm.batchIds.length === 0}
-                  className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl transition shadow-sm shadow-blue-500/20 cursor-pointer text-xs"
-                >
-                  {userSubmitting ? "Creating..." : "Create User"}
-                </button>
+                {/* Bulk Tab Footer */}
+                <div className="shrink-0 p-3.5 sm:p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/40 flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCreateUserModal(false);
+                      setBulkError(null);
+                      setBulkSuccess(null);
+                      setBulkValidationResult(null);
+                      setBulkFileName("");
+                    }}
+                    className="w-full sm:w-auto px-4 py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl transition cursor-pointer text-xs"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!bulkValidationResult || bulkValidationResult.validCount === 0 || bulkLoading}
+                    onClick={handleExecuteBulkImport}
+                    className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl transition shadow-sm shadow-emerald-500/20 cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>
+                      {bulkLoading
+                        ? "Importing..."
+                        : `Import ${bulkValidationResult ? bulkValidationResult.validCount : 0} Valid Student(s)`}
+                    </span>
+                  </button>
+                </div>
               </div>
-            </form>
+            )}
           </div>
         </div>
       )}

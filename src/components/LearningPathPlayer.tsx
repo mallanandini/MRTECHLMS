@@ -12,6 +12,8 @@ import {
   ChevronDown, ChevronRight, HelpCircle
 } from "lucide-react";
 import { LearningPath, LearningPathSection, LearningPathItem } from "../types.js";
+import { getEmbedVideo } from "../utils/youtube.js";
+import { PDFViewer } from "./PDFViewer.js";
 
 interface LearningPathPlayerProps {
   pathId: string;
@@ -608,71 +610,65 @@ export function LearningPathPlayer({ pathId, authToken }: LearningPathPlayerProp
               )}
 
               {/* 2. VIDEO ITEM */}
-              {activeItem.type === "video" && (
-                <div className="space-y-4">
-                  <div className="aspect-video bg-black rounded-xl overflow-hidden shadow-md">
-                    {activeItem.videoSource === "upload" || activeItem.videoUrl?.startsWith("/storage/") ? (
-                      <video src={activeItem.videoUrl} controls className="w-full h-full" />
-                    ) : activeItem.videoUrl?.includes("youtube.com") || activeItem.videoUrl?.includes("youtu.be") ? (
-                      <iframe
-                        src={`https://www.youtube.com/embed/${
-                          activeItem.videoUrl.includes("v=") 
-                            ? activeItem.videoUrl.split("v=")[1]?.split("&")[0] 
-                            : activeItem.videoUrl.split("/").pop()
-                        }`}
-                        className="w-full h-full border-0"
-                        allowFullScreen
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-white text-xs">
-                        <Play className="w-10 h-10 text-white/50" />
-                      </div>
-                    )}
+              {activeItem.type === "video" && (() => {
+                const embed = getEmbedVideo(activeItem.videoUrl);
+                return (
+                  <div className="space-y-4">
+                    <div className="aspect-video bg-black rounded-xl overflow-hidden shadow-md">
+                      {activeItem.videoSource === "upload" || activeItem.videoUrl?.startsWith("/storage/") ? (
+                        <video src={activeItem.videoUrl} controls className="w-full h-full" />
+                      ) : embed?.type === "youtube" ? (
+                        <iframe
+                          src={embed.embedUrl}
+                          className="w-full h-full border-0"
+                          referrerPolicy="strict-origin-when-cross-origin"
+                          allowFullScreen
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        />
+                      ) : embed?.type === "vimeo" ? (
+                        <iframe
+                          src={embed.embedUrl}
+                          className="w-full h-full border-0"
+                          referrerPolicy="strict-origin-when-cross-origin"
+                          allowFullScreen
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-white text-xs">
+                          <Play className="w-10 h-10 text-white/50" />
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* 3. PDF ITEM */}
               {activeItem.type === "pdf" && (
                 <div className="space-y-4">
-                  <div className="p-6 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="p-4 sm:p-5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-lg bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 flex items-center justify-center shrink-0">
-                        <File className="w-6 h-6" />
+                      <div className="w-10 h-10 rounded-lg bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 flex items-center justify-center shrink-0">
+                        <File className="w-5 h-5" />
                       </div>
                       <div>
                         <h4 className="text-sm font-bold text-slate-900 dark:text-white">
                           {activeItem.fileName || "Study Material PDF"}
                         </h4>
-                        <span className="text-xs text-slate-400">PDF Document • Read or download for offline study</span>
+                        <span className="text-xs text-slate-400 font-mono">
+                          Protected PDF Document · View-Only Inside LMS
+                        </span>
                       </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
-                      <a
-                        href={activeItem.fileUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex-1 sm:flex-initial px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 shadow-xs transition-colors"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        <span>View Document</span>
-                      </a>
-                      <a
-                        href={activeItem.fileUrl}
-                        download
-                        className="flex-1 sm:flex-initial px-4 py-2 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>Download</span>
-                      </a>
                     </div>
                   </div>
 
                   {activeItem.fileUrl && (
-                    <div className="h-[480px] rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-100">
-                      <iframe src={activeItem.fileUrl} className="w-full h-full border-0" />
+                    <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm">
+                      <PDFViewer
+                        url={activeItem.fileUrl}
+                        authToken={authToken}
+                        title={activeItem.fileName || "Study Material PDF"}
+                      />
                     </div>
                   )}
                 </div>
