@@ -706,10 +706,10 @@ export async function initializeDatabase() {
   console.log("MySQL tables, audit logs, and authoring schema configured successfully.");
   await runMigrations(pool);
 
-  // 2. Perform Migration of Mock JSON data if tables are empty
-  const [usersCountResult]: any = await pool.query("SELECT COUNT(*) as count FROM users");
-  if (usersCountResult[0].count === 0) {
-    console.log("MySQL database is empty. Starting migration of JSON mock data...");
+  // Synchronize bundled fixtures on each startup. INSERT IGNORE makes this
+  // idempotent and lets a previous partial import resume safely.
+  {
+    console.log("Synchronizing bundled JSON sample data...");
 
     // Migrate Users
     const jsonUsers = await loadJsonFile<any>("users.json");
@@ -724,7 +724,7 @@ export async function initializeDatabase() {
         }
       }
       await pool.query(
-        "INSERT INTO users (id, name, email, role, profilePhoto, createdAt, status, bookmarkedBlogIds, passwordHash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT IGNORE INTO users (id, name, email, role, profilePhoto, createdAt, status, bookmarkedBlogIds, passwordHash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [u.id, u.name, u.email, u.role, u.profilePhoto || null, u.createdAt, u.status, JSON.stringify(u.bookmarkedBlogIds || []), u.passwordHash]
       );
     }
@@ -734,7 +734,7 @@ export async function initializeDatabase() {
     const jsonCourses = await loadJsonFile<any>("courses.json");
     for (const c of jsonCourses) {
       await pool.query(
-        "INSERT INTO courses (id, title, description, thumbnail, banner, instructorId, instructorName, category, requirements, skillsCovered, status, isFeatured, rating, reviewsCount, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT IGNORE INTO courses (id, title, description, thumbnail, banner, instructorId, instructorName, category, requirements, skillsCovered, status, isFeatured, rating, reviewsCount, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [c.id, c.title, c.description, c.thumbnail || null, c.banner || null, c.instructorId, c.instructorName, c.category, JSON.stringify(c.requirements || []), JSON.stringify(c.skillsCovered || []), c.status || "published", c.isFeatured || false, c.rating || 5.0, c.reviewsCount || 0, c.createdAt]
       );
     }
@@ -744,7 +744,7 @@ export async function initializeDatabase() {
     const jsonModules = await loadJsonFile<any>("modules.json");
     for (const m of jsonModules) {
       await pool.query(
-        "INSERT INTO modules (id, courseId, title, \`order\`) VALUES (?, ?, ?, ?)",
+        "INSERT IGNORE INTO modules (id, courseId, title, \`order\`) VALUES (?, ?, ?, ?)",
         [m.id, m.courseId, m.title, m.order]
       );
     }
@@ -754,17 +754,24 @@ export async function initializeDatabase() {
     const jsonLessons = await loadJsonFile<any>("lessons.json");
     for (const l of jsonLessons) {
       await pool.query(
-        "INSERT INTO lessons (id, moduleId, courseId, title, type, content, videoUrl, fileUrl, codingPrompt, \`order\`, durationMinutes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT IGNORE INTO lessons (id, moduleId, courseId, title, type, content, videoUrl, fileUrl, codingPrompt, \`order\`, durationMinutes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [l.id, l.moduleId, l.courseId, l.title, l.type, l.content || null, l.videoUrl || null, l.fileUrl || null, l.codingPrompt ? JSON.stringify(l.codingPrompt) : null, l.order, l.durationMinutes]
       );
     }
     console.log(`Migrated ${jsonLessons.length} lessons.`);
 
+    const [studentRows]: any = await pool.query("SELECT id FROM users WHERE role = 'student'");
+    const studentIds = new Set<string>(studentRows.map((row: { id: string }) => row.id));
+
     // Migrate Enrollments
     const jsonEnrollments = await loadJsonFile<any>("enrollments.json");
     for (const e of jsonEnrollments) {
+      if (!studentIds.has(e.studentId)) {
+        console.warn(`Skipping enrollment ${e.id}: student ${e.studentId} is not present.`);
+        continue;
+      }
       await pool.query(
-        "INSERT INTO enrollments (id, studentId, courseId, enrolledAt, completedAt) VALUES (?, ?, ?, ?, ?)",
+        "INSERT IGNORE INTO enrollments (id, studentId, courseId, enrolledAt, completedAt) VALUES (?, ?, ?, ?, ?)",
         [e.id, e.studentId, e.courseId, e.enrolledAt, e.completedAt || null]
       );
     }
@@ -773,8 +780,12 @@ export async function initializeDatabase() {
     // Migrate Progress
     const jsonProgress = await loadJsonFile<any>("progress.json");
     for (const p of jsonProgress) {
+      if (!studentIds.has(p.studentId)) {
+        console.warn(`Skipping progress ${p.id}: student ${p.studentId} is not present.`);
+        continue;
+      }
       await pool.query(
-        "INSERT INTO progress (id, studentId, courseId, lessonId, completed, completedAt, timeSpentSeconds) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT IGNORE INTO progress (id, studentId, courseId, lessonId, completed, completedAt, timeSpentSeconds) VALUES (?, ?, ?, ?, ?, ?, ?)",
         [p.id, p.studentId, p.courseId, p.lessonId, p.completed || false, p.completedAt || null, p.timeSpentSeconds || 0]
       );
     }
@@ -784,7 +795,7 @@ export async function initializeDatabase() {
     const jsonAssessments = await loadJsonFile<any>("assessments.json");
     for (const a of jsonAssessments) {
       await pool.query(
-        "INSERT INTO assessments (id, courseId, moduleId, title, description, durationMinutes, passingScore, totalPoints, questionsCount, createdAt, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT IGNORE INTO assessments (id, courseId, moduleId, title, description, durationMinutes, passingScore, totalPoints, questionsCount, createdAt, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [a.id, a.courseId, a.moduleId || null, a.title, a.description, a.durationMinutes, a.passingScore, a.totalPoints, a.questionsCount, a.createdAt, a.status]
       );
     }
@@ -794,7 +805,7 @@ export async function initializeDatabase() {
     const jsonQuestions = await loadJsonFile<any>("questions.json");
     for (const q of jsonQuestions) {
       await pool.query(
-        "INSERT INTO questions (id, assessmentId, type, questionText, options, correctAnswers, points, negativePoints) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT IGNORE INTO questions (id, assessmentId, type, questionText, options, correctAnswers, points, negativePoints) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         [q.id, q.assessmentId, q.type, q.questionText, q.options ? JSON.stringify(q.options) : null, JSON.stringify(q.correctAnswers || []), q.points, q.negativePoints || 0]
       );
     }
@@ -803,8 +814,12 @@ export async function initializeDatabase() {
     // Migrate Submissions
     const jsonSubmissions = await loadJsonFile<any>("submissions.json");
     for (const s of jsonSubmissions) {
+      if (!studentIds.has(s.studentId)) {
+        console.warn(`Skipping submission ${s.id}: student ${s.studentId} is not present.`);
+        continue;
+      }
       await pool.query(
-        "INSERT INTO submissions (id, assessmentId, studentId, studentName, answers, score, totalPoints, passed, submittedAt, timeTakenSeconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT IGNORE INTO submissions (id, assessmentId, studentId, studentName, answers, score, totalPoints, passed, submittedAt, timeTakenSeconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [s.id, s.assessmentId, s.studentId, s.studentName, JSON.stringify(s.answers || {}), s.score, s.totalPoints, s.passed, s.submittedAt, s.timeTakenSeconds]
       );
     }
@@ -813,8 +828,12 @@ export async function initializeDatabase() {
     // Migrate Coding Submissions
     const jsonCodingSub = await loadJsonFile<any>("coding_submissions.json");
     for (const cs of jsonCodingSub) {
+      if (!studentIds.has(cs.studentId)) {
+        console.warn(`Skipping coding submission ${cs.id}: student ${cs.studentId} is not present.`);
+        continue;
+      }
       await pool.query(
-        "INSERT INTO coding_submissions (id, studentId, studentName, problemId, language, code, status, output, passedCount, totalCount, submittedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT IGNORE INTO coding_submissions (id, studentId, studentName, problemId, language, code, status, output, passedCount, totalCount, submittedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [cs.id, cs.studentId, cs.studentName, cs.problemId, cs.language, cs.code, cs.status, cs.output || null, cs.passedCount, cs.totalCount, cs.submittedAt]
       );
     }
@@ -824,7 +843,7 @@ export async function initializeDatabase() {
     const jsonBlogs = await loadJsonFile<any>("blogs.json");
     for (const b of jsonBlogs) {
       await pool.query(
-        "INSERT INTO blogs (id, title, content, summary, coverImage, authorId, authorName, category, tags, likesCount, bookmarksCount, status, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT IGNORE INTO blogs (id, title, content, summary, coverImage, authorId, authorName, category, tags, likesCount, bookmarksCount, status, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [b.id, b.title, b.content, b.summary, b.coverImage || null, b.authorId, b.authorName, b.category, JSON.stringify(b.tags || []), b.likesCount || 0, b.bookmarksCount || 0, b.status, b.createdAt]
       );
     }
@@ -834,7 +853,7 @@ export async function initializeDatabase() {
     const jsonComments = await loadJsonFile<any>("comments.json");
     for (const c of jsonComments) {
       await pool.query(
-        "INSERT INTO comments (id, blogId, authorId, authorName, authorRole, content, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT IGNORE INTO comments (id, blogId, authorId, authorName, authorRole, content, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
         [c.id, c.blogId, c.authorId, c.authorName, c.authorRole, c.content, c.createdAt]
       );
     }
@@ -843,16 +862,18 @@ export async function initializeDatabase() {
     // Migrate Reviews
     const jsonReviews = await loadJsonFile<any>("reviews.json");
     for (const r of jsonReviews) {
+      if (!studentIds.has(r.studentId)) {
+        console.warn(`Skipping review ${r.id}: student ${r.studentId} is not present.`);
+        continue;
+      }
       await pool.query(
-        "INSERT INTO reviews (id, courseId, studentId, studentName, rating, comment, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT IGNORE INTO reviews (id, courseId, studentId, studentName, rating, comment, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
         [r.id, r.courseId, r.studentId, r.studentName, r.rating, r.comment, r.createdAt]
       );
     }
     console.log(`Migrated ${jsonReviews.length} reviews.`);
 
-    console.log("Migration complete!");
-  } else {
-    console.log("MySQL database already populated. Skipping JSON data migration.");
+    console.log("Bundled JSON sample data synchronization complete.");
   }
 
   // Ensure default coding challenges are seeded
@@ -1454,7 +1475,7 @@ async function seedCodingHierarchy(pool: any) {
           c.id, c.chapterId, c.topicId, c.orderIndex, c.title, c.slug, c.description, c.difficulty, c.category, c.challengeType,
           c.supportedLanguages, c.starterCode, c.htmlStarterCode || null, c.cssStarterCode || null, c.javascriptStarterCode || null,
           c.inputFormat, c.outputFormat, c.constraints, c.examples, c.publicTestCases, c.privateTestCases,
-          c.hints, c.solutionExplanation, c.timeLimit, c.memoryLimit, c.createdAt, c.updatedAt
+          c.hints, c.solutionExplanation, c.timeLimit, c.memoryLimit, c.createdAt, c.updatedAt || c.createdAt || new Date().toISOString()
         ]
       );
       insertedCount++;

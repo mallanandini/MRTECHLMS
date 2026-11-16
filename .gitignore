@@ -8,6 +8,7 @@ coverage/
 !.env.example
 scratch/
 *.sql
+!setup-database.sql
 
 # Runtime media & uploaded assets (Centralized in top-level assets/)
 assets/videos/*
