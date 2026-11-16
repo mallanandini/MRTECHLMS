@@ -45,5 +45,27 @@
     "rating": 4.6,
     "reviewsCount": 75,
     "createdAt": "2026-02-01T00:00:00.000Z"
+  },
+  {
+    "id": "course-python-foundations-2026",
+    "title": "Python Programming Foundations: From First Steps to Practical Projects",
+    "shortDescription": "Learn Python from the ground up and build useful command-line programs along the way.",
+    "description": "A beginner-friendly, hands-on course for learning Python with confidence. Start with readable code and core data types, then practice decisions, loops, collections, functions, files, error handling, and classes. Finish by building and testing a command-line expense tracker. No programming experience is required.",
+    "difficulty": "Beginner",
+    "estimatedDuration": "8 hours",
+    "thumbnail": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600&auto=format&fit=crop&q=80",
+    "banner": "https://images.unsplash.com/photo-1515879218367-8466d910aaa4?w=1200&auto=format&fit=crop&q=80",
+    "instructorId": "trainer-1",
+    "instructorName": "Dr. Sarah Mitchell",
+    "category": "Programming",
+    "requirements": ["A computer with Python 3 installed", "No prior programming experience required"],
+    "prerequisites": [],
+    "skillsCovered": ["Python syntax and data types", "Conditionals and loops", "Lists and dictionaries", "Functions and modules", "Files and exceptions", "Object-oriented programming", "Testing and debugging"],
+    "tags": ["python", "programming", "beginner", "projects"],
+    "status": "published",
+    "isFeatured": false,
+    "rating": 0,
+    "reviewsCount": 0,
+    "createdAt": "2026-11-16T00:00:00.000Z"
   }
 ]

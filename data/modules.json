@@ -22,5 +22,33 @@
     "courseId": "course-2",
     "title": "Module 2: Real-World Coding & AI Solutions",
     "order": 2
+  },
+  {
+    "id": "mod-python-foundations-01",
+    "courseId": "course-python-foundations-2026",
+    "title": "Module 1: Getting Started with Python",
+    "description": "Set up Python, run your first program, and work with variables, values, and basic expressions.",
+    "order": 1
+  },
+  {
+    "id": "mod-python-foundations-02",
+    "courseId": "course-python-foundations-2026",
+    "title": "Module 2: Decisions, Loops, and Collections",
+    "description": "Control program flow and organize related data with lists and dictionaries.",
+    "order": 2
+  },
+  {
+    "id": "mod-python-foundations-03",
+    "courseId": "course-python-foundations-2026",
+    "title": "Module 3: Functions, Files, and Errors",
+    "description": "Write reusable functions, divide work into modules, and handle files and common errors safely.",
+    "order": 3
+  },
+  {
+    "id": "mod-python-foundations-04",
+    "courseId": "course-python-foundations-2026",
+    "title": "Module 4: Classes and Your First Project",
+    "description": "Learn the basics of classes, test your code, and build a small expense tracker.",
+    "order": 4
   }
 ]

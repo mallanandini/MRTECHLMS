@@ -116,7 +116,7 @@ export function AssessmentSubmissionDetailModal({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-bold text-slate-900">
-                  Candidate Submission Evaluation
+                  Student Assessment Review
                 </h3>
                 {data && (
                   <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded uppercase ${
@@ -230,8 +230,8 @@ export function AssessmentSubmissionDetailModal({
 
                 <div className="space-y-4">
                   {data.questions.map((q, idx) => {
-                    const studentChoice = q.studentAnswers[0];
-                    const correctChoice = q.correctAnswers[0];
+                    const studentAnswers = Array.isArray(q.studentAnswers) ? q.studentAnswers : [];
+                    const correctAnswers = Array.isArray(q.correctAnswers) ? q.correctAnswers : [];
 
                     return (
                       <div 
@@ -284,43 +284,52 @@ export function AssessmentSubmissionDetailModal({
                         </div>
 
                         {/* Options list */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-9 pt-1">
-                          {q.options.map((opt, oIdx) => {
-                            const isCorrectOpt = opt === correctChoice;
-                            const isStudentOpt = opt === studentChoice;
+                        {q.options.length > 0 ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-9 pt-1">
+                            {q.options.map((opt, oIdx) => {
+                              const isCorrectOpt = correctAnswers.includes(opt);
+                              const isStudentOpt = studentAnswers.includes(opt);
+                              const optStyle = isCorrectOpt
+                                ? "bg-emerald-50 border-emerald-300 text-emerald-900"
+                                : isStudentOpt
+                                  ? "bg-rose-50 border-rose-300 text-rose-900"
+                                  : "bg-white border-slate-200 text-slate-600";
 
-                            let optStyle = "bg-white border-slate-200 text-slate-600";
-                            if (isCorrectOpt) {
-                              optStyle = "bg-emerald-100/70 border-emerald-300 text-emerald-900 font-bold";
-                            } else if (isStudentOpt && !isCorrectOpt) {
-                              optStyle = "bg-rose-100/70 border-rose-300 text-rose-900 line-through font-semibold";
-                            }
-
-                            return (
-                              <div 
-                                key={oIdx}
-                                className={`px-3 py-2 rounded-lg text-xs flex items-center justify-between border ${optStyle}`}
-                              >
-                                <div className="flex items-center gap-2 truncate">
-                                  <span className="w-4 h-4 rounded-full flex items-center justify-center font-mono text-[9px] shrink-0 font-bold border border-slate-300">
-                                    {String.fromCharCode(65 + oIdx)}
-                                  </span>
-                                  <span className="truncate">{opt}</span>
+                              return (
+                                <div
+                                  key={oIdx}
+                                  className={`px-3 py-2 rounded-lg text-xs flex items-center justify-between gap-2 border ${optStyle}`}
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="w-4 h-4 rounded-full flex items-center justify-center font-mono text-[9px] shrink-0 font-bold border border-slate-300">
+                                      {String.fromCharCode(65 + oIdx)}
+                                    </span>
+                                    <span className="break-words">{opt}</span>
+                                  </div>
+                                  <div className="flex flex-wrap justify-end gap-1 shrink-0">
+                                    {isCorrectOpt && <span className="text-[9px] font-mono font-bold text-emerald-700">RIGHT ANSWER</span>}
+                                    {isStudentOpt && (
+                                      <span className={`text-[9px] font-mono font-bold ${isCorrectOpt ? "text-emerald-700" : "text-rose-700"}`}>
+                                        {isCorrectOpt ? "STUDENT PICK" : "WRONG PICK"}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                                {isCorrectOpt && (
-                                  <span className="text-[9px] font-mono font-bold text-emerald-700 ml-2 shrink-0">
-                                    CORRECT
-                                  </span>
-                                )}
-                                {isStudentOpt && !isCorrectOpt && (
-                                  <span className="text-[9px] font-mono font-bold text-rose-700 ml-2 shrink-0">
-                                    STUDENT PICK
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="ml-9 grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                            <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs">
+                              <span className="block mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Student response</span>
+                              <p className="text-slate-800 whitespace-pre-wrap break-words">{studentAnswers.length ? studentAnswers.join(", ") : "No response"}</p>
+                            </div>
+                            <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs">
+                              <span className="block mb-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">Correct answer</span>
+                              <p className="text-emerald-900 whitespace-pre-wrap break-words">{correctAnswers.length ? correctAnswers.join(", ") : "Manual review required"}</p>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Explanation */}
                         {q.explanation && (
