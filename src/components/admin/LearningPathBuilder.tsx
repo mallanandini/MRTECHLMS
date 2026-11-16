@@ -657,7 +657,7 @@ export function LearningPathBuilder({
       showToast("Thumbnail uploaded successfully", "success");
 
       // Clean up previous uploaded image if replaced
-      if (oldThumbnail && oldThumbnail.startsWith("/storage/") && oldThumbnail !== data.url) {
+      if (oldThumbnail && (oldThumbnail.startsWith("/assets/") || oldThumbnail.startsWith("/storage/")) && oldThumbnail !== data.url) {
         fetch("/api/upload", {
           method: "DELETE",
           headers: {
@@ -684,7 +684,7 @@ export function LearningPathBuilder({
     }
 
     // Attempt cleanup of orphaned server-stored thumbnail
-    if (oldThumbnail && oldThumbnail.startsWith("/storage/")) {
+    if (oldThumbnail && (oldThumbnail.startsWith("/assets/") || oldThumbnail.startsWith("/storage/"))) {
       try {
         await fetch("/api/upload", {
           method: "DELETE",

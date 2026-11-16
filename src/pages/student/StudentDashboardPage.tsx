@@ -8,7 +8,6 @@ import { useNavigate } from "react-router-dom";
 import { StudentDashboard } from "../../components/StudentDashboard.js";
 import { useAuth } from "../../context/AuthContext.js";
 import { useToast } from "../../context/NotificationContext.js";
-import { Course } from "../../types.js";
 import { ThemeQuickControls } from "../../components/ThemeQuickControls.js";
 import { NotificationBell } from "../../components/NotificationBell.js";
 
@@ -17,7 +16,6 @@ export function StudentDashboardPage() {
   const toast = useToast();
   const navigate = useNavigate();
 
-  const [catalogCourses, setCatalogCourses] = useState<Course[]>([]);
   const [myDashboardStats, setMyDashboardStats] = useState<any>(null);
   const [enrolledCourseIds, setEnrolledCourseIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -26,14 +24,7 @@ export function StudentDashboardPage() {
     if (!authToken) return;
     setIsLoading(true);
     try {
-      // Load Catalog
-      const catRes = await fetch("/api/courses");
-      if (catRes.ok) {
-        const catData = await catRes.json();
-        setCatalogCourses(catData);
-      }
-
-      // Load Stats
+      // Load Stats & Assigned Courses
       const statsRes = await fetch("/api/student/dashboard", {
         headers: { Authorization: `Bearer ${authToken}` }
       });
@@ -88,7 +79,7 @@ export function StudentDashboardPage() {
         currentUser={currentUser}
         authToken={authToken}
         myDashboardStats={myDashboardStats}
-        catalogCourses={catalogCourses}
+        catalogCourses={[]}
         enrolledCourseIds={enrolledCourseIds}
         onResumeCourse={(courseId) => navigate(`/student/course/${courseId}`)}
         onResumeLearningPath={(pathId) => navigate(`/student/learning-path/${pathId}`)}

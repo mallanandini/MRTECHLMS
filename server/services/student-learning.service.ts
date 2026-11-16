@@ -34,7 +34,7 @@ export class StudentLearningService {
           CASE WHEN e.dueDate IS NOT NULL THEN DATEDIFF(e.dueDate, NOW()) ELSE NULL END AS daysRemaining
          FROM courses c
          LEFT JOIN enrollments e ON e.courseId = c.id AND e.studentId = ? AND e.deletedAt IS NULL
-         WHERE c.id IN (${ph}) AND c.deletedAt IS NULL
+         WHERE c.id IN (${ph}) AND c.deletedAt IS NULL AND (c.status = 'published' OR c.status = 'archived')
          ORDER BY isOverdue DESC, isDueSoon DESC, COALESCE(e.lastAccessedAt, e.enrolledAt, c.createdAt) DESC`,
         [studentId, ...effectiveCourseIds]
       );
@@ -92,7 +92,9 @@ export class StudentLearningService {
           isDueSoon: !!e.isDueSoon,
           daysRemaining: e.daysRemaining !== null ? Number(e.daysRemaining) : null,
           assessmentId: courseAssMap.get(e.courseId) || null,
-          batchNames: eff?.batches?.map(b => b.name) || []
+          batchNames: eff?.batches?.map(b => b.name) || [],
+          assignmentSource: eff?.assignmentSource || "individual",
+          sourceDetails: eff?.sourceDetails || null
         };
       });
     }
@@ -459,39 +461,8 @@ export class StudentLearningService {
       estimatedLearningHours
     };
 
-    // 9. Recommended Learning Catalog (Courses not yet enrolled)
-    const [recRows]: any = await pool.query(
-      `SELECT 
-        c.id, c.title, c.category, c.thumbnail, c.shortDescription, c.description,
-        c.difficulty, c.estimatedDuration, c.rating, c.reviewsCount,
-        c.prerequisites, c.skillsCovered
-       FROM courses c
-       WHERE c.organizationId = ? AND c.status = 'published' AND c.deletedAt IS NULL
-         AND c.id NOT IN (
-           SELECT courseId FROM enrollments WHERE studentId = ? AND status != 'revoked' AND deletedAt IS NULL
-           UNION
-           SELECT bc.courseId FROM batch_students bs JOIN batch_courses bc ON bc.batchId = bs.batchId WHERE bs.studentId = ? AND bs.status = 'active' AND bc.status = 'active'
-           UNION
-           SELECT b.courseId FROM batch_students bs JOIN batches b ON b.id = bs.batchId WHERE bs.studentId = ? AND bs.status = 'active' AND b.courseId IS NOT NULL AND b.courseId != ''
-         )
-       ORDER BY c.rating DESC, c.reviewsCount DESC
-       LIMIT 4`,
-      [orgId, studentId, studentId, studentId]
-    );
-
-    const recommendedLearning = recRows.map((r: any) => ({
-      id: r.id,
-      title: r.title,
-      category: r.category,
-      thumbnail: r.thumbnail,
-      shortDescription: r.shortDescription || (r.description ? r.description.slice(0, 120) + "..." : ""),
-      difficulty: r.difficulty || "Intermediate",
-      estimatedDuration: r.estimatedDuration || "6 hours",
-      rating: Number(r.rating) || 5.0,
-      reviewsCount: Number(r.reviewsCount) || 0,
-      prerequisites: typeof r.prerequisites === "string" ? JSON.parse(r.prerequisites) : r.prerequisites || [],
-      skillsCovered: typeof r.skillsCovered === "string" ? JSON.parse(r.skillsCovered) : r.skillsCovered || []
-    }));
+    // 9. Recommended Learning Catalog - Disabled per policy: only assigned/enrolled courses are shown to students
+    const recommendedLearning: any[] = [];
 
     // 10. Student Active Batches with courses
     const [myBatches]: any = await pool.query(`

@@ -261,9 +261,12 @@ export function getEmbedVideo(url?: string, options: YouTubeEmbedOptions = {}): 
     };
   }
 
-  // 3. Direct video format or relative storage path
+  // 3. Direct video format or relative assets/storage path
   const isDirectVideo =
     /\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/i.test(trimmed) ||
+    trimmed.startsWith("/assets/videos/") ||
+    trimmed.startsWith("/assets/documents/") ||
+    trimmed.startsWith("/assets/other/") ||
     trimmed.startsWith("/storage/videos/") ||
     trimmed.startsWith("/storage/materials/");
 

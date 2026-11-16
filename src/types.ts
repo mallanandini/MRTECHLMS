@@ -286,7 +286,7 @@ export interface TestCase {
   isPublic: boolean;
 }
 
-export type AccessStatus = "assigned" | "not_started" | "in_progress" | "completed" | "expired" | "revoked";
+export type AccessStatus = "assigned" | "not_started" | "in_progress" | "completed" | "expired" | "revoked" | "suspended" | "inactive";
 export type AssignmentSource = "individual" | "bulk" | "group" | "course" | "learning_path" | "self" | "batch";
 
 export interface Enrollment {

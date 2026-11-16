@@ -9,7 +9,25 @@ coverage/
 scratch/
 *.sql
 
-# Runtime media & private uploads
+# Runtime media & uploaded assets (Centralized in top-level assets/)
+assets/videos/*
+!assets/videos/.gitkeep
+assets/pdfs/*
+!assets/pdfs/.gitkeep
+assets/documents/*
+!assets/documents/.gitkeep
+assets/images/*
+!assets/images/.gitkeep
+!assets/images/thumbnails/
+assets/images/thumbnails/*
+!assets/images/thumbnails/.gitkeep
+!assets/images/avatars/
+assets/images/avatars/*
+!assets/images/avatars/.gitkeep
+assets/other/*
+!assets/other/.gitkeep
+
+# Legacy storage directory (kept for backward compatibility)
 storage/avatars/*
 !storage/avatars/.gitkeep
 storage/videos/*
@@ -18,3 +36,4 @@ storage/course-thumbnails/*
 !storage/course-thumbnails/.gitkeep
 storage/materials/*.pdf
 storage/materials/*.mp4
+storage/materials/*.txt

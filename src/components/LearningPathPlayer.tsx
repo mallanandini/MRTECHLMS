@@ -615,7 +615,7 @@ export function LearningPathPlayer({ pathId, authToken }: LearningPathPlayerProp
                 return (
                   <div className="space-y-4">
                     <div className="aspect-video bg-black rounded-xl overflow-hidden shadow-md">
-                      {activeItem.videoSource === "upload" || activeItem.videoUrl?.startsWith("/storage/") ? (
+                      {activeItem.videoSource === "upload" || activeItem.videoUrl?.startsWith("/assets/") || activeItem.videoUrl?.startsWith("/storage/") ? (
                         <video src={activeItem.videoUrl} controls className="w-full h-full" />
                       ) : embed?.type === "youtube" ? (
                         <iframe

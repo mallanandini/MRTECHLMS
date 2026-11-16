@@ -1229,16 +1229,16 @@ export class AccessControlService {
     }
 
     // Revocation check: explicit student revocation overrides batch access
-    if (enrollment && enrollment.status === "revoked") {
+    if (enrollment && (enrollment.status === "revoked" || enrollment.status === "suspended" || enrollment.status === "inactive")) {
       return { 
         allowed: false, 
         status: 403, 
-        error: `Access denied. Your enrollment has been revoked: ${enrollment.revocationReason || "Contact your LMS administrator."}` 
+        error: `Access denied. Your enrollment has been ${enrollment.status}: ${enrollment.revocationReason || "Contact your LMS administrator."}` 
       };
     }
 
     // Due date & expiration check (if incomplete and overdue)
-    if (enrollment.dueDate && new Date(enrollment.dueDate) < new Date() && !enrollment.completedAt && (enrollment.progressPercentage || 0) < 100) {
+    if (enrollment && enrollment.dueDate && new Date(enrollment.dueDate) < new Date() && !enrollment.completedAt && (enrollment.progressPercentage || 0) < 100) {
       return {
         allowed: false,
         status: 403,
@@ -1534,12 +1534,12 @@ export class AccessControlService {
    * and populates course title, source details, status, and revoke capability.
    */
   static async getStudentEffectiveCourses(studentId: string): Promise<EffectiveCourseAccess[]> {
-    // 1. Direct enrollments for the student
+    // 1. Direct enrollments for the student (only published/archived courses, not deleted)
     const [directRows]: any = await pool.query(`
       SELECT e.*, c.title as courseTitle, c.category, c.instructorName, c.status as courseStatus
       FROM enrollments e
-      LEFT JOIN courses c ON e.courseId = c.id
-      WHERE e.studentId = ? AND e.deletedAt IS NULL
+      JOIN courses c ON e.courseId = c.id
+      WHERE e.studentId = ? AND e.deletedAt IS NULL AND c.deletedAt IS NULL AND (c.status = 'published' OR c.status = 'archived')
     `, [studentId]);
 
     // 2. Active batch memberships for the student with courses (from batch_courses AND/OR batches.courseId)
@@ -1559,8 +1559,8 @@ export class AccessControlService {
       FROM batch_students bs
       JOIN batches b ON bs.batchId = b.id AND b.status = 'active' AND b.deletedAt IS NULL
       JOIN batch_courses bc ON bc.batchId = b.id AND bc.status = 'active'
-      LEFT JOIN courses c ON bc.courseId = c.id
-      WHERE bs.studentId = ? AND bs.status = 'active' AND c.deletedAt IS NULL
+      JOIN courses c ON bc.courseId = c.id
+      WHERE bs.studentId = ? AND bs.status = 'active' AND c.deletedAt IS NULL AND (c.status = 'published' OR c.status = 'archived')
       UNION
       SELECT 
         bs.studentId,
@@ -1576,8 +1576,8 @@ export class AccessControlService {
         b.createdAt as batchCourseAssignedAt
       FROM batch_students bs
       JOIN batches b ON bs.batchId = b.id AND b.status = 'active' AND b.deletedAt IS NULL
-      LEFT JOIN courses c ON b.courseId = c.id
-      WHERE bs.studentId = ? AND bs.status = 'active' AND b.courseId IS NOT NULL AND b.courseId != '' AND c.deletedAt IS NULL
+      JOIN courses c ON b.courseId = c.id
+      WHERE bs.studentId = ? AND bs.status = 'active' AND b.courseId IS NOT NULL AND b.courseId != '' AND c.deletedAt IS NULL AND (c.status = 'published' OR c.status = 'archived')
     `, [studentId, studentId]);
 
     const courseMap = new Map<string, {
@@ -1643,11 +1643,11 @@ export class AccessControlService {
 
     for (const [courseId, data] of courseMap.entries()) {
       const direct = data.directEnrollment;
-      const isExplicitlyRevoked = direct && direct.status === "revoked";
-      const hasActiveDirect = direct && direct.status !== "revoked";
+      const isExplicitlyRevoked = direct && (direct.status === "revoked" || direct.status === "suspended" || direct.status === "inactive");
+      const hasActiveDirect = direct && direct.status !== "revoked" && direct.status !== "suspended" && direct.status !== "inactive";
       const hasBatch = data.batches.length > 0;
 
-      // Explicit student revocation overrides batch access
+      // Explicit student revocation or suspension overrides batch access
       if (isExplicitlyRevoked) {
         continue;
       }

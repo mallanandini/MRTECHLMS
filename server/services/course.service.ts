@@ -769,12 +769,12 @@ export class CourseService {
       };
     }
 
-    // 4. Revocation check: explicit student revocation overrides batch access
-    if (enrollment && enrollment.status === "revoked" && !enrollment.deletedAt) {
+    // 4. Revocation check: explicit student revocation or suspension overrides batch access
+    if (enrollment && (enrollment.status === "revoked" || enrollment.status === "suspended" || enrollment.status === "inactive") && !enrollment.deletedAt) {
       return { 
         allowed: false, 
         status: 403, 
-        message: `Access denied. Course access has been revoked: ${enrollment.revocationReason || "Contact your LMS administrator."}` 
+        message: `Access denied. Course access has been ${enrollment.status}: ${enrollment.revocationReason || "Contact your LMS administrator."}` 
       };
     }
 

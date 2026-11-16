@@ -3717,7 +3717,7 @@ export function CourseAuthoringStudio({
                         type="text"
                         value={lessonVideoUrl}
                         onChange={(e) => setLessonVideoUrl(e.target.value)}
-                        placeholder="e.g. https://www.youtube.com/watch?v=... or https://storage/..."
+                        placeholder="e.g. https://www.youtube.com/watch?v=... or /assets/videos/..."
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:bg-white"
                       />
                     </div>
@@ -3796,7 +3796,7 @@ export function CourseAuthoringStudio({
                         type="text"
                         value={lessonMaterialUrl}
                         onChange={(e) => setLessonMaterialUrl(e.target.value)}
-                        placeholder="e.g. https://... or /storage/materials/..."
+                        placeholder="e.g. https://... or /assets/pdfs/..."
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:bg-white"
                       />
                     </div>

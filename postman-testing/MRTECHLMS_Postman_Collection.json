@@ -1,0 +1,3986 @@
+{
+  "info": {
+    "_postman_id": "mrtechlms-full-api-testing-suite",
+    "name": "MRTECHLMS Complete API Testing",
+    "description": "Production-grade automated API testing collection for MRTECHLMS. Validates Authentication, Admin Operations, Academic Batches, Users, Courses, Modules, Lessons, Materials, Assessments, Questions, Submissions, Student Progress, Profiles, and Security Isolation.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Authentication APIs",
+      "item": [
+        {
+          "name": "Admin Login - Valid Credentials",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\",\n  \"portal\": \"admin\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Token received and role is admin', function () {",
+                  "  pm.expect(json.token).to.be.a('string');",
+                  "  pm.expect(json.user).to.be.an('object');",
+                  "  pm.expect(json.user.role).to.eql('admin');",
+                  "});",
+                  "pm.environment.set('adminToken', json.token);",
+                  "pm.environment.set('token', json.token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Student Login - Valid Credentials",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{studentEmail}}\",\n  \"password\": \"{{studentPassword}}\",\n  \"portal\": \"student\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Token received and role is student', function () {",
+                  "  pm.expect(json.token).to.be.a('string');",
+                  "  pm.expect(json.user).to.be.an('object');",
+                  "  pm.expect(json.user.role).to.eql('student');",
+                  "});",
+                  "pm.environment.set('studentToken', json.token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Current Session User (Me)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Current user matches session', function () {",
+                  "  pm.expect(json.user.email).to.eql(pm.environment.get('adminEmail'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Public Self-Registration Disabled",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Guest Self Register\",\n  \"email\": \"guest@example.com\",\n  \"password\": \"Password123!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 403 Forbidden', function () { pm.response.to.have.status(403); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Registration guard message verified', function () {",
+                  "  pm.expect(json.error).to.include('Public registration is disabled');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Admin Self-Registration Disabled",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/admin-register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "admin-register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Rogue Admin\",\n  \"email\": \"rogue@example.com\",\n  \"password\": \"Password123!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 403 Forbidden', function () { pm.response.to.have.status(403); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Admin registration guard verified', function () {",
+                  "  pm.expect(json.error).to.include('Public administrator registration is disabled');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Negative Auth - Invalid Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"WrongPassword!99\",\n  \"portal\": \"admin\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 Unauthorized', function () { pm.response.to.have.status(401); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Invalid credentials error message', function () {",
+                  "  pm.expect(json.error).to.eql('Invalid email or password');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Negative Auth - Empty Credentials Validation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"\",\n  \"password\": \"\",\n  \"portal\": \"admin\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400 Bad Request', function () { pm.response.to.have.status(400); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Admin APIs",
+      "item": [
+        {
+          "name": "Admin Dashboard Overview Metrics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/dashboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "dashboard"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Dashboard contains analytics or overview metrics', function () {",
+                  "  pm.expect(json.analytics || json.assessmentStats || json.recentCourses).to.be.ok;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin System Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/audit-logs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "audit-logs"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Audit logs is array', function () {",
+                  "  pm.expect(json).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Academic Batches",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/batches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "batches"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Batches list returned', function () {",
+                  "  pm.expect(json.batches || json).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Academic Batch",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/batches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "batches"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Automated Batch {{$timestamp}}\",\n  \"code\": \"BATCH-PM-{{$timestamp}}\",\n  \"institution\": \"MR Technologies Academy\",\n  \"academicYear\": \"2026\",\n  \"description\": \"Batch created via automated Postman testing\",\n  \"maxStudents\": 60\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Batch ID created', function () {",
+                  "  pm.expect(json.id).to.be.a('string');",
+                  "});",
+                  "pm.environment.set('batchId', json.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Batch Details by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/batches/{{batchId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "batches",
+                "{{batchId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Batch matches requested ID', function () {",
+                  "  pm.expect(json.id || json.batch.id).to.eql(pm.environment.get('batchId'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Batch Details",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/batches/{{batchId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "batches",
+                "{{batchId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated description via Postman\",\n  \"maxStudents\": 75\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Assign Students to Batch",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/batches/assign-students",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "batches",
+                "assign-students"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"batchId\": \"{{batchId}}\",\n  \"studentEmails\": [\n    \"{{studentEmail}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Success flag is true', function () {",
+                  "  pm.expect(json.success).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Academic Institutions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/institutions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "institutions"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Institutions is array', function () {",
+                  "  pm.expect(json).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. User Management APIs",
+      "item": [
+        {
+          "name": "List All Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Users list returned', function () {",
+                  "  pm.expect(json).to.be.an('array');",
+                  "  pm.expect(json.length).to.be.above(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Individual User (Student)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Postman User\",\n  \"email\": \"pm.test.{{$timestamp}}@example.com\",\n  \"password\": \"Student@123\",\n  \"role\": \"student\",\n  \"phoneNumber\": \"9876543210\",\n  \"location\": \"Hyderabad\",\n  \"batchIds\": [\n    \"{{batchId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.test('User created without exposing passwordHash', function () {",
+                  "  pm.expect(json.id).to.be.a('string');",
+                  "  pm.expect(json.passwordHash).to.be.undefined;",
+                  "});",
+                  "pm.environment.set('newUserId', json.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get User Access & Enrollment Matrix",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/{{newUserId}}/access",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users",
+                "{{newUserId}}",
+                "access"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Access details loaded', function () {",
+                  "  pm.expect(json).to.be.an('object');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get User Batch Memberships",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/{{newUserId}}/batches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users",
+                "{{newUserId}}",
+                "batches"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Batches array returned', function () {",
+                  "  pm.expect(json.batches || json).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update User Information",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/{{newUserId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users",
+                "{{newUserId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Postman User\",\n  \"location\": \"Bengaluru\",\n  \"phoneNumber\": \"9876543211\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Updated location verified', function () {",
+                  "  pm.expect(json.location).to.eql('Bengaluru');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin Reset User Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/{{newUserId}}/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users",
+                "{{newUserId}}",
+                "reset-password"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newPassword\": \"NewSecurePassword@123\",\n  \"confirmPassword\": \"NewSecurePassword@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Password reset confirmed', function () {",
+                  "  pm.expect(json.message).to.be.a('string');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update User Status (Suspend User)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/{{newUserId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users",
+                "{{newUserId}}",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"suspended\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Status changed to suspended', function () {",
+                  "  pm.expect(json.user?.status || json.status).to.eql('suspended');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Restore User Status (Re-activate User)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/{{newUserId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users",
+                "{{newUserId}}",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Status restored to active', function () {",
+                  "  pm.expect(json.user?.status || json.status).to.eql('active');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Course Management APIs",
+      "item": [
+        {
+          "name": "Admin List All Courses",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/courses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "courses"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Courses is an array', function () {",
+                  "  pm.expect(json).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create New Course (Draft)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/courses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "courses"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"API Architecture & Quality Engineering {{$timestamp}}\",\n  \"shortDescription\": \"End-to-end API testing masterclass.\",\n  \"description\": \"Comprehensive curriculum covering REST, GraphQL, databases, and automated testing.\",\n  \"category\": \"Software Engineering\",\n  \"difficulty\": \"Intermediate\",\n  \"estimatedDuration\": \"25 hours\",\n  \"thumbnail\": \"https://images.unsplash.com/photo-1516321318423-f06f85e504b3\",\n  \"status\": \"draft\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Course ID returned', function () {",
+                  "  pm.expect(json.id).to.be.a('string');",
+                  "});",
+                  "pm.environment.set('courseId', json.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Course Details by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/courses/{{courseId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "courses",
+                "{{courseId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Course ID matches', function () {",
+                  "  const resolvedId = json.course ? json.course.id : json.id;",
+                  "  pm.expect(resolvedId).to.eql(pm.environment.get('courseId'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Course Details",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/courses/{{courseId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "courses",
+                "{{courseId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"difficulty\": \"Advanced\",\n  \"estimatedDuration\": \"30 hours\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Updated duration verified', function () {",
+                  "  pm.expect(json.estimatedDuration).to.eql('30 hours');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Validate Course Pre-Publish Requirements",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/courses/{{courseId}}/validate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "courses",
+                "{{courseId}}",
+                "validate"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Validation checklist returned', function () {",
+                  "  pm.expect(json).to.have.property('valid');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Attempt Publish Empty Course (Expect Guard 422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/courses/{{courseId}}/publish",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "courses",
+                "{{courseId}}",
+                "publish"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 422 Unprocessable Entity', function () { pm.response.to.have.status(422); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Pre-publish guard rejected empty course', function () {",
+                  "  pm.expect(json.error).to.include('validation failed');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Module Management APIs",
+      "item": [
+        {
+          "name": "Create Module within Course",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/courses/{{courseId}}/modules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "courses",
+                "{{courseId}}",
+                "modules"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Module 1: RESTful Architecture & Protocol Specs\",\n  \"description\": \"Comprehensive coverage of HTTP specs, REST maturity models, and caching headers.\",\n  \"order\": 1,\n  \"status\": \"published\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Module ID created', function () {",
+                  "  pm.expect(json.id).to.be.a('string');",
+                  "});",
+                  "pm.environment.set('moduleId', json.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Module Details",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/modules/{{moduleId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "modules",
+                "{{moduleId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Module 1: Advanced RESTful Architecture & Security Specs\",\n  \"description\": \"Updated description with security emphasis.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Title updated', function () {",
+                  "  pm.expect(json.title).to.include('Security Specs');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reorder Course Modules",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/courses/{{courseId}}/modules/reorder",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "courses",
+                "{{courseId}}",
+                "modules",
+                "reorder"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"moduleIds\": [\n    \"{{moduleId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Lesson Management APIs",
+      "item": [
+        {
+          "name": "Create Generic Lesson",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/modules/{{moduleId}}/lessons",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "modules",
+                "{{moduleId}}",
+                "lessons"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Lesson 1: Foundations of REST APIs\",\n  \"description\": \"Foundational concepts of HTTP verbs, status codes, and idempotency.\",\n  \"type\": \"text\",\n  \"content\": \"### REST Fundamentals\\nAPIs provide uniform interfaces to access and manipulate server resources.\",\n  \"order\": 1,\n  \"durationMinutes\": 15,\n  \"status\": \"published\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Lesson ID created', function () {",
+                  "  pm.expect(json.id).to.be.a('string');",
+                  "});",
+                  "pm.environment.set('lessonId', json.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Lesson Details",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/lessons/{{lessonId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "lessons",
+                "{{lessonId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Lesson 1: Foundations of REST APIs (Updated)\",\n  \"durationMinutes\": 20\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Duration updated', function () {",
+                  "  pm.expect(json.durationMinutes).to.eql(20);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Duplicate Lesson",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/lessons/{{lessonId}}/duplicate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "lessons",
+                "{{lessonId}}",
+                "duplicate"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Duplicated lesson created', function () {",
+                  "  pm.expect(json.id).to.be.a('string');",
+                  "});",
+                  "pm.environment.set('duplicatedLessonId', json.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Duplicated Lesson",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/lessons/{{duplicatedLessonId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "lessons",
+                "{{duplicatedLessonId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "7. Video Session APIs",
+      "item": [
+        {
+          "name": "Create Video Session Lesson (YouTube URL)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/modules/{{moduleId}}/lessons",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "modules",
+                "{{moduleId}}",
+                "lessons"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Video Session: REST API Design Deep Dive\",\n  \"description\": \"Video lecture explaining resource uri modeling and status code selections.\",\n  \"type\": \"video\",\n  \"videoUrl\": \"https://www.youtube.com/watch?v=d56mG7DezGs\",\n  \"order\": 2,\n  \"durationMinutes\": 25,\n  \"status\": \"published\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Video lesson created with valid URL', function () {",
+                  "  pm.expect(json.videoUrl).to.include('youtube.com');",
+                  "});",
+                  "pm.environment.set('videoLessonId', json.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Video Lesson in Course Structure",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/courses/{{courseId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "courses",
+                "{{courseId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Video lesson exists within module structure', function () {",
+                  "  const modules = json.modules || [];",
+                  "  const hasVideo = modules.some(m => (m.lessons || []).some(l => l.id === pm.environment.get('videoLessonId')));",
+                  "  pm.expect(hasVideo).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "8. Text Material APIs",
+      "item": [
+        {
+          "name": "Create Rich Text Reading Lesson",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/modules/{{moduleId}}/lessons",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "modules",
+                "{{moduleId}}",
+                "lessons"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Text Material: API Security Checklist\",\n  \"description\": \"Key security principles covering token lifetimes, HTTPS, and authorization headers.\",\n  \"type\": \"text\",\n  \"content\": \"### API Security Best Practices\\n1. Always enforce TLS 1.3\\n2. Verify JWT expiry and signature\\n3. Protect against OWASP API Security Top 10 vulnerabilities\",\n  \"order\": 3,\n  \"durationMinutes\": 15,\n  \"status\": \"published\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Text material created', function () {",
+                  "  pm.expect(json.content).to.include('API Security Best Practices');",
+                  "});",
+                  "pm.environment.set('textLessonId', json.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create PDF Reading Material Lesson",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/modules/{{moduleId}}/lessons",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "modules",
+                "{{moduleId}}",
+                "lessons"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"PDF Document: Interactive Architecture Guide\",\n  \"description\": \"Protected PDF document covering enterprise system designs.\",\n  \"type\": \"pdf\",\n  \"materialUrl\": \"/storage/materials/sample-interactive-lesson.pdf\",\n  \"order\": 4,\n  \"durationMinutes\": 20,\n  \"status\": \"published\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.test('PDF material created', function () {",
+                  "  pm.expect(json.materialUrl).to.include('.pdf');",
+                  "});",
+                  "pm.environment.set('pdfLessonId', json.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "9. Assessment APIs",
+      "item": [
+        {
+          "name": "List Assessments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/assessments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "assessments"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Assessments list is array', function () {",
+                  "  pm.expect(json).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Assessment (Draft)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/assessments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "assessments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"REST API Architecture & Protocol Certification Exam {{$timestamp}}\",\n  \"description\": \"Comprehensive assessment on REST semantics, HTTP status codes, and API security.\",\n  \"courseId\": \"{{courseId}}\",\n  \"moduleId\": \"{{moduleId}}\",\n  \"type\": \"module_exam\",\n  \"durationMinutes\": 30,\n  \"passingScore\": 70,\n  \"totalPoints\": 100,\n  \"maxAttempts\": 3,\n  \"status\": \"draft\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Assessment ID created', function () {",
+                  "  pm.expect(json.id).to.be.a('string');",
+                  "});",
+                  "pm.environment.set('assessmentId', json.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Assessment Details by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/assessments/{{assessmentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "assessments",
+                "{{assessmentId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Assessment matches ID', function () {",
+                  "  const resolvedId = json.assessment ? json.assessment.id : json.id;",
+                  "  pm.expect(resolvedId).to.eql(pm.environment.get('assessmentId'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Assessment Details",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/assessments/{{assessmentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "assessments",
+                "{{assessmentId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"durationMinutes\": 35,\n  \"passingScore\": 60\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Passing score updated', function () {",
+                  "  pm.expect(json.passingScore).to.eql(60);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pre-Publish Checklist Guard (Empty Questions Rejection)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/assessments/{{assessmentId}}/publish",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "assessments",
+                "{{assessmentId}}",
+                "publish"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400 Bad Request', function () { pm.response.to.have.status(400); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Checklist error specifies question requirement', function () {",
+                  "  const errStr = JSON.stringify(json);",
+                  "  pm.expect(errStr).to.include('at least 1 question');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "10. Assessment Question APIs",
+      "item": [
+        {
+          "name": "Create Single Choice Question",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/assessments/{{assessmentId}}/questions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "assessments",
+                "{{assessmentId}}",
+                "questions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"questionText\": \"Which HTTP status code is most appropriate for a newly created resource?\",\n  \"type\": \"single_choice\",\n  \"options\": [\n    \"200 OK\",\n    \"201 Created\",\n    \"204 No Content\",\n    \"202 Accepted\"\n  ],\n  \"correctAnswers\": [\n    \"201 Created\"\n  ],\n  \"explanation\": \"201 Created indicates that the request has succeeded and led to the creation of a resource.\",\n  \"points\": 10,\n  \"order\": 1,\n  \"difficulty\": \"easy\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Question ID returned', function () {",
+                  "  pm.expect(json.id).to.be.a('string');",
+                  "});",
+                  "pm.environment.set('singleChoiceQId', json.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Multiple Choice Question",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/assessments/{{assessmentId}}/questions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "assessments",
+                "{{assessmentId}}",
+                "questions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"questionText\": \"Which of the following HTTP methods are idempotent by specification?\",\n  \"type\": \"multiple_choice\",\n  \"options\": [\n    \"GET\",\n    \"PUT\",\n    \"DELETE\",\n    \"POST\"\n  ],\n  \"correctAnswers\": [\n    \"GET\",\n    \"PUT\",\n    \"DELETE\"\n  ],\n  \"explanation\": \"GET, PUT, and DELETE are idempotent according to RFC 7231.\",\n  \"points\": 15,\n  \"order\": 2,\n  \"difficulty\": \"medium\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Multiple choice question created', function () {",
+                  "  pm.expect(json.id).to.be.a('string');",
+                  "});",
+                  "pm.environment.set('multiChoiceQId', json.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Subjective Question",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/assessments/{{assessmentId}}/questions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "assessments",
+                "{{assessmentId}}",
+                "questions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"questionText\": \"Explain the difference between authentication and authorization in modern API security.\",\n  \"type\": \"subjective\",\n  \"points\": 25,\n  \"order\": 3,\n  \"difficulty\": \"medium\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Subjective question created', function () {",
+                  "  pm.expect(json.id).to.be.a('string');",
+                  "});",
+                  "pm.environment.set('subjectiveQId', json.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reorder Assessment Questions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/assessments/{{assessmentId}}/reorder-questions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "assessments",
+                "{{assessmentId}}",
+                "reorder-questions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"questionIds\": [\n    \"{{singleChoiceQId}}\",\n    \"{{multiChoiceQId}}\",\n    \"{{subjectiveQId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Publish Assessment (Checklist Guard Satisfied)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/assessments/{{assessmentId}}/publish",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "assessments",
+                "{{assessmentId}}",
+                "publish"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Assessment published confirmed', function () {",
+                  "  pm.expect(json.status || json.message).to.be.ok;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "11. Course Assignment APIs",
+      "item": [
+        {
+          "name": "Publish Course (Pre-publish Requirements Met)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/courses/{{courseId}}/publish",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "courses",
+                "{{courseId}}",
+                "publish"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Course published successfully', function () {",
+                  "  pm.expect(json.message || json.course.status).to.be.ok;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Assign Course to Batch",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/batches/assign-courses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "batches",
+                "assign-courses"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"batchId\": \"{{batchId}}\",\n  \"courseIds\": [\n    \"{{courseId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Assignment succeeded', function () {",
+                  "  pm.expect(json.success).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Inspect Course Access Matrix",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/courses/{{courseId}}/access",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "courses",
+                "{{courseId}}",
+                "access"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Access matrix returned as array', function () {",
+                  "  pm.expect(json).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "12. Assessment Assignment APIs",
+      "item": [
+        {
+          "name": "Assign Assessment to Student by Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/assessments/{{assessmentId}}/assign",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "assessments",
+                "{{assessmentId}}",
+                "assign"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"studentEmails\": [\n    \"{{studentEmail}}\"\n  ],\n  \"isMandatory\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Assigned count confirmed', function () {",
+                  "  pm.expect(json.assignedCount || json.success).to.be.ok;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Assessment Access Roster",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/assessments/{{assessmentId}}/access",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "assessments",
+                "{{assessmentId}}",
+                "access"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Roster returned as array', function () {",
+                  "  pm.expect(json).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "13. Student APIs",
+      "item": [
+        {
+          "name": "Student Assigned Courses Catalog",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/student/courses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "student",
+                "courses"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Courses catalog is array', function () {",
+                  "  pm.expect(json).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Student Direct Enroll Attempt (Security Policy Guard)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/student/courses/{{courseId}}/enroll",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "student",
+                "courses",
+                "{{courseId}}",
+                "enroll"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 403 Forbidden', function () { pm.response.to.have.status(403); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Self-enrollment prevention message', function () {",
+                  "  pm.expect(json.error).to.include('Self-enrollment is disabled');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Student Course Overview & Syllabus",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/student/courses/{{courseId}}/overview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "student",
+                "courses",
+                "{{courseId}}",
+                "overview"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Course outline loaded', function () {",
+                  "  const resolvedId = json.course ? json.course.id : json.id;",
+                  "  pm.expect(resolvedId).to.eql(pm.environment.get('courseId'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Student Stream PDF Material (View-Only Protected)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/student/courses/{{courseId}}/lessons/{{pdfLessonId}}/pdf",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "student",
+                "courses",
+                "{{courseId}}",
+                "lessons",
+                "{{pdfLessonId}}",
+                "pdf"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Content-Type is application/pdf', function () {",
+                  "  const ct = pm.response.headers.get('Content-Type') || '';",
+                  "  pm.expect(ct).to.include('application/pdf');",
+                  "});",
+                  "pm.test('Content-Disposition is inline', function () {",
+                  "  const cd = pm.response.headers.get('Content-Disposition') || '';",
+                  "  pm.expect(cd).to.include('inline');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Student Assigned Assessments Catalog",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/student/assessments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "student",
+                "assessments"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Assessments list is array', function () {",
+                  "  pm.expect(json).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Student View Assessment Public Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assessments/{{assessmentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assessments",
+                "{{assessmentId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Assessment metadata received', function () {",
+                  "  const resolvedId = json.assessment ? json.assessment.id : json.id;",
+                  "  pm.expect(resolvedId).to.eql(pm.environment.get('assessmentId'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "14. Student Progress APIs",
+      "item": [
+        {
+          "name": "Student Track Video Playback Progress",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/student/lessons/{{videoLessonId}}/progress",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "student",
+                "lessons",
+                "{{videoLessonId}}",
+                "progress"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"completed\": true,\n  \"timeSpentSeconds\": 150,\n  \"progressPercent\": 100\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Progress recorded', function () {",
+                  "  pm.expect(json.progress || json.courseProgressPercentage !== undefined).to.be.ok;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Text Lesson Progress State",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/student/lessons/{{textLessonId}}/progress",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "student",
+                "lessons",
+                "{{textLessonId}}",
+                "progress"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"completed\": true,\n  \"timeSpentSeconds\": 120,\n  \"progressPercent\": 100\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Course Progress Metrics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/student/courses/{{courseId}}/progress",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "student",
+                "courses",
+                "{{courseId}}",
+                "progress"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Progress percentage returned', function () {",
+                  "  pm.expect(json.progressPercentage !== undefined).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Student Resume Learning Next Lesson",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/student/courses/{{courseId}}/resume",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "student",
+                "courses",
+                "{{courseId}}",
+                "resume"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Resume position returned', function () {",
+                  "  pm.expect(json.progressPercentage !== undefined).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "15. Assessment Submission APIs",
+      "item": [
+        {
+          "name": "Start Assessment Examination Attempt",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assessments/{{assessmentId}}/start",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assessments",
+                "{{assessmentId}}",
+                "start"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 or 201', function () {",
+                  "  pm.expect([200, 201]).to.include(pm.response.code);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Attempt ID created and questions returned', function () {",
+                  "  const attempt = json.attempt || json;",
+                  "  pm.expect(attempt.id).to.be.a('string');",
+                  "  pm.expect(json.questions).to.be.an('array');",
+                  "});",
+                  "const attempt = json.attempt || json;",
+                  "pm.environment.set('attemptId', attempt.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Student Save Draft Answers",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assessments/{{assessmentId}}/save-answers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assessments",
+                "{{assessmentId}}",
+                "save-answers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"attemptId\": \"{{attemptId}}\",\n  \"answers\": {\n    \"{{singleChoiceQId}}\": [\n      \"201 Created\"\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Answers saved successfully', function () {",
+                  "  pm.expect(json.success).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Record Proctoring Event",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assessments/{{assessmentId}}/proctoring-event",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assessments",
+                "{{assessmentId}}",
+                "proctoring-event"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"attemptId\": \"{{attemptId}}\",\n  \"eventType\": \"tab_switch\",\n  \"details\": \"Student switched active browser tab during exam\",\n  \"severity\": \"medium\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Proctoring violation logged', function () {",
+                  "  pm.expect(json.success).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit Assessment & Compute Score",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assessments/{{assessmentId}}/submit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assessments",
+                "{{assessmentId}}",
+                "submit"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"attemptId\": \"{{attemptId}}\",\n  \"answers\": {\n    \"{{singleChoiceQId}}\": [\n      \"201 Created\"\n    ],\n    \"{{multiChoiceQId}}\": [\n      \"GET\",\n      \"PUT\",\n      \"DELETE\"\n    ],\n    \"{{subjectiveQId}}\": [\n      \"Authentication verifies user identity; authorization determines access rights.\"\n    ]\n  },\n  \"timeTakenSeconds\": 45\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Score computed and submission created', function () {",
+                  "  pm.expect(json.score !== undefined).to.be.true;",
+                  "  pm.expect(json.submission).to.be.an('object');",
+                  "});",
+                  "pm.environment.set('submissionId', json.submission.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Student View Submission Result Breakdown",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/student/assessments/{{assessmentId}}/result",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "student",
+                "assessments",
+                "{{assessmentId}}",
+                "result"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Result breakdown has score and questions', function () {",
+                  "  pm.expect(json.submission && json.submission.score !== undefined).to.be.true;",
+                  "  pm.expect(json.questions === undefined || Array.isArray(json.questions)).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin Gradebook Review Assessment Submissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/assessments/{{assessmentId}}/results",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "assessments",
+                "{{assessmentId}}",
+                "results"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Submissions array returned', function () {",
+                  "  const list = json.submissions || json;",
+                  "  pm.expect(list).to.be.an('array');",
+                  "  pm.expect(list.length).to.be.above(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin Review Individual Submission Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/results/submission/{{submissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "results",
+                "submission",
+                "{{submissionId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Detailed breakdown loaded', function () {",
+                  "  pm.expect(json.submission.id).to.eql(pm.environment.get('submissionId'));",
+                  "  pm.expect(json.student).to.be.an('object');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "16. Profile APIs",
+      "item": [
+        {
+          "name": "Get Current Student Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Student email matches', function () {",
+                  "  pm.expect(json.user.email).to.eql(pm.environment.get('studentEmail'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Student User Preferences (Theme)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user/preferences",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "preferences"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"theme\": \"ocean-teal\",\n  \"mode\": \"dark\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Preferences updated', function () {",
+                  "  pm.expect(json.theme).to.eql('ocean-teal');",
+                  "  pm.expect(json.mode).to.eql('dark');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Student Profile Details",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/student/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "student",
+                "profile"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"location\": \"Hyderabad\",\n  \"phoneNumber\": \"9876543210\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Admin User Preferences (Theme)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user/preferences",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "preferences"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"theme\": \"royal-purple\",\n  \"mode\": \"dark\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Admin theme updated', function () {",
+                  "  pm.expect(json.theme).to.eql('royal-purple');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "17. Security & Role Isolation Testing",
+      "item": [
+        {
+          "name": "Missing Authentication Token Rejection",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 Unauthorized', function () { pm.response.to.have.status(401); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Role Escalation Defense - Student Access to Admin Endpoint",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{studentToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 403 Forbidden', function () { pm.response.to.have.status(403); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Admin role required guard triggered', function () {",
+                  "  pm.expect(json.error).to.include('Admin role required');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tampered / Corrupted JWT Signature Rejection",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalidpayload.tamperedsignature",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 Unauthorized', function () { pm.response.to.have.status(401); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cross-Portal Access Denial (Admin on Student Portal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\",\n  \"portal\": \"student\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 403 Forbidden', function () { pm.response.to.have.status(403); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Portal separation error returned', function () {",
+                  "  pm.expect(json.error).to.include('Student portal accounts only');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cross-Portal Access Denial (Student on Admin Portal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{studentEmail}}\",\n  \"password\": \"{{studentPassword}}\",\n  \"portal\": \"admin\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 403 Forbidden', function () { pm.response.to.have.status(403); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Portal separation error returned', function () {",
+                  "  pm.expect(json.error).to.include('administrative privileges');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

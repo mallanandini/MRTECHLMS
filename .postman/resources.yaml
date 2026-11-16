@@ -1,0 +1,10 @@
+workspace:
+  id: bfdb5148-ad57-4d79-899f-17fde4387bf5
+localResources:
+  collections:
+    - ../postman-testing/MRTECHLMS_Postman_Collection.json
+cloudResources:
+  globals:
+    ../postman/globals/workspace.globals.yaml: 0c72af1f-c9a7-4bb8-85d4-a960386ee5fa
+  collections:
+    ../postman/collections/My Collection: 49817591-51dce1f2-e4e8-4e26-85bb-816c43304d05

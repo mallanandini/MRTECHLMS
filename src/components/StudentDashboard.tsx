@@ -136,7 +136,6 @@ export function StudentDashboard({
     learningStreakDays: 1,
     estimatedLearningHours: 0
   };
-  const recommendedLearning = myDashboardStats?.recommendedLearning || [];
 
   // Filtered assigned courses
   const filteredCourses = assignedCourses.filter((c: any) => {
@@ -640,11 +639,11 @@ export function StudentDashboard({
                 <div className="col-span-full py-12 text-center bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-3xl p-6 text-slate-400 space-y-2">
                   <BookOpen className="w-8 h-8 mx-auto text-slate-300" />
                   <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                    {assignedCourses.length === 0 ? "No courses assigned yet" : "No courses match this filter"}
+                    {assignedCourses.length === 0 ? "No Courses Assigned Yet" : "No courses match this filter"}
                   </p>
                   <p className="text-xs text-slate-400">
                     {assignedCourses.length === 0 
-                      ? "You do not currently have any active course enrollments. Reach out to your instructor or LMS administrator to get started." 
+                      ? "You don't have any courses assigned to your account yet. Please contact your administrator for course access." 
                       : "All your active assignments will appear here."}
                   </p>
                 </div>
@@ -710,68 +709,6 @@ export function StudentDashboard({
                         }`}
                       >
                         {a.status === "passed" ? "Retake Exam" : "Start Exam"}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* SECTION 5: RECOMMENDED LEARNING */}
-          {recommendedLearning.length > 0 && (
-            <div className="space-y-4 pt-2">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-blue-600" />
-                    Recommended For Your Track
-                  </h3>
-                  <p className="text-xs text-slate-400">High-rated academy courses you haven't enrolled in yet</p>
-                </div>
-                <button
-                  onClick={() => onNavigate("courses")}
-                  className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  Full Catalog
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {recommendedLearning.map((rec: any) => (
-                  <div
-                    key={rec.id}
-                    className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 shadow-2xs flex flex-col justify-between"
-                  >
-                    <div className="space-y-2.5">
-                      <div className="aspect-video bg-slate-100 dark:bg-slate-800 rounded-xl overflow-hidden relative">
-                        <img
-                          src={rec.thumbnail}
-                          alt={rec.title}
-                          className="w-full h-full object-cover"
-                        />
-                        <span className="absolute top-2 left-2 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-slate-950/80 text-white font-mono">
-                          {rec.category}
-                        </span>
-                      </div>
-                      <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white line-clamp-1">
-                        {rec.title}
-                      </h4>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2">
-                        {rec.shortDescription}
-                      </p>
-                    </div>
-
-                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800 mt-3 flex items-center justify-between">
-                      <div className="flex items-center gap-1 text-amber-500 text-xs font-bold">
-                        <Star className="w-3.5 h-3.5 fill-current" />
-                        <span>{rec.rating.toFixed(1)}</span>
-                      </div>
-                      <button
-                        onClick={() => setInspectCourseId(rec.id)}
-                        className="px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold text-xs hover:bg-blue-100 transition"
-                      >
-                        View Overview
                       </button>
                     </div>
                   </div>

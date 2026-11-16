@@ -145,21 +145,27 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-// Ensure storage directories exist for physical assets
-const storageDir = path.join(process.cwd(), "storage");
-const thumbnailsDir = path.join(storageDir, "course-thumbnails");
-const materialsDir = path.join(storageDir, "materials");
-const videosDir = path.join(storageDir, "videos");
-const avatarsDir = path.join(storageDir, "avatars");
+// Ensure physical asset directories exist at project root assets/
+const assetsDir = path.resolve(process.env.STORAGE_LOCAL_ROOT || path.join(process.cwd(), "assets"));
+const videosDir = path.join(assetsDir, "videos");
+const pdfsDir = path.join(assetsDir, "pdfs");
+const documentsDir = path.join(assetsDir, "documents");
+const imagesDir = path.join(assetsDir, "images");
+const thumbnailsDir = path.join(imagesDir, "thumbnails");
+const avatarsDir = path.join(imagesDir, "avatars");
+const otherDir = path.join(assetsDir, "other");
 
-[storageDir, thumbnailsDir, materialsDir, videosDir, avatarsDir].forEach(dir => {
+// Legacy storage directory maintained for backward-compatible fallback
+const legacyStorageDir = path.resolve(path.join(process.cwd(), "storage"));
+
+[assetsDir, videosDir, pdfsDir, documentsDir, imagesDir, thumbnailsDir, avatarsDir, otherDir].forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 });
 
-// Serve physical asset uploads with defensive sandbox headers and no directory listing
-app.use("/storage", express.static(storageDir, {
+// Serve physical asset uploads from /assets with defensive sandbox headers and no directory listing
+app.use("/assets", express.static(assetsDir, {
   dotfiles: "ignore",
   index: false,
   setHeaders: (res) => {
@@ -167,6 +173,47 @@ app.use("/storage", express.static(storageDir, {
     res.setHeader("Content-Security-Policy", "sandbox; default-src 'none'; media-src 'self'; img-src 'self'");
   }
 }));
+
+// Return clean 404 for missing assets so they do not fall through to Vite SPA index.html
+app.use("/assets", (_req, res) => {
+  res.status(404).json({ error: "Asset not found" });
+});
+
+// Seamless backward compatibility: serve legacy /storage requests from assetsDir (or legacyStorageDir as fallback)
+app.use("/storage", (req, res, next) => {
+  const rawPath = req.path;
+  let targetPath = path.join(assetsDir, rawPath);
+  if (rawPath.startsWith("/course-thumbnails/")) {
+    targetPath = path.join(thumbnailsDir, rawPath.replace("/course-thumbnails/", ""));
+  } else if (rawPath.startsWith("/avatars/")) {
+    targetPath = path.join(avatarsDir, rawPath.replace("/avatars/", ""));
+  } else if (rawPath.startsWith("/materials/")) {
+    const file = rawPath.replace("/materials/", "");
+    if (file.endsWith(".pdf")) {
+      targetPath = path.join(pdfsDir, file);
+    } else {
+      targetPath = path.join(documentsDir, file);
+    }
+  } else if (rawPath.startsWith("/videos/")) {
+    targetPath = path.join(videosDir, rawPath.replace("/videos/", ""));
+  }
+
+  // Defend against path traversal
+  const safeTarget = path.resolve(targetPath);
+  if (safeTarget.startsWith(assetsDir) && fs.existsSync(safeTarget) && fs.statSync(safeTarget).isFile()) {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    return res.sendFile(safeTarget);
+  }
+
+  // Fallback to legacy storage folder if file exists there
+  const fallbackTarget = path.resolve(path.join(legacyStorageDir, rawPath));
+  if (fallbackTarget.startsWith(legacyStorageDir) && fs.existsSync(fallbackTarget) && fs.statSync(fallbackTarget).isFile()) {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    return res.sendFile(fallbackTarget);
+  }
+
+  res.status(404).json({ error: "Storage asset not found" });
+});
 
 // Serve local monaco-editor distribution to provide zero-latency, offline-capable code editor assets
 const monacoVsDir = path.join(process.cwd(), "node_modules", "monaco-editor", "min", "vs");
@@ -264,14 +311,27 @@ function isValidImageContent(filePath: string, ext: string): boolean {
   }
 }
 
-// Multer storage setup for Admin Course Creator assets
+// Multer storage setup for Admin Course Creator assets (stored in top-level assets/)
 const diskStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     const folder = (req.query.folder as string) || "materials";
-    if (folder === "thumbnail") cb(null, thumbnailsDir);
-    else if (folder === "video") cb(null, videosDir);
-    else if (folder === "avatar") cb(null, avatarsDir);
-    else cb(null, materialsDir);
+    const ext = path.extname(file.originalname).toLowerCase();
+
+    if (folder === "video" || ALLOWED_UPLOAD_EXTENSIONS.video.includes(ext)) {
+      cb(null, videosDir);
+    } else if (ext === ".pdf") {
+      cb(null, pdfsDir);
+    } else if (folder === "thumbnail") {
+      cb(null, thumbnailsDir);
+    } else if (folder === "avatar") {
+      cb(null, avatarsDir);
+    } else if (ext === ".jpg" || ext === ".jpeg" || ext === ".png" || ext === ".webp") {
+      cb(null, imagesDir);
+    } else if (ALLOWED_UPLOAD_EXTENSIONS.materials.includes(ext) || ext === ".txt" || ext === ".doc" || ext === ".docx") {
+      cb(null, documentsDir);
+    } else {
+      cb(null, otherDir);
+    }
   },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
@@ -752,13 +812,25 @@ app.get("/api/student/courses/:courseId/lessons/:lessonId/pdf", authenticateToke
       return res.status(404).json({ error: "No PDF document associated with this lesson" });
     }
 
-    // 5. Handle local storage PDF stream
-    if (pdfPath.startsWith("/storage/")) {
-      const relativePath = pdfPath.replace(/^\/storage\//, "");
-      const fullPath = path.resolve(storageDir, relativePath);
+    // 5. Handle local assets/storage PDF stream
+    if (pdfPath.startsWith("/assets/") || pdfPath.startsWith("/storage/") || pdfPath.startsWith("assets/") || pdfPath.startsWith("storage/")) {
+      let fullPath = "";
+      if (pdfPath.startsWith("/assets/") || pdfPath.startsWith("assets/")) {
+        const relativePath = pdfPath.replace(/^\/?assets\//, "");
+        fullPath = path.resolve(assetsDir, relativePath);
+      } else {
+        const relativePath = pdfPath.replace(/^\/?storage\//, "");
+        const filename = path.basename(relativePath);
+        const assetsPdfPath = path.resolve(pdfsDir, filename);
+        if (fs.existsSync(assetsPdfPath)) {
+          fullPath = assetsPdfPath;
+        } else {
+          fullPath = path.resolve(legacyStorageDir, relativePath);
+        }
+      }
 
       // Defend against directory traversal attacks
-      if (!fullPath.startsWith(storageDir)) {
+      if (!fullPath.startsWith(assetsDir) && !fullPath.startsWith(legacyStorageDir)) {
         return res.status(403).json({ error: "Access to specified file path is forbidden" });
       }
 
@@ -820,43 +892,75 @@ app.get("/api/student/profile/learning-profile", authenticateToken, async (req, 
 });
 
 app.get("/api/student/courses", authenticateToken, async (req, res) => {
-  const studentId = req.user!.id;
-  const effectiveCourses = await AccessControlService.getStudentEffectiveCourses(studentId);
-  const effectiveMap = new Map(effectiveCourses.map(e => [e.courseId, e]));
-  const effectiveCourseIds = new Set(effectiveCourses.map(e => e.courseId));
+  try {
+    const studentId = req.user!.id;
+    const effectiveCourses = await AccessControlService.getStudentEffectiveCourses(studentId);
+    const effectiveMap = new Map(effectiveCourses.map(e => [e.courseId, e]));
+    const effectiveCourseIds = Array.from(effectiveMap.keys());
 
-  const enrollments = await enrollmentsDb.find({ studentId });
-  const enrollmentMap = new Map(enrollments.map(e => [e.courseId, e]));
+    if (effectiveCourseIds.length === 0) {
+      return res.json([]);
+    }
 
-  const allCourses = await coursesDb.find();
-  // Filter courses student has effective access to AND that are published or archived
-  // (Students cannot view courses in draft or review mode)
-  const courses = allCourses
-    .filter(c => effectiveCourseIds.has(c.id) && (c.status === "published" || c.status === "archived"))
-    .map(c => {
-      const enr = enrollmentMap.get(c.id);
-      const eff = effectiveMap.get(c.id);
-      const effectiveStatus = eff?.status || (enr ? AccessControlService.evaluateAccessStatus(enr) : "assigned");
-      const isOverdue = enr ? AccessControlService.isOverdue(enr) : false;
-      return {
-        ...c,
-        accessStatus: effectiveStatus,
-        statusBadge: effectiveStatus,
-        dueDate: enr?.dueDate || null,
-        isOverdue,
-        isMandatory: Boolean(enr?.isMandatory),
-        isRevoked: false,
-        assignmentSource: eff?.assignmentSource || enr?.assignmentSource || "individual",
-        sourceDetails: eff?.sourceDetails || null,
-        assignedAt: enr?.assignedAt || enr?.enrolledAt || eff?.enrolledAt,
-        progressPercentage: enr?.progressPercentage || 0,
-        completedAt: enr?.completedAt || null,
-        lastLessonId: enr?.lastLessonId || null,
-        lastAccessedAt: enr?.lastAccessedAt || null
-      };
-    });
+    const enrollments = await enrollmentsDb.find({ studentId });
+    const enrollmentMap = new Map(enrollments.map(e => [e.courseId, e]));
 
-  res.json(courses);
+    const ph = effectiveCourseIds.map(() => "?").join(",");
+    const [totalRows]: any = await pool.query(
+      `SELECT courseId, COUNT(id) AS cnt FROM lessons WHERE courseId IN (${ph}) AND deletedAt IS NULL GROUP BY courseId`,
+      effectiveCourseIds
+    );
+    const totalLessonsMap = new Map<string, number>();
+    totalRows.forEach((r: any) => totalLessonsMap.set(r.courseId, Number(r.cnt) || 0));
+
+    const [compRows]: any = await pool.query(
+      `SELECT courseId, COUNT(id) AS cnt FROM progress WHERE studentId = ? AND courseId IN (${ph}) AND completed = 1 GROUP BY courseId`,
+      [studentId, ...effectiveCourseIds]
+    );
+    const completedLessonsMap = new Map<string, number>();
+    compRows.forEach((r: any) => completedLessonsMap.set(r.courseId, Number(r.cnt) || 0));
+
+    const allCourses = await coursesDb.find();
+    // Filter courses student has effective access to AND that are published or archived
+    // (Students cannot view courses in draft, review, or rejected mode)
+    const courses = allCourses
+      .filter(c => effectiveMap.has(c.id) && !c.deletedAt && (c.status === "published" || c.status === "archived"))
+      .map(c => {
+        const enr = enrollmentMap.get(c.id);
+        const eff = effectiveMap.get(c.id);
+        const totalCount = totalLessonsMap.get(c.id) || 0;
+        const completedCount = completedLessonsMap.get(c.id) || 0;
+        const calculatedPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : (enr?.progressPercentage || 0);
+        const effectiveStatus = calculatedPct >= 100 ? "completed" : (eff?.status || (enr ? AccessControlService.evaluateAccessStatus(enr) : "assigned"));
+        const isOverdue = enr ? AccessControlService.isOverdue(enr) : false;
+        return {
+          ...c,
+          accessStatus: effectiveStatus,
+          statusBadge: effectiveStatus,
+          status: effectiveStatus,
+          dueDate: enr?.dueDate || null,
+          isOverdue,
+          isMandatory: Boolean(enr?.isMandatory),
+          isRevoked: false,
+          assignmentSource: eff?.assignmentSource || enr?.assignmentSource || "individual",
+          sourceDetails: eff?.sourceDetails || null,
+          batches: eff?.batches || [],
+          batchNames: eff?.batches?.map(b => b.name) || [],
+          assignedAt: enr?.assignedAt || enr?.enrolledAt || eff?.enrolledAt,
+          progressPercentage: calculatedPct,
+          totalCount,
+          completedCount,
+          completedAt: enr?.completedAt || null,
+          lastLessonId: enr?.lastLessonId || null,
+          lastAccessedAt: enr?.lastAccessedAt || null
+        };
+      });
+
+    res.json(courses);
+  } catch (err: any) {
+    console.error("Error in GET /api/student/courses:", err);
+    res.status(500).json({ error: err.message || "Failed to load student courses" });
+  }
 });
 
 app.post("/api/student/courses/:courseId/enroll", authenticateToken, async (req, res) => {
@@ -1006,7 +1110,7 @@ app.post("/api/user/avatar", authenticateToken, uploadRateLimiter.middleware, (r
 
   uploadRateLimiter.recordHit(req);
 
-  const fileUrl = `/storage/avatars/${req.file.filename}`;
+  const fileUrl = `/assets/images/avatars/${req.file.filename}`;
 
   logAuditEvent({
     userId: req.user!.id,
@@ -3458,8 +3562,22 @@ app.post("/api/upload", authenticateToken, uploadRateLimiter.middleware, (req, r
 
   uploadRateLimiter.recordHit(req);
 
-  const subPath = folder === "thumbnail" ? "course-thumbnails" : folder === "video" ? "videos" : "materials";
-  const fileUrl = `/storage/${subPath}/${req.file.filename}`;
+  let fileUrl = "";
+  if (folder === "video" || ALLOWED_UPLOAD_EXTENSIONS.video.includes(ext)) {
+    fileUrl = `/assets/videos/${req.file.filename}`;
+  } else if (ext === ".pdf") {
+    fileUrl = `/assets/pdfs/${req.file.filename}`;
+  } else if (folder === "thumbnail") {
+    fileUrl = `/assets/images/thumbnails/${req.file.filename}`;
+  } else if (folder === "avatar") {
+    fileUrl = `/assets/images/avatars/${req.file.filename}`;
+  } else if (ext === ".jpg" || ext === ".jpeg" || ext === ".png" || ext === ".webp") {
+    fileUrl = `/assets/images/${req.file.filename}`;
+  } else if (ALLOWED_UPLOAD_EXTENSIONS.materials.includes(ext) || ext === ".txt" || ext === ".doc" || ext === ".docx") {
+    fileUrl = `/assets/documents/${req.file.filename}`;
+  } else {
+    fileUrl = `/assets/other/${req.file.filename}`;
+  }
 
   logAuditEvent({
     userId: req.user!.id,
@@ -3468,7 +3586,7 @@ app.post("/api/upload", authenticateToken, uploadRateLimiter.middleware, (req, r
     action: "upload_file",
     resourceType: "file",
     resourceId: fileUrl,
-    details: { filename: req.file.originalname, size: req.file.size, folder, mimetype: req.file.mimetype },
+    details: { filename: req.file.originalname, size: req.file.size, folder, mimetype: req.file.mimetype, url: fileUrl },
     ipAddress: getClientIp(req),
     userAgent: req.headers["user-agent"],
     status: "success"
@@ -3494,15 +3612,31 @@ app.delete("/api/upload", authenticateToken, async (req, res) => {
   }
 
   // Prevent path traversal
-  if (!fileUrl.startsWith("/storage/") || fileUrl.includes("..")) {
+  if ((!fileUrl.startsWith("/assets/") && !fileUrl.startsWith("/storage/")) || fileUrl.includes("..")) {
     return res.status(400).json({ error: "Invalid file URL" });
   }
 
-  const relativePath = fileUrl.replace(/^\/storage\//, "");
-  const fullPath = path.resolve(storageDir, relativePath);
+  let fullPath = "";
+  if (fileUrl.startsWith("/assets/")) {
+    const relativePath = fileUrl.replace(/^\/assets\//, "");
+    fullPath = path.resolve(assetsDir, relativePath);
+  } else {
+    const relativePath = fileUrl.replace(/^\/storage\//, "");
+    const filename = path.basename(relativePath);
+    const possiblePaths = [
+      path.resolve(assetsDir, relativePath),
+      path.resolve(thumbnailsDir, filename),
+      path.resolve(avatarsDir, filename),
+      path.resolve(pdfsDir, filename),
+      path.resolve(documentsDir, filename),
+      path.resolve(videosDir, filename),
+      path.resolve(legacyStorageDir, relativePath)
+    ];
+    fullPath = possiblePaths.find(p => fs.existsSync(p)) || path.resolve(assetsDir, relativePath);
+  }
 
-  // Ensure resolved path is strictly within storageDir
-  if (!fullPath.startsWith(storageDir)) {
+  // Ensure resolved path is strictly within assetsDir or legacyStorageDir
+  if (!fullPath.startsWith(assetsDir) && !fullPath.startsWith(legacyStorageDir)) {
     return res.status(400).json({ error: "Invalid file path traversal attempt" });
   }
 
@@ -3510,13 +3644,14 @@ app.delete("/api/upload", authenticateToken, async (req, res) => {
     return res.status(404).json({ error: "File not found on server" });
   }
 
-  // Preserve files still referenced in courses or learning paths
-  const [coursesWithFile, pathsWithFile] = await Promise.all([
+  // Preserve files still referenced in courses, learning paths, or lessons
+  const [coursesWithFile, pathsWithFile, lessonsWithFile] = await Promise.all([
     coursesDb.find({ thumbnail: fileUrl }),
-    learningPathsDb.find({ thumbnail: fileUrl })
+    learningPathsDb.find({ thumbnail: fileUrl }),
+    lessonsDb.find({ fileUrl })
   ]);
 
-  if (coursesWithFile.length > 0 || pathsWithFile.length > 0) {
+  if (coursesWithFile.length > 0 || pathsWithFile.length > 0 || lessonsWithFile.length > 0) {
     return res.json({ 
       success: true, 
       message: "File retained on server because it is referenced by other published or draft resources", 
