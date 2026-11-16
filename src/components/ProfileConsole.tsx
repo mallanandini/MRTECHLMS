@@ -9,7 +9,7 @@ import {
   CheckCircle, CheckCircle2, Bookmark, BookmarkMinus, Settings, RefreshCw, Key,
   Palette, Sun, Moon, Building2, Layers, Users as UsersIcon,
   Award, Trophy, Crown, Medal, Flame, Footprints, Code, ExternalLink,
-  Clock, Target, Zap, GraduationCap, ShieldCheck, Upload
+  Clock, Target, Zap, GraduationCap, ShieldCheck, Upload, X, Move, ZoomIn
 } from "lucide-react";
 import { User, Blog } from "../types.js";
 import { useTheme } from "../context/ThemeContext.js";
@@ -113,6 +113,10 @@ export function ProfileConsole({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string>("");
+  const [cropSource, setCropSource] = useState<{ file: File; url: string; width: number; height: number } | null>(null);
+  const [cropZoom, setCropZoom] = useState(1);
+  const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 });
+  const cropDragRef = useRef<{ pointerId: number; startX: number; startY: number; offsetX: number; offsetY: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Password reset form state
@@ -328,6 +332,98 @@ export function ProfileConsole({
 
   const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp"];
   const MAX_AVATAR_SIZE = 5 * 1024 * 1024; // 5 MB
+  const CROP_VIEW_SIZE = 256;
+  const AVATAR_OUTPUT_SIZE = 512;
+
+  const getCropDimensions = (zoom = cropZoom) => {
+    if (!cropSource) return { width: CROP_VIEW_SIZE, height: CROP_VIEW_SIZE };
+    const scale = Math.max(CROP_VIEW_SIZE / cropSource.width, CROP_VIEW_SIZE / cropSource.height) * zoom;
+    return { width: cropSource.width * scale, height: cropSource.height * scale, scale };
+  };
+
+  const clampCropOffset = (x: number, y: number, zoom = cropZoom) => {
+    const dimensions = getCropDimensions(zoom);
+    return {
+      x: Math.min(0, Math.max(CROP_VIEW_SIZE - dimensions.width, x)),
+      y: Math.min(0, Math.max(CROP_VIEW_SIZE - dimensions.height, y))
+    };
+  };
+
+  const closeCropEditor = () => {
+    if (cropSource?.url) URL.revokeObjectURL(cropSource.url);
+    setCropSource(null);
+    cropDragRef.current = null;
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleCropZoomChange = (nextZoom: number) => {
+    const oldDimensions = getCropDimensions();
+    const nextDimensions = getCropDimensions(nextZoom);
+    const centered = {
+      x: CROP_VIEW_SIZE / 2 - (CROP_VIEW_SIZE / 2 - cropOffset.x) * (nextDimensions.width / oldDimensions.width),
+      y: CROP_VIEW_SIZE / 2 - (CROP_VIEW_SIZE / 2 - cropOffset.y) * (nextDimensions.height / oldDimensions.height)
+    };
+    setCropZoom(nextZoom);
+    setCropOffset(clampCropOffset(centered.x, centered.y, nextZoom));
+  };
+
+  const handleCropPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    cropDragRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      offsetX: cropOffset.x,
+      offsetY: cropOffset.y
+    };
+  };
+
+  const handleCropPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = cropDragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    setCropOffset(clampCropOffset(drag.offsetX + e.clientX - drag.startX, drag.offsetY + e.clientY - drag.startY));
+  };
+
+  const finishCrop = async () => {
+    if (!cropSource) return;
+    setFileError("");
+
+    try {
+      const image = new Image();
+      image.src = cropSource.url;
+      await image.decode();
+      const { scale } = getCropDimensions();
+      const sourceSize = CROP_VIEW_SIZE / scale;
+      const sourceX = Math.max(0, -cropOffset.x / scale);
+      const sourceY = Math.max(0, -cropOffset.y / scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = AVATAR_OUTPUT_SIZE;
+      canvas.height = AVATAR_OUTPUT_SIZE;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Could not prepare the cropped image.");
+      context.drawImage(image, sourceX, sourceY, sourceSize, sourceSize, 0, 0, AVATAR_OUTPUT_SIZE, AVATAR_OUTPUT_SIZE);
+
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.82));
+      if (!blob) throw new Error("Could not compress the cropped image.");
+
+      const outputType = blob.type === "image/webp" ? "image/webp" : "image/png";
+      const outputExtension = outputType === "image/webp" ? "webp" : "png";
+      const croppedFile = new File([blob], `${cropSource.file.name.replace(/\.[^.]+$/, "")}-avatar.${outputExtension}`, {
+        type: outputType,
+        lastModified: Date.now()
+      });
+      const preview = URL.createObjectURL(croppedFile);
+      if (filePreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(filePreviewUrl);
+      URL.revokeObjectURL(cropSource.url);
+      setSelectedFile(croppedFile);
+      setFilePreviewUrl(preview);
+      setProfilePhoto(preview);
+      setCropSource(null);
+      cropDragRef.current = null;
+    } catch (error) {
+      setFileError(error instanceof Error ? error.message : "Could not crop this image.");
+    }
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -353,14 +449,24 @@ export function ProfileConsole({
       return;
     }
 
-    if (filePreviewUrl && filePreviewUrl.startsWith("blob:")) {
-      URL.revokeObjectURL(filePreviewUrl);
-    }
-
-    const preview = URL.createObjectURL(file);
-    setSelectedFile(file);
-    setFilePreviewUrl(preview);
-    setProfilePhoto(preview);
+    const sourceUrl = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      if (cropSource?.url) URL.revokeObjectURL(cropSource.url);
+      setCropSource({ file, url: sourceUrl, width: image.naturalWidth, height: image.naturalHeight });
+      setCropZoom(1);
+      const scale = Math.max(CROP_VIEW_SIZE / image.naturalWidth, CROP_VIEW_SIZE / image.naturalHeight);
+      setCropOffset({
+        x: (CROP_VIEW_SIZE - image.naturalWidth * scale) / 2,
+        y: (CROP_VIEW_SIZE - image.naturalHeight * scale) / 2
+      });
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(sourceUrl);
+      setFileError("This image could not be opened. Please choose another file.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+    image.src = sourceUrl;
   };
 
   const handleCustomUrlChange = (url: string) => {
@@ -392,6 +498,10 @@ export function ProfileConsole({
       }
     };
   }, [filePreviewUrl]);
+
+  useEffect(() => () => {
+    if (cropSource?.url) URL.revokeObjectURL(cropSource.url);
+  }, [cropSource]);
 
   useEffect(() => {
     if (currentUser) {
@@ -986,7 +1096,7 @@ export function ProfileConsole({
                         )}
                       </div>
                       <p className="text-[11px] text-slate-600 dark:text-slate-400 font-mono">
-                        Supported formats: JPG, JPEG, PNG, WEBP • Max 5 MB
+                        JPG, PNG, or WEBP up to 5 MB. Crop and compress before saving.
                       </p>
                     </div>
                   </div>
@@ -1406,6 +1516,79 @@ export function ProfileConsole({
         </div>
       )}
 
+      {cropSource && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4" role="presentation">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="avatar-crop-title"
+            className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="avatar-crop-title" className="text-base font-bold text-slate-900 dark:text-white">Crop profile photo</h2>
+                <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">Drag the image to position it inside the square.</p>
+              </div>
+              <button type="button" onClick={closeCropEditor} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-300" aria-label="Cancel crop">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {(() => {
+              const dimensions = getCropDimensions();
+              return (
+                <div
+                  className="relative mx-auto mt-5 overflow-hidden rounded-xl bg-slate-950 border border-slate-300 dark:border-slate-700 touch-none cursor-grab active:cursor-grabbing"
+                  style={{ width: CROP_VIEW_SIZE, height: CROP_VIEW_SIZE, maxWidth: "100%" }}
+                  onPointerDown={handleCropPointerDown}
+                  onPointerMove={handleCropPointerMove}
+                  onPointerUp={() => { cropDragRef.current = null; }}
+                  onPointerCancel={() => { cropDragRef.current = null; }}
+                >
+                  <img
+                    src={cropSource.url}
+                    alt="Crop preview"
+                    draggable={false}
+                    className="pointer-events-none absolute max-w-none select-none"
+                    style={{ width: dimensions.width, height: dimensions.height, left: cropOffset.x, top: cropOffset.y }}
+                  />
+                  <div className="pointer-events-none absolute inset-0 border border-white/70 rounded-xl" />
+                </div>
+              );
+            })()}
+
+            <label className="mt-5 flex items-center gap-3 text-xs font-medium text-slate-700 dark:text-slate-300">
+              <ZoomIn className="w-4 h-4 shrink-0" />
+              <span className="shrink-0">Zoom</span>
+              <input
+                type="range"
+                min="1"
+                max="3"
+                step="0.01"
+                value={cropZoom}
+                onChange={(e) => handleCropZoomChange(Number(e.target.value))}
+                className="w-full accent-blue-600"
+                aria-label="Zoom crop"
+              />
+            </label>
+
+            <div className="mt-4 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+              <Move className="w-3.5 h-3.5 shrink-0" />
+              <span>Saved as a 512 × 512 compressed image to reduce storage size.</span>
+            </div>
+            {fileError && <p className="mt-3 text-xs text-rose-600 dark:text-rose-400">{fileError}</p>}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={closeCropEditor} className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800">
+                Cancel
+              </button>
+              <button type="button" onClick={finishCrop} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-xs font-semibold text-white">
+                Use this crop
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
