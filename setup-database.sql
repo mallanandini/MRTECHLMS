@@ -1067,7 +1067,17 @@ INSERT INTO `courses` (`id`, `organizationId`, `title`, `description`, `shortDes
    'acme-admin-1', 'Prof. Robert Chen', 'Computer Science',
    '["Intermediate programming skills","Basic data structures knowledge"]',
    '["Graph Algorithms","Dynamic Programming","Tree Traversals","Complexity Analysis"]',
-   'published', TRUE, 4.90, 210, @past4, @now);
+   'published', TRUE, 4.90, 210, @past4, @now),
+
+  ('course-python-foundations-2026', 'org-default', 'Python Programming Foundations: From First Steps to Practical Projects',
+   'A beginner-friendly, hands-on course covering Python data types, decisions, loops, collections, functions, files, errors, classes, testing, and a command-line expense tracker project.',
+   'Learn Python from the ground up and build useful command-line programs along the way.',
+   'Beginner',
+   'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600&auto=format&fit=crop&q=80',
+   'trainer-1', 'Dr. Sarah Mitchell', 'Programming',
+   '["A computer with Python 3 installed","No prior programming experience required"]',
+   '["Python syntax and data types","Conditionals and loops","Lists and dictionaries","Functions and modules","Files and exceptions","Object-oriented programming","Testing and debugging"]',
+   'published', FALSE, 0.00, 0, @now, @now);
 
 -- ============================================================
 -- MODULES
@@ -1080,7 +1090,11 @@ INSERT INTO `modules` (`id`, `courseId`, `title`, `description`, `order`) VALUES
   ('mod-5', 'course-3', 'Module 1: SQL Fundamentals', 'SELECT, WHERE, JOINs, GROUP BY, and subqueries.', 1),
   ('mod-6', 'course-3', 'Module 2: Advanced Database Design', 'Normalization, indexing, transactions, and optimization.', 2),
   ('mod-7', 'course-4', 'Module 1: Foundations of Complexity', 'Big-O notation, recursion, and sorting algorithms.', 1),
-  ('mod-8', 'course-4', 'Module 2: Graphs & Dynamic Programming', 'BFS, DFS, shortest paths, memoization, and tabulation.', 2);
+  ('mod-8', 'course-4', 'Module 2: Graphs & Dynamic Programming', 'BFS, DFS, shortest paths, memoization, and tabulation.', 2),
+  ('mod-python-foundations-01', 'course-python-foundations-2026', 'Module 1: Getting Started with Python', 'Set up Python, run your first program, and work with variables and basic expressions.', 1),
+  ('mod-python-foundations-02', 'course-python-foundations-2026', 'Module 2: Decisions, Loops, and Collections', 'Control program flow and organize related data with lists and dictionaries.', 2),
+  ('mod-python-foundations-03', 'course-python-foundations-2026', 'Module 3: Functions, Files, and Errors', 'Write reusable functions and work safely with files and common errors.', 3),
+  ('mod-python-foundations-04', 'course-python-foundations-2026', 'Module 4: Classes and Your First Project', 'Learn classes, testing, and build a command-line expense tracker.', 4);
 
 -- ============================================================
 -- LESSONS
@@ -1095,7 +1109,19 @@ INSERT INTO `lessons` (`id`, `moduleId`, `courseId`, `title`, `type`, `content`,
   ('les-7', 'mod-5', 'course-3', 'Mastering JOINs', 'text', '## JOIN Operations\n\nINNER JOIN, LEFT JOIN, RIGHT JOIN, and CROSS JOIN explained with examples.', NULL, 2, 15),
   ('les-8', 'mod-6', 'course-3', 'Database Normalization (1NF to 3NF)', 'text', '## Normalization\n\nEliminate redundancy by organizing tables into normal forms.', NULL, 1, 20),
   ('les-9', 'mod-7', 'course-4', 'Big-O Notation Explained', 'video', '## Understanding Time Complexity\n\nO(1), O(n), O(log n), O(n²) — when and why they matter.', 'https://example.com/videos/big-o.mp4', 1, 18),
-  ('les-10', 'mod-8', 'course-4', 'Graph Traversal: BFS and DFS', 'text', '## Graph Algorithms\n\nBreadth-first search vs depth-first search with real-world applications.', NULL, 1, 25);
+  ('les-10', 'mod-8', 'course-4', 'Graph Traversal: BFS and DFS', 'text', '## Graph Algorithms\n\nBreadth-first search vs depth-first search with real-world applications.', NULL, 1, 25),
+  ('py-found-lesson-01', 'mod-python-foundations-01', 'course-python-foundations-2026', 'Meet Python and Run Your First Program', 'text', 'Create hello.py, print a message, run it with Python 3, and learn to read syntax errors as useful clues.', NULL, 1, 25),
+  ('py-found-lesson-02', 'mod-python-foundations-01', 'course-python-foundations-2026', 'Variables, Values, and Basic Types', 'text', 'Store values in descriptive variables. Practice strings, integers, floats, booleans, assignment, and type().', NULL, 2, 30),
+  ('py-found-lesson-03', 'mod-python-foundations-01', 'course-python-foundations-2026', 'Numbers, Strings, and User Input', 'text', 'Use arithmetic operators, input(), numeric conversions, f-strings, and common string methods.', NULL, 3, 30),
+  ('py-found-lesson-04', 'mod-python-foundations-02', 'course-python-foundations-2026', 'Make Decisions with if, elif, and else', 'text', 'Use comparison operators and branching logic to make a program choose what to do next.', NULL, 1, 30),
+  ('py-found-lesson-05', 'mod-python-foundations-02', 'course-python-foundations-2026', 'Repeat Work with for and while Loops', 'text', 'Use for, range, and while loops. Avoid infinite loops and practice break and continue.', NULL, 2, 35),
+  ('py-found-lesson-06', 'mod-python-foundations-02', 'course-python-foundations-2026', 'Lists and Working with Collections', 'text', 'Create ordered lists, access items by index, update collections, and process items with loops.', NULL, 3, 35),
+  ('py-found-lesson-07', 'mod-python-foundations-02', 'course-python-foundations-2026', 'Dictionaries and Structured Data', 'text', 'Store labeled key/value pairs, update dictionary entries, and handle optional keys safely.', NULL, 4, 35),
+  ('py-found-lesson-08', 'mod-python-foundations-03', 'course-python-foundations-2026', 'Functions: Reuse and Name Your Logic', 'text', 'Define focused functions with parameters and return values, then reuse them across a program.', NULL, 1, 40),
+  ('py-found-lesson-09', 'mod-python-foundations-03', 'course-python-foundations-2026', 'Modules, Files, and Safe Input', 'text', 'Organize code into modules, read and write files with with blocks, and handle expected conversion errors.', NULL, 2, 40),
+  ('py-found-lesson-10', 'mod-python-foundations-04', 'course-python-foundations-2026', 'Classes and Objects: A Gentle Introduction', 'text', 'Model related values and behavior with a simple class, an initializer, instance attributes, and methods.', NULL, 1, 40),
+  ('py-found-lesson-11', 'mod-python-foundations-04', 'course-python-foundations-2026', 'Testing, Debugging, and Clear Code', 'text', 'Check normal and edge cases with assertions, read tracebacks, and debug one small change at a time.', NULL, 2, 35),
+  ('py-found-lesson-12', 'mod-python-foundations-04', 'course-python-foundations-2026', 'Capstone: Build an Expense Tracker', 'text', 'Build a command-line expense tracker using lists, dictionaries, functions, input validation, and file storage.', NULL, 3, 60);
 
 -- ============================================================
 -- ENROLLMENTS
@@ -1110,7 +1136,8 @@ INSERT INTO `enrollments` (`id`, `organizationId`, `studentId`, `courseId`, `enr
   ('enroll-7', 'org-default', 'student-4', 'course-2', @past4, 'bulk'),
   ('enroll-8', 'org-default', 'student-5', 'course-3', @past5, 'self'),
   ('enroll-9', 'org-acme-univ', 'acme-student-1', 'course-4', @past4, 'individual'),
-  ('enroll-10', 'org-acme-univ', 'acme-student-2', 'course-4', @past4, 'individual');
+  ('enroll-10', 'org-acme-univ', 'acme-student-2', 'course-4', @past4, 'individual'),
+  ('enroll-python-1', 'org-default', 'student-1', 'course-python-foundations-2026', @now, 'individual');
 
 -- ============================================================
 -- PROGRESS (some lessons completed)

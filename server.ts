@@ -6,6 +6,7 @@
 import "./server/env.js";
 import express from "express";
 import path from "path";
+import os from "os";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { createServer as createViteServer } from "vite";
@@ -69,11 +70,18 @@ const PORT = 3000;
 
 // Security: Helmet HTTP security headers with customized Content-Security-Policy
 app.use(helmet({
+  // LAN development is served over HTTP. Helmet's default CSP includes
+  // upgrade-insecure-requests, which makes browsers try HTTPS for every app
+  // asset on a private IP even though this dev server has no TLS listener.
+  crossOriginOpenerPolicy: process.env.NODE_ENV === "production"
+    ? { policy: "same-origin" }
+    : false,
   referrerPolicy: {
     policy: "strict-origin-when-cross-origin"
   },
   contentSecurityPolicy: {
     directives: {
+      upgradeInsecureRequests: process.env.NODE_ENV === "production" ? [] : null,
       defaultSrc: ["'self'"],
       scriptSrc: [
         "'self'", 
@@ -116,6 +124,12 @@ app.use(helmet({
 const allowedOrigins = process.env.CORS_ORIGIN 
   ? process.env.CORS_ORIGIN.split(",").map(o => o.trim())
   : [process.env.APP_URL, "http://localhost:3000", "http://127.0.0.1:3000"].filter(Boolean) as string[];
+const localIPv4Addresses = new Set(
+  Object.values(os.networkInterfaces())
+    .flatMap((interfaces) => interfaces || [])
+    .filter((address) => !address.internal && address.family === "IPv4")
+    .map((address) => address.address)
+);
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -123,6 +137,18 @@ app.use(cors({
     if (process.env.NODE_ENV !== "production") {
       if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
         return callback(null, true);
+      }
+      try {
+        const parsedOrigin = new URL(origin);
+        if (
+          parsedOrigin.protocol === "http:" &&
+          parsedOrigin.port === String(PORT) &&
+          localIPv4Addresses.has(parsedOrigin.hostname)
+        ) {
+          return callback(null, true);
+        }
+      } catch {
+        // Invalid Origin values fall through to the normal allowlist check.
       }
     }
     if (allowedOrigins.includes(origin)) {
@@ -7303,7 +7329,8 @@ app.get("/api/assessments/:id", authenticateToken, async (req, res) => {
       }
     }
     const completedAttempts = allAttempts.filter(a => a.status === "submitted" || a.status === "timed_out");
-    userAttemptsCount = completedAttempts.length;
+    const priorSubmissions = await submissionsDb.find({ assessmentId: assessment.id, studentId });
+    userAttemptsCount = Math.max(completedAttempts.length, priorSubmissions.length);
   }
 
   let finalQuestions: any[] = questions;
@@ -7425,7 +7452,8 @@ app.post("/api/assessments/:id/start", authenticateToken, async (req, res) => {
 
   // Count completed attempts
   const completedAttempts = allAttempts.filter(a => a.status === "submitted" || a.status === "timed_out");
-  const completedCount = completedAttempts.length;
+  const priorSubmissions = await submissionsDb.find({ assessmentId: assessment.id, studentId });
+  const completedCount = Math.max(completedAttempts.length, priorSubmissions.length);
 
   if (assessment.maxAttempts && assessment.maxAttempts > 0) {
     if (completedCount >= assessment.maxAttempts) {
@@ -9091,6 +9119,13 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server is booted and listening on http://localhost:${PORT}`);
+    const lanAddresses = Object.values(os.networkInterfaces())
+      .flatMap((interfaces) => interfaces || [])
+      .filter((address) => !address.internal && address.family === "IPv4")
+      .map((address) => `http://${address.address}:${PORT}`);
+    if (lanAddresses.length > 0) {
+      console.log(`Open from another PC on the same network: ${lanAddresses.join(" | ")}`);
+    }
     schedulerService.start();
   });
 }

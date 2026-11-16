@@ -92,5 +92,125 @@
         "A number is prime if it has no positive divisors other than 1 and itself."
       ]
     }
+  },
+  {
+    "id": "py-found-lesson-01",
+    "moduleId": "mod-python-foundations-01",
+    "courseId": "course-python-foundations-2026",
+    "title": "Meet Python and Run Your First Program",
+    "type": "text",
+    "order": 1,
+    "durationMinutes": 25,
+    "content": "## Welcome to Python\n\nPython is a general-purpose language known for clear, readable code. In this course you will write small programs, run them, and improve them step by step.\n\n### Your first program\n\nCreate a file named `hello.py` and add:\n\n```python\nprint(\"Hello, Python!\")\n```\n\nRun it from a terminal with `python hello.py` (some systems use `python3 hello.py`). `print()` writes a value to the screen.\n\n### Read errors as clues\n\nIf Python reports a `SyntaxError`, check spelling, quotes, parentheses, and indentation near the line it names. Make one change at a time, run the file again, and compare the output with what you expected.\n\n### Try it\n\nPrint your name, your favorite activity, and one sentence about what you hope to build."
+  },
+  {
+    "id": "py-found-lesson-02",
+    "moduleId": "mod-python-foundations-01",
+    "courseId": "course-python-foundations-2026",
+    "title": "Variables, Values, and Basic Types",
+    "type": "text",
+    "order": 2,
+    "durationMinutes": 30,
+    "content": "## Store information in variables\n\nA variable gives a name to a value. Python creates the variable when you assign to it:\n\n```python\nlearner_name = \"Mina\"\nlessons_finished = 3\ncourse_rating = 4.8\nis_enrolled = True\n```\n\nCommon built-in types include `str` (text), `int` (whole numbers), `float` (decimal numbers), and `bool` (`True` or `False`). Use `type(value)` to inspect a value while learning.\n\n### Naming and updating\n\nUse descriptive names such as `total_price` or `favorite_language`. Python names are case-sensitive. Assignment updates a variable:\n\n```python\nscore = 10\nscore = score + 5\nprint(score)  # 15\n```\n\n### Try it\n\nCreate variables for a book title, its page count, and whether you have finished it. Print a sentence that uses all three."
+  },
+  {
+    "id": "py-found-lesson-03",
+    "moduleId": "mod-python-foundations-01",
+    "courseId": "course-python-foundations-2026",
+    "title": "Numbers, Strings, and User Input",
+    "type": "text",
+    "order": 3,
+    "durationMinutes": 30,
+    "content": "## Combine and convert values\n\nUse `+`, `-`, `*`, `/`, `//`, `%`, and `**` for arithmetic. Use f-strings to include values in readable text:\n\n```python\nname = input(\"What is your name? \")\nage = int(input(\"How old are you? \"))\nprint(f\"Hi {name}! Next year you will be {age + 1}.\")\n```\n\n`input()` always returns text. Convert it with `int()` or `float()` before doing numeric calculations. Convert a number to text with `str()` when needed.\n\n### Useful string tools\n\nStrings support methods such as `.strip()` to remove surrounding whitespace, `.lower()` to normalize case, and `.split()` to separate words. Methods return values you can store or print.\n\n### Try it\n\nAsk for a price and a quantity. Convert both inputs to numbers, multiply them, and print the total with an f-string."
+  },
+  {
+    "id": "py-found-lesson-04",
+    "moduleId": "mod-python-foundations-02",
+    "courseId": "course-python-foundations-2026",
+    "title": "Make Decisions with if, elif, and else",
+    "type": "text",
+    "order": 1,
+    "durationMinutes": 30,
+    "content": "## Branching logic\n\nUse `if` when a block should run only when a condition is true. Add `elif` for another condition and `else` for the fallback:\n\n```python\nscore = 82\nif score >= 90:\n    grade = \"A\"\nelif score >= 80:\n    grade = \"B\"\nelse:\n    grade = \"Keep practicing\"\nprint(grade)\n```\n\nComparison operators include `==`, `!=`, `<`, `<=`, `>`, and `>=`. Combine conditions with `and`, `or`, and `not`. A single `=` assigns a value; `==` compares two values.\n\nIndentation defines the body of each branch. Keep the indentation consistent, usually four spaces.\n\n### Try it\n\nAsk for a temperature and print whether it is below freezing, comfortable, or hot. Choose sensible boundaries and test values around each boundary."
+  },
+  {
+    "id": "py-found-lesson-05",
+    "moduleId": "mod-python-foundations-02",
+    "courseId": "course-python-foundations-2026",
+    "title": "Repeat Work with for and while Loops",
+    "type": "text",
+    "order": 2,
+    "durationMinutes": 35,
+    "content": "## Loops save repetition\n\nA `for` loop visits each item in a sequence. `range(stop)` produces numbers starting at zero and stopping before `stop`:\n\n```python\nfor number in range(1, 6):\n    print(number)\n```\n\nUse a `while` loop when repetition depends on a condition:\n\n```python\nremaining = 3\nwhile remaining > 0:\n    print(remaining)\n    remaining -= 1\n```\n\nMake sure a `while` loop changes something that eventually makes its condition false. Otherwise, it can run forever. `break` exits a loop; `continue` skips to its next round.\n\n### Try it\n\nUse a loop to add the numbers from 1 through 100. Then change it to add only the even numbers."
+  },
+  {
+    "id": "py-found-lesson-06",
+    "moduleId": "mod-python-foundations-02",
+    "courseId": "course-python-foundations-2026",
+    "title": "Lists and Working with Collections",
+    "type": "text",
+    "order": 3,
+    "durationMinutes": 35,
+    "content": "## Keep related values in a list\n\nLists preserve order and can grow or shrink:\n\n```python\ntasks = [\"read\", \"practice\"]\ntasks.append(\"review\")\nprint(tasks[0])       # read\nprint(len(tasks))     # 3\n```\n\nIndexes start at zero. `tasks[-1]` refers to the last item. Use `append()` to add one value, `remove()` to remove a matching value, and `pop()` to remove and return an item.\n\nA loop can process every item:\n\n```python\nfor task in tasks:\n    print(f\"- {task}\")\n```\n\n### Try it\n\nBuild a short shopping list, add an item, remove one, then print the updated list with numbering."
+  },
+  {
+    "id": "py-found-lesson-07",
+    "moduleId": "mod-python-foundations-02",
+    "courseId": "course-python-foundations-2026",
+    "title": "Dictionaries and Structured Data",
+    "type": "text",
+    "order": 4,
+    "durationMinutes": 35,
+    "content": "## Look values up by name\n\nA dictionary stores key/value pairs. It is useful when each value has a meaningful label:\n\n```python\nbook = {\"title\": \"The Hobbit\", \"pages\": 310, \"finished\": False}\nprint(book[\"title\"])\nbook[\"finished\"] = True\nbook[\"author\"] = \"J. R. R. Tolkien\"\n```\n\nUse `dict.get(key, default)` when a key may be missing. Use `.items()` to loop over keys and values together. Keys should be unique and are commonly strings.\n\n### Try it\n\nCreate a dictionary for a product with a name, price, and stock count. Update the stock after a sale and print a clear summary."
+  },
+  {
+    "id": "py-found-lesson-08",
+    "moduleId": "mod-python-foundations-03",
+    "courseId": "course-python-foundations-2026",
+    "title": "Functions: Reuse and Name Your Logic",
+    "type": "text",
+    "order": 1,
+    "durationMinutes": 40,
+    "content": "## Define a function once\n\nFunctions package steps under a name. Parameters receive input, and `return` sends a result back:\n\n```python\ndef calculate_total(price, quantity):\n    return price * quantity\n\ntotal = calculate_total(12.5, 3)\nprint(total)\n```\n\nKeep functions focused on one job. Give parameters and return values clear meanings. A function that only displays output can use `print()`; a function whose result should be reused should usually `return` it.\n\nPython executes the function body when you call the function, not when you define it. Put the call after its definition.\n\n### Try it\n\nWrite `is_even(number)` that returns `True` for even values and `False` for odd values. Test it with both kinds of input."
+  },
+  {
+    "id": "py-found-lesson-09",
+    "moduleId": "mod-python-foundations-03",
+    "courseId": "course-python-foundations-2026",
+    "title": "Modules, Files, and Safe Input",
+    "type": "text",
+    "order": 2,
+    "durationMinutes": 40,
+    "content": "## Organize code into modules\n\nA Python file can be imported as a module. For example, `import math` gives access to `math.sqrt(25)`. Import only what you need and avoid naming your own files after standard-library modules.\n\n### Read and write files safely\n\nUse a `with` block so Python closes the file automatically:\n\n```python\nwith open(\"notes.txt\", \"w\", encoding=\"utf-8\") as file:\n    file.write(\"Practice a little every day.\\n\")\n\nwith open(\"notes.txt\", encoding=\"utf-8\") as file:\n    notes = file.read()\nprint(notes)\n```\n\n### Handle expected errors\n\nConvert user input inside a `try` block when it may not be valid:\n\n```python\ntry:\n    quantity = int(input(\"Quantity: \"))\nexcept ValueError:\n    print(\"Please enter a whole number.\")\n```\n\nCatch specific errors and give the user a useful next step."
+  },
+  {
+    "id": "py-found-lesson-10",
+    "moduleId": "mod-python-foundations-04",
+    "courseId": "course-python-foundations-2026",
+    "title": "Classes and Objects: A Gentle Introduction",
+    "type": "text",
+    "order": 1,
+    "durationMinutes": 40,
+    "content": "## Model related behavior and data\n\nA class describes a kind of object. An object is one instance of that class. The `__init__` method sets up each new instance, and `self` refers to that instance:\n\n```python\nclass Pet:\n    def __init__(self, name, animal_type):\n        self.name = name\n        self.animal_type = animal_type\n\n    def introduce(self):\n        return f\"{self.name} is a {self.animal_type}.\"\n\nmy_pet = Pet(\"Milo\", \"cat\")\nprint(my_pet.introduce())\n```\n\nStart with ordinary functions and collections. Use a class when several values and related behaviors belong together.\n\n### Try it\n\nCreate a `Book` class with a title and author, then add a method that returns a formatted description."
+  },
+  {
+    "id": "py-found-lesson-11",
+    "moduleId": "mod-python-foundations-04",
+    "courseId": "course-python-foundations-2026",
+    "title": "Testing, Debugging, and Clear Code",
+    "type": "text",
+    "order": 2,
+    "durationMinutes": 35,
+    "content": "## Check behavior with small tests\n\nTest a function with typical, boundary, and invalid inputs. For example, a total calculator should be checked with one item, several items, and an empty list.\n\nPython's built-in `assert` is useful for quick checks:\n\n```python\ndef double(number):\n    return number * 2\n\nassert double(4) == 8\nassert double(0) == 0\n```\n\nWhen debugging, read the traceback from the bottom up to find the error and line. Print intermediate values or use a debugger, then reduce the problem to the smallest case that still fails.\n\n### Good habits\n\nUse descriptive names, consistent indentation, short functions, and comments that explain why a decision was made. Remove temporary debug output before sharing a program."
+  },
+  {
+    "id": "py-found-lesson-12",
+    "moduleId": "mod-python-foundations-04",
+    "courseId": "course-python-foundations-2026",
+    "title": "Capstone: Build an Expense Tracker",
+    "type": "text",
+    "order": 3,
+    "durationMinutes": 60,
+    "content": "## Put the pieces together\n\nBuild a command-line expense tracker that lets a user record a description and amount, list saved expenses, and show the total. Start with an in-memory list of dictionaries, then add file storage.\n\n### Suggested plan\n\n1. Create a list named `expenses`. Store each entry as a dictionary with `description` and `amount`.\n2. Write `add_expense(expenses, description, amount)` and reject amounts that are zero or negative.\n3. Write `calculate_total(expenses)` and `show_expenses(expenses)` as separate functions.\n4. Add a loop with menu choices to add, list, and quit. Handle invalid menu choices and non-numeric amounts.\n5. Save entries to a text or CSV file with a `with` block, then load them when the program starts.\n6. Test an empty list, one expense, several expenses, and invalid input.\n\n### Stretch goals\n\nAdd categories, filter expenses by category, or display the largest expense. Keep each feature small and test it before moving on."
   }
 ]

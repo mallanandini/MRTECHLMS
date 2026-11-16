@@ -716,6 +716,10 @@ export function AssessmentViewer({
       if (response.ok) {
         const data = await response.json();
         setSubmissionResult(data.submission);
+        const completedCount = attemptsCount + 1;
+        const maxAttempts = Number(assessment?.maxAttempts ?? 1);
+        setAttemptsCount(completedCount);
+        setAttemptsReached(maxAttempts > 0 && completedCount >= maxAttempts);
         if (data.questions) {
           setGradedQuestions(data.questions);
         }
@@ -763,6 +767,47 @@ export function AssessmentViewer({
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleRetakeAssessment = () => {
+    const maxAttempts = Number(assessment?.maxAttempts ?? 1);
+    if (maxAttempts > 0 && attemptsCount >= maxAttempts) return;
+
+    localStorage.removeItem(storageKey);
+    setAnswers({});
+    setMarkedForReview({});
+    setActiveQuestionIdx(0);
+    setSubmissionResult(null);
+    setGradedQuestions(null);
+    setIsSubmitted(false);
+    setHasStarted(false);
+    setAttemptsReached(false);
+    setCurrentAttemptId(null);
+    setSecondsRemaining(null);
+    setExpiresAtDate(null);
+    setRulesAgreed(false);
+    setWarningCount(0);
+    setProctoringWarnings([]);
+    setIsFullscreen(false);
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    setChecklist(prev => prev.map(item => {
+      if (item.id === "rules") return { ...item, status: "pending" };
+      if (item.id === "camera") return {
+        ...item,
+        status: assessment?.proctoringConfig?.requireCamera ? "pending" : "not_required",
+        errorMessage: undefined
+      };
+      if (item.id === "microphone") return {
+        ...item,
+        status: assessment?.proctoringConfig?.requireMicrophone ? "pending" : "not_required",
+        errorMessage: undefined
+      };
+      if (item.id === "session") return { ...item, status: "passed", errorMessage: undefined };
+      return item;
+    }));
   };
 
   // Re-enter Fullscreen from Warning Modal
@@ -1157,7 +1202,7 @@ export function AssessmentViewer({
                 className="w-full sm:w-auto px-8 py-3.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-extrabold text-sm rounded-2xl transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Play className="w-4 h-4 fill-white" />
-                <span>Begin Timed Assessment</span>
+                <span>{attemptsCount > 0 ? `Start Attempt ${attemptsCount + 1}` : "Begin Timed Assessment"}</span>
               </button>
             </div>
           </div>
@@ -1177,6 +1222,8 @@ export function AssessmentViewer({
     const correctC = submissionResult?.correctCount ?? 0;
     const incorrectC = submissionResult?.incorrectCount ?? 0;
     const unansweredC = submissionResult?.unansweredCount ?? 0;
+    const maxAttempts = Number(assessment.maxAttempts ?? 1);
+    const canRetake = maxAttempts <= 0 || attemptsCount < maxAttempts;
 
     return (
       <div 
@@ -1294,6 +1341,16 @@ export function AssessmentViewer({
 
             {/* Action buttons */}
             <div className="flex flex-wrap gap-3 justify-center pt-2">
+              {canRetake && (
+                <button
+                  type="button"
+                  onClick={handleRetakeAssessment}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer inline-flex items-center gap-2"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Retake Assessment ({attemptsCount + 1}{maxAttempts > 0 ? ` of ${maxAttempts}` : ""})</span>
+                </button>
+              )}
               <button
                 onClick={onBack}
                 className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl border border-slate-300 transition cursor-pointer"

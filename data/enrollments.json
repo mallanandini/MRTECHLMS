@@ -22,5 +22,11 @@
     "courseId": "course-1",
     "enrolledAt": "2026-07-22T09:41:23.051Z",
     "id": "61456ea7-4dbc-4596-8f8f-7d9eef8d6b98"
+  },
+  {
+    "studentId": "student-1",
+    "courseId": "course-python-foundations-2026",
+    "enrolledAt": "2026-11-16T09:00:00.000Z",
+    "id": "e7dc1780-2c94-4a20-a2c0-3f2608472c9a"
   }
 ]

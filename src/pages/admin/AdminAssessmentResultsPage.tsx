@@ -500,10 +500,10 @@ export function AdminAssessmentResultsPage() {
                             <button
                               onClick={() => setViewingSubmissionId(row.submissionId!)}
                               className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-600 text-xs font-bold transition inline-flex items-center gap-1 cursor-pointer shadow-2xs"
-                              title="View Question-by-Question Breakdown"
+                              title="Review the student's answers against the correct answers"
                             >
                               <Eye className="w-3.5 h-3.5 text-blue-600" />
-                              <span>View Details</span>
+                              <span>Review Answers</span>
                             </button>
                           ) : (
                             <span className="text-[11px] text-slate-400 italic">No attempt</span>

@@ -734,8 +734,8 @@ export async function initializeDatabase() {
     const jsonCourses = await loadJsonFile<any>("courses.json");
     for (const c of jsonCourses) {
       await pool.query(
-        "INSERT IGNORE INTO courses (id, title, description, thumbnail, banner, instructorId, instructorName, category, requirements, skillsCovered, status, isFeatured, rating, reviewsCount, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [c.id, c.title, c.description, c.thumbnail || null, c.banner || null, c.instructorId, c.instructorName, c.category, JSON.stringify(c.requirements || []), JSON.stringify(c.skillsCovered || []), c.status || "published", c.isFeatured || false, c.rating || 5.0, c.reviewsCount || 0, c.createdAt]
+        "INSERT IGNORE INTO courses (id, title, description, shortDescription, difficulty, thumbnail, banner, instructorId, instructorName, category, requirements, skillsCovered, tags, prerequisites, estimatedDuration, status, isFeatured, rating, reviewsCount, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [c.id, c.title, c.description, c.shortDescription || null, c.difficulty || "Beginner", c.thumbnail || null, c.banner || null, c.instructorId, c.instructorName, c.category, JSON.stringify(c.requirements || []), JSON.stringify(c.skillsCovered || []), JSON.stringify(c.tags || []), JSON.stringify(c.prerequisites || []), c.estimatedDuration || null, c.status || "published", c.isFeatured || false, c.rating ?? 5.0, c.reviewsCount || 0, c.createdAt]
       );
     }
     console.log(`Migrated ${jsonCourses.length} courses.`);
@@ -744,8 +744,8 @@ export async function initializeDatabase() {
     const jsonModules = await loadJsonFile<any>("modules.json");
     for (const m of jsonModules) {
       await pool.query(
-        "INSERT IGNORE INTO modules (id, courseId, title, \`order\`) VALUES (?, ?, ?, ?)",
-        [m.id, m.courseId, m.title, m.order]
+        "INSERT IGNORE INTO modules (id, courseId, title, description, \`order\`) VALUES (?, ?, ?, ?, ?)",
+        [m.id, m.courseId, m.title, m.description || null, m.order]
       );
     }
     console.log(`Migrated ${jsonModules.length} modules.`);
