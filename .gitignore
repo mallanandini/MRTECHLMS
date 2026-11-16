@@ -19,10 +19,8 @@ assets/documents/*
 !assets/documents/.gitkeep
 assets/images/*
 !assets/images/.gitkeep
-!assets/images/thumbnails/
 assets/images/thumbnails/*
 !assets/images/thumbnails/.gitkeep
-!assets/images/avatars/
 assets/images/avatars/*
 !assets/images/avatars/.gitkeep
 assets/other/*
