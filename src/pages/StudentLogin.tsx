@@ -52,14 +52,29 @@ export function StudentLogin() {
   };
 
   return (
-    <div 
-      style={{ backgroundColor: "var(--theme-background)", color: "var(--theme-text)" }}
-      className="min-h-screen flex flex-col font-sans transition-colors duration-200"
-    >
+    <div className="student-login-page min-h-screen flex flex-col font-sans transition-colors duration-200">
+      <div className="student-login-tech-backdrop" aria-hidden="true">
+        <svg className="student-login-circuit-lines" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">
+          <g fill="none" stroke="currentColor" strokeWidth="1">
+            <path d="M0 190h210l54 54h154l56-56h165M1440 220h-220l-72 72h-122l-58 58h-130M0 690h190l78-78h126l52-52h122M1440 660h-174l-76-76h-118l-54-54h-150" />
+            <path d="M330 0v105l58 58v78M1080 0v116l-62 62v92M410 900v-126l52-52v-70M1010 900V770l-60-60v-82" />
+            <circle cx="210" cy="190" r="4" /><circle cx="584" cy="188" r="4" />
+            <circle cx="1220" cy="220" r="4" /><circle cx="838" cy="350" r="4" />
+            <circle cx="190" cy="690" r="4" /><circle cx="568" cy="560" r="4" />
+            <circle cx="1266" cy="660" r="4" /><circle cx="868" cy="530" r="4" />
+          </g>
+        </svg>
+        <div className="student-login-equations student-login-equations-left">
+          <span>∑ xᵢ² = ‖x‖²</span><span>f(x) → y</span><span>101101 · 010010</span><span>∂E / ∂w = 0</span>
+        </div>
+        <div className="student-login-equations student-login-equations-right">
+          <span>0101 1100 1010</span><span>∫ f(x) dx</span><span>A · x = b</span><span>√(a² + b²)</span>
+        </div>
+        <div className="student-login-coordinate">NODE_07&nbsp;&nbsp; / &nbsp;&nbsp;LEARN.SYS</div>
+      </div>
       {/* Header */}
       <header 
-        style={{ backgroundColor: "var(--theme-surface)", borderColor: "var(--theme-border)" }}
-        className="border-b px-4 sm:px-8 py-3.5 flex items-center justify-between"
+        className="student-login-header border-b px-4 sm:px-8 py-3.5 flex items-center justify-between"
       >
         <Link to="/" className="flex items-center gap-2.5 text-xs font-semibold hover:opacity-80 transition" style={{ color: "var(--theme-text)" }}>
           <ArrowLeft className="w-4 h-4" />
@@ -79,7 +94,7 @@ export function StudentLogin() {
         <div className="w-full max-w-md">
           {/* Logo & Header */}
           <div className="text-center mb-8">
-            <div className="inline-flex p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl shadow-blue-500/10 mb-4 hover:scale-105 transition-transform">
+            <div className="student-login-brand-mark inline-flex p-3 rounded-2xl mb-4 hover:scale-105 transition-transform">
               <img 
                 src="/mr-logo-icon.png" 
                 alt="MR Technologies" 
@@ -96,10 +111,7 @@ export function StudentLogin() {
           </div>
 
           {/* Form Container */}
-          <div 
-            style={{ backgroundColor: "var(--theme-surface)", borderColor: "var(--theme-border)" }}
-            className="border rounded-3xl p-6 sm:p-8 shadow-sm space-y-6"
-          >
+          <div className="student-login-glass-card border rounded-3xl p-6 sm:p-8 space-y-6">
             {errorMsg && (
               <div className="p-3.5 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 text-rose-800 dark:text-rose-300 text-xs font-semibold rounded-xl flex items-start gap-2.5">
                 <span className="text-base">⚠️</span>
@@ -123,7 +135,7 @@ export function StudentLogin() {
                     if (errorMsg) setErrorMsg("");
                   }}
                   placeholder="student@domain.com"
-                  className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white caret-slate-900 dark:caret-white border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-medium placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-600 transition font-mono"
+                  className="student-login-input w-full rounded-xl px-4 py-2.5 text-xs font-medium focus:outline-none focus:ring-2 transition font-mono"
                   required
                 />
               </div>
@@ -141,7 +153,7 @@ export function StudentLogin() {
                     if (errorMsg) setErrorMsg("");
                   }}
                   placeholder="••••••••"
-                  className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white caret-slate-900 dark:caret-white border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-medium placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-600 transition"
+                  className="student-login-input w-full rounded-xl px-4 py-2.5 text-xs font-medium focus:outline-none focus:ring-2 transition"
                   required
                 />
               </div>
