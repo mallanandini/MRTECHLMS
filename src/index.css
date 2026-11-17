@@ -1474,3 +1474,238 @@ body {
     break-inside: avoid !important;
   }
 }
+
+/* Liquid-glass treatment for the student sign-in screen only. */
+.student-login-page {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  color: var(--theme-text);
+  background:
+    radial-gradient(38rem 32rem at 12% 12%, rgba(96, 165, 250, 0.3), transparent 68%),
+    radial-gradient(36rem 30rem at 88% 78%, rgba(167, 139, 250, 0.26), transparent 68%),
+    linear-gradient(135deg, #e9f4ff 0%, #f4f5ff 52%, #e9faff 100%);
+}
+
+.student-login-page > main {
+  position: relative;
+  z-index: 1;
+}
+
+.student-login-tech-backdrop {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  color: rgba(37, 99, 235, 0.46);
+  background-image:
+    linear-gradient(rgba(59, 130, 246, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59, 130, 246, 0.07) 1px, transparent 1px),
+    radial-gradient(circle, rgba(37, 99, 235, 0.22) 1px, transparent 1.5px);
+  background-size: 44px 44px, 44px 44px, 22px 22px;
+  pointer-events: none;
+}
+
+.student-login-circuit-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.42;
+}
+
+.student-login-equations {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  color: currentColor;
+  font-family: var(--font-mono);
+  font-size: clamp(0.65rem, 1vw, 0.85rem);
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  opacity: 0.6;
+  text-shadow: 0 1px 12px rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+}
+
+.student-login-equations-left {
+  top: 27%;
+  left: clamp(1rem, 7vw, 7rem);
+  transform: rotate(-7deg);
+}
+
+.student-login-equations-right {
+  right: clamp(1rem, 7vw, 7rem);
+  bottom: 18%;
+  transform: rotate(6deg);
+}
+
+.student-login-coordinate {
+  position: absolute;
+  right: 3.5rem;
+  top: 7rem;
+  color: currentColor;
+  font: 600 0.62rem/1 var(--font-mono);
+  letter-spacing: 0.2em;
+  opacity: 0.55;
+}
+
+.student-login-page::before,
+.student-login-page::after {
+  position: absolute;
+  z-index: -1;
+  width: 19rem;
+  height: 19rem;
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  border-radius: 9999px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.42), rgba(147, 197, 253, 0.08));
+  box-shadow: inset 0 1px 18px rgba(255, 255, 255, 0.45), 0 22px 70px rgba(59, 130, 246, 0.1);
+  content: "";
+  pointer-events: none;
+}
+
+.student-login-page::before {
+  top: 16%;
+  left: -10rem;
+}
+
+.student-login-page::after {
+  right: -9rem;
+  bottom: 8%;
+  width: 24rem;
+  height: 24rem;
+}
+
+.student-login-header {
+  position: relative;
+  z-index: 1;
+  border-color: rgba(255, 255, 255, 0.62);
+  background: rgba(255, 255, 255, 0.32);
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+}
+
+.student-login-glass-card {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 28px 90px rgba(30, 64, 175, 0.11), inset 0 1px 0 rgba(255, 255, 255, 0.76);
+  backdrop-filter: blur(14px) saturate(165%);
+  -webkit-backdrop-filter: blur(14px) saturate(165%);
+}
+
+.student-login-brand-mark {
+  border: 1px solid rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.36);
+  box-shadow: 0 14px 38px rgba(59, 130, 246, 0.14), inset 0 1px 0 #fff;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.student-login-input {
+  border: 1px solid rgba(148, 163, 184, 0.36);
+  background: rgba(255, 255, 255, 0.28);
+  color: #0f172a;
+  caret-color: #2563eb;
+}
+
+.student-login-input::placeholder {
+  color: #94a3b8;
+}
+
+.student-login-input:focus {
+  border-color: rgba(59, 130, 246, 0.72);
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12);
+}
+
+.dark .student-login-page {
+  background:
+    radial-gradient(38rem 32rem at 12% 12%, rgba(37, 99, 235, 0.22), transparent 68%),
+    radial-gradient(36rem 30rem at 88% 78%, rgba(124, 58, 237, 0.18), transparent 68%),
+    linear-gradient(135deg, #0b1220 0%, #111827 52%, #0d1b2a 100%);
+}
+
+.dark .student-login-tech-backdrop {
+  color: rgba(125, 180, 255, 0.58);
+  background-image:
+    linear-gradient(rgba(125, 180, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(125, 180, 255, 0.08) 1px, transparent 1px),
+    radial-gradient(circle, rgba(125, 180, 255, 0.2) 1px, transparent 1.5px);
+}
+
+.dark .student-login-circuit-lines {
+  opacity: 0.35;
+}
+
+.dark .student-login-page::before,
+.dark .student-login-page::after {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(59, 130, 246, 0.035));
+  box-shadow: inset 0 1px 18px rgba(255, 255, 255, 0.06), 0 22px 70px rgba(0, 0, 0, 0.18);
+}
+
+.dark .student-login-header {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(15, 23, 42, 0.26);
+}
+
+.dark .student-login-glass-card {
+  border-color: rgba(255, 255, 255, 0.19);
+  background: rgba(15, 23, 42, 0.34);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.dark .student-login-brand-mark {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(15, 23, 42, 0.34);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.dark .student-login-input {
+  border-color: rgba(148, 163, 184, 0.26);
+  background: rgba(15, 23, 42, 0.35);
+  color: #f8fafc;
+  caret-color: #93c5fd;
+}
+
+.dark .student-login-input:focus {
+  border-color: rgba(96, 165, 250, 0.72);
+  background: rgba(15, 23, 42, 0.6);
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.18);
+}
+
+@media (max-width: 640px) {
+  .student-login-equations {
+    gap: 0.9rem;
+    font-size: 0.62rem;
+    opacity: 0.38;
+  }
+
+  .student-login-equations-left {
+    top: 17%;
+    left: 0.6rem;
+  }
+
+  .student-login-equations-right {
+    right: 0.6rem;
+    bottom: 12%;
+  }
+
+  .student-login-coordinate {
+    top: 5rem;
+    right: 1rem;
+    font-size: 0.52rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .student-login-page *,
+  .student-login-page *::before,
+  .student-login-page *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
