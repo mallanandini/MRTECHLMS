@@ -1,0 +1,1861 @@
+-- =====================================================================
+-- MRTECHLMS - MASTER PORTABLE DATABASE SETUP SCRIPT
+-- Compatible with: MySQL 8.0, 8.4 LTS, 9.0+, MariaDB 10.6+
+-- Generated: 2026-11-16T09:04:23.126Z
+-- Database Name: mrtechlms
+-- Tables: 70 tables
+-- Features: Multi-tenancy, LMS, Coding Engine, Assessments, Certifications,
+--           Batches, Proctoring, Notifications, Gamification, Enterprise
+-- =====================================================================
+
+SET NAMES utf8mb4;
+SET CHARACTER SET utf8mb4;
+SET FOREIGN_KEY_CHECKS = 0;
+SET SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO';
+
+-- ---------------------------------------------------------------------
+-- 1. Database Creation
+-- ---------------------------------------------------------------------
+CREATE DATABASE IF NOT EXISTS `mrtechlms`
+  DEFAULT CHARACTER SET utf8mb4
+  DEFAULT COLLATE utf8mb4_unicode_ci;
+
+USE `mrtechlms`;
+
+-- ---------------------------------------------------------------------
+-- 2. Table Schemas (70 Tables)
+-- ---------------------------------------------------------------------
+
+-- =====================================================================
+-- Domain: 01_core_and_auth.sql
+-- =====================================================================
+
+-- Table: `organizations`
+DROP TABLE IF EXISTS `organizations`;
+CREATE TABLE `organizations` (
+  `id` varchar(36) NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `slug` varchar(100) NOT NULL,
+  `domain` varchar(255) DEFAULT NULL,
+  `logoUrl` text,
+  `settings` json DEFAULT NULL,
+  `status` enum('active','inactive','suspended') DEFAULT 'active',
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) DEFAULT NULL,
+  `deletedAt` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `slug` (`slug`),
+  KEY `idx_org_slug` (`slug`),
+  KEY `idx_org_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `users`
+DROP TABLE IF EXISTS `users`;
+CREATE TABLE `users` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) DEFAULT NULL,
+  `name` varchar(255) NOT NULL,
+  `email` varchar(255) NOT NULL,
+  `role` enum('student','trainer','admin','super_admin','manager') NOT NULL DEFAULT 'student',
+  `profilePhoto` text,
+  `createdAt` varchar(50) NOT NULL,
+  `status` enum('active','suspended') DEFAULT 'active',
+  `bookmarkedBlogIds` json DEFAULT NULL,
+  `passwordHash` varchar(255) NOT NULL,
+  `deletedAt` varchar(50) DEFAULT NULL,
+  `departmentId` varchar(36) DEFAULT NULL,
+  `managerId` varchar(36) DEFAULT NULL,
+  `jobTitle` varchar(100) DEFAULT NULL,
+  `phoneNumber` varchar(50) DEFAULT NULL,
+  `location` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `email` (`email`),
+  KEY `idx_users_org` (`organizationId`),
+  KEY `idx_users_deleted` (`deletedAt`),
+  KEY `idx_users_org_role_status` (`organizationId`,`role`,`status`),
+  KEY `idx_users_dept` (`departmentId`),
+  KEY `idx_users_manager` (`managerId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `user_preferences`
+DROP TABLE IF EXISTS `user_preferences`;
+CREATE TABLE `user_preferences` (
+  `id` varchar(36) NOT NULL,
+  `userId` varchar(36) NOT NULL,
+  `theme` varchar(50) NOT NULL DEFAULT 'default-blue',
+  `primaryColor` varchar(50) NOT NULL DEFAULT '#2563eb',
+  `secondaryColor` varchar(50) NOT NULL DEFAULT '#4f46e5',
+  `backgroundColor` varchar(50) NOT NULL DEFAULT '#f8fafc',
+  `surfaceColor` varchar(50) NOT NULL DEFAULT '#ffffff',
+  `textColor` varchar(50) NOT NULL DEFAULT '#0f172a',
+  `mode` enum('light','dark') NOT NULL DEFAULT 'light',
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `userId` (`userId`),
+  CONSTRAINT `user_preferences_ibfk_1` FOREIGN KEY (`userId`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `audit_logs`
+DROP TABLE IF EXISTS `audit_logs`;
+CREATE TABLE `audit_logs` (
+  `id` varchar(64) NOT NULL,
+  `organizationId` varchar(36) DEFAULT NULL,
+  `userId` varchar(64) DEFAULT NULL,
+  `userEmail` varchar(255) DEFAULT NULL,
+  `userRole` varchar(32) DEFAULT NULL,
+  `action` varchar(64) NOT NULL,
+  `resourceType` varchar(64) NOT NULL,
+  `resourceId` varchar(64) DEFAULT NULL,
+  `details` json DEFAULT NULL,
+  `ipAddress` varchar(64) DEFAULT NULL,
+  `userAgent` varchar(255) DEFAULT NULL,
+  `status` varchar(16) NOT NULL DEFAULT 'success',
+  `createdAt` varchar(32) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_audit_user` (`userId`),
+  KEY `idx_audit_action` (`action`),
+  KEY `idx_audit_created` (`createdAt`),
+  KEY `idx_audit_logs_org` (`organizationId`),
+  KEY `idx_audit_org_action` (`organizationId`,`action`),
+  KEY `idx_audit_org_action_date` (`organizationId`,`action`,`createdAt`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `schema_migrations`
+DROP TABLE IF EXISTS `schema_migrations`;
+CREATE TABLE `schema_migrations` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `version` varchar(100) NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `batch` int NOT NULL,
+  `appliedAt` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `version` (`version`)
+) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- =====================================================================
+-- Domain: 02_curriculum_and_learning.sql
+-- =====================================================================
+
+-- Table: `courses`
+DROP TABLE IF EXISTS `courses`;
+CREATE TABLE `courses` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) DEFAULT NULL,
+  `title` varchar(255) NOT NULL,
+  `description` text NOT NULL,
+  `thumbnail` text,
+  `banner` text,
+  `instructorId` varchar(36) NOT NULL,
+  `instructorName` varchar(255) NOT NULL,
+  `category` varchar(100) NOT NULL,
+  `requirements` json DEFAULT NULL,
+  `skillsCovered` json DEFAULT NULL,
+  `status` enum('draft','review','published','rejected','archived') DEFAULT 'draft',
+  `isFeatured` tinyint(1) DEFAULT '0',
+  `rating` decimal(3,2) DEFAULT '5.00',
+  `reviewsCount` int DEFAULT '0',
+  `createdAt` varchar(50) NOT NULL,
+  `shortDescription` text,
+  `difficulty` varchar(50) NOT NULL DEFAULT 'Beginner',
+  `deletedAt` varchar(50) DEFAULT NULL,
+  `estimatedDuration` varchar(50) DEFAULT NULL,
+  `tags` json DEFAULT NULL,
+  `prerequisites` json DEFAULT NULL,
+  `version` int NOT NULL DEFAULT '1',
+  `updatedAt` varchar(50) DEFAULT NULL,
+  `certificateEnabled` tinyint(1) NOT NULL DEFAULT '1',
+  `certificateTemplateId` varchar(36) DEFAULT NULL,
+  `certificateTitle` varchar(255) DEFAULT NULL,
+  `requireFinalAssessment` tinyint(1) NOT NULL DEFAULT '0',
+  `validityMonths` int DEFAULT NULL,
+  `signatoryName` varchar(255) DEFAULT NULL,
+  `signatoryTitle` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `instructorId` (`instructorId`),
+  KEY `idx_courses_org` (`organizationId`),
+  KEY `idx_courses_deleted` (`deletedAt`),
+  KEY `idx_courses_org_status` (`organizationId`,`status`),
+  CONSTRAINT `courses_ibfk_1` FOREIGN KEY (`instructorId`) REFERENCES `users` (`id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `modules`
+DROP TABLE IF EXISTS `modules`;
+CREATE TABLE `modules` (
+  `id` varchar(36) NOT NULL,
+  `courseId` varchar(36) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `order` int NOT NULL,
+  `description` text,
+  `status` enum('draft','published') NOT NULL DEFAULT 'published',
+  `deletedAt` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_modules_deleted` (`deletedAt`),
+  KEY `idx_modules_course_order` (`courseId`,`order`),
+  CONSTRAINT `modules_ibfk_1` FOREIGN KEY (`courseId`) REFERENCES `courses` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `lessons`
+DROP TABLE IF EXISTS `lessons`;
+CREATE TABLE `lessons` (
+  `id` varchar(36) NOT NULL,
+  `moduleId` varchar(36) NOT NULL,
+  `courseId` varchar(36) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `type` enum('video','pdf','image','text','coding','assessment') NOT NULL DEFAULT 'video',
+  `content` text,
+  `videoUrl` text,
+  `fileUrl` text,
+  `codingPrompt` json DEFAULT NULL,
+  `order` int NOT NULL,
+  `durationMinutes` int NOT NULL,
+  `description` text,
+  `materialTitle` varchar(255) DEFAULT NULL,
+  `materialUrl` text,
+  `assessmentId` varchar(36) DEFAULT NULL,
+  `status` enum('draft','published') NOT NULL DEFAULT 'published',
+  `deletedAt` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `courseId` (`courseId`),
+  KEY `idx_lessons_deleted` (`deletedAt`),
+  KEY `idx_lessons_module_order` (`moduleId`,`order`),
+  CONSTRAINT `lessons_ibfk_1` FOREIGN KEY (`moduleId`) REFERENCES `modules` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `lessons_ibfk_2` FOREIGN KEY (`courseId`) REFERENCES `courses` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `enrollments`
+DROP TABLE IF EXISTS `enrollments`;
+CREATE TABLE `enrollments` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) DEFAULT NULL,
+  `studentId` varchar(36) NOT NULL,
+  `courseId` varchar(36) NOT NULL,
+  `enrolledAt` varchar(50) NOT NULL,
+  `completedAt` varchar(50) DEFAULT NULL,
+  `lastLessonId` varchar(36) DEFAULT NULL,
+  `lastAccessedAt` varchar(50) DEFAULT NULL,
+  `progressPercentage` int NOT NULL DEFAULT '0',
+  `status` enum('assigned','not_started','in_progress','completed','expired','revoked') NOT NULL DEFAULT 'assigned',
+  `assignedBy` varchar(36) DEFAULT NULL,
+  `assignedAt` varchar(50) DEFAULT NULL,
+  `dueDate` varchar(50) DEFAULT NULL,
+  `isMandatory` tinyint(1) NOT NULL DEFAULT '0',
+  `assignmentSource` enum('individual','bulk','group','learning_path','self','batch') NOT NULL DEFAULT 'individual',
+  `assignmentSourceId` varchar(36) DEFAULT NULL,
+  `revokedAt` varchar(50) DEFAULT NULL,
+  `revokedBy` varchar(36) DEFAULT NULL,
+  `revocationReason` text,
+  `deletedAt` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `student_course_uniq` (`studentId`,`courseId`),
+  KEY `idx_enrollments_org` (`organizationId`),
+  KEY `idx_enrollments_student_course` (`studentId`,`courseId`),
+  KEY `idx_enrollments_status` (`status`),
+  KEY `idx_enrollments_due_date` (`dueDate`),
+  KEY `idx_enr_org_status_comp` (`organizationId`,`status`,`completedAt`),
+  KEY `idx_enr_course_progress` (`courseId`,`status`,`progressPercentage`),
+  CONSTRAINT `enrollments_ibfk_1` FOREIGN KEY (`studentId`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `enrollments_ibfk_2` FOREIGN KEY (`courseId`) REFERENCES `courses` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `progress`
+DROP TABLE IF EXISTS `progress`;
+CREATE TABLE `progress` (
+  `id` varchar(36) NOT NULL,
+  `studentId` varchar(36) NOT NULL,
+  `courseId` varchar(36) NOT NULL,
+  `lessonId` varchar(36) NOT NULL,
+  `completed` tinyint(1) DEFAULT '0',
+  `completedAt` varchar(50) DEFAULT NULL,
+  `timeSpentSeconds` int DEFAULT '0',
+  `status` enum('not_started','in_progress','completed') NOT NULL DEFAULT 'not_started',
+  `lastAccessedAt` varchar(50) DEFAULT NULL,
+  `progressPercent` int NOT NULL DEFAULT '0',
+  `lastPositionSeconds` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `student_lesson_uniq` (`studentId`,`lessonId`),
+  KEY `lessonId` (`lessonId`),
+  KEY `idx_progress_student_course` (`studentId`,`courseId`),
+  KEY `idx_prog_course_student_comp` (`courseId`,`studentId`,`completed`),
+  KEY `idx_prog_course_lesson_comp` (`courseId`,`lessonId`,`completed`),
+  CONSTRAINT `progress_ibfk_1` FOREIGN KEY (`studentId`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `progress_ibfk_2` FOREIGN KEY (`courseId`) REFERENCES `courses` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `progress_ibfk_3` FOREIGN KEY (`lessonId`) REFERENCES `lessons` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `reviews`
+DROP TABLE IF EXISTS `reviews`;
+CREATE TABLE `reviews` (
+  `id` varchar(36) NOT NULL,
+  `courseId` varchar(36) NOT NULL,
+  `studentId` varchar(36) NOT NULL,
+  `studentName` varchar(255) NOT NULL,
+  `rating` int NOT NULL,
+  `comment` text NOT NULL,
+  `createdAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `student_course_review` (`studentId`,`courseId`),
+  KEY `courseId` (`courseId`),
+  CONSTRAINT `reviews_ibfk_1` FOREIGN KEY (`courseId`) REFERENCES `courses` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `reviews_ibfk_2` FOREIGN KEY (`studentId`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- =====================================================================
+-- Domain: 03_assessments_and_attempts.sql
+-- =====================================================================
+
+-- Table: `assessments`
+DROP TABLE IF EXISTS `assessments`;
+CREATE TABLE `assessments` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) DEFAULT NULL,
+  `courseId` varchar(36) DEFAULT NULL,
+  `moduleId` varchar(36) DEFAULT NULL,
+  `title` varchar(255) NOT NULL,
+  `description` text NOT NULL,
+  `durationMinutes` int NOT NULL,
+  `passingScore` int NOT NULL,
+  `totalPoints` int NOT NULL,
+  `questionsCount` int NOT NULL,
+  `createdAt` varchar(50) NOT NULL,
+  `status` enum('published','draft','archived') DEFAULT 'draft',
+  `lessonId` varchar(36) DEFAULT NULL,
+  `type` enum('lesson_practice','course_final','path_practice','path_final','standalone') DEFAULT 'standalone',
+  `learningPathId` varchar(36) DEFAULT NULL,
+  `learningPathItemId` varchar(36) DEFAULT NULL,
+  `shortDescription` text,
+  `instructions` text,
+  `category` varchar(100) NOT NULL DEFAULT 'General',
+  `difficulty` varchar(50) NOT NULL DEFAULT 'medium',
+  `assessmentType` varchar(50) NOT NULL DEFAULT 'practice_test',
+  `maxAttempts` int NOT NULL DEFAULT '1',
+  `questionNavigation` enum('free','sequential') DEFAULT 'free',
+  `randomizeQuestions` tinyint(1) DEFAULT '0',
+  `randomizeOptions` tinyint(1) DEFAULT '0',
+  `revealAnswers` tinyint(1) DEFAULT '1',
+  `proctoringConfig` json DEFAULT NULL,
+  `authorId` varchar(36) DEFAULT NULL,
+  `authorName` varchar(255) DEFAULT NULL,
+  `updatedAt` varchar(50) DEFAULT NULL,
+  `deletedAt` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `courseId` (`courseId`),
+  KEY `moduleId` (`moduleId`),
+  KEY `idx_assessments_org` (`organizationId`),
+  KEY `idx_assessments_deleted` (`deletedAt`),
+  KEY `idx_assessments_org_status` (`organizationId`,`status`),
+  CONSTRAINT `assessments_ibfk_1` FOREIGN KEY (`courseId`) REFERENCES `courses` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `assessments_ibfk_2` FOREIGN KEY (`moduleId`) REFERENCES `modules` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `questions`
+DROP TABLE IF EXISTS `questions`;
+CREATE TABLE `questions` (
+  `id` varchar(36) NOT NULL,
+  `assessmentId` varchar(36) NOT NULL,
+  `type` enum('mcq_single','mcq_multi','true_false','fill_blanks','subjective') NOT NULL,
+  `questionText` text NOT NULL,
+  `options` json DEFAULT NULL,
+  `correctAnswers` json NOT NULL,
+  `points` int NOT NULL,
+  `negativePoints` int DEFAULT '0',
+  `explanation` text,
+  `difficulty` varchar(50) NOT NULL DEFAULT 'medium',
+  `order` int NOT NULL DEFAULT '1',
+  `deletedAt` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `assessmentId` (`assessmentId`),
+  KEY `idx_questions_deleted` (`deletedAt`),
+  CONSTRAINT `questions_ibfk_1` FOREIGN KEY (`assessmentId`) REFERENCES `assessments` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `assessment_assignments`
+DROP TABLE IF EXISTS `assessment_assignments`;
+CREATE TABLE `assessment_assignments` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) DEFAULT NULL,
+  `assessmentId` varchar(36) NOT NULL,
+  `studentId` varchar(36) NOT NULL,
+  `assignedBy` varchar(36) NOT NULL,
+  `assignedAt` varchar(50) NOT NULL,
+  `dueDate` varchar(50) DEFAULT NULL,
+  `status` enum('assigned','not_started','in_progress','completed','expired','revoked') NOT NULL DEFAULT 'assigned',
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  `isMandatory` tinyint(1) NOT NULL DEFAULT '0',
+  `assignmentSource` enum('individual','bulk','group','course','learning_path','self') NOT NULL DEFAULT 'individual',
+  `assignmentSourceId` varchar(36) DEFAULT NULL,
+  `revokedAt` varchar(50) DEFAULT NULL,
+  `revokedBy` varchar(36) DEFAULT NULL,
+  `revocationReason` text,
+  `deletedAt` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `student_assessment_uniq` (`assessmentId`,`studentId`),
+  KEY `assignedBy` (`assignedBy`),
+  KEY `idx_assessment_assignments_org` (`organizationId`),
+  KEY `idx_assign_student_status` (`studentId`,`status`),
+  KEY `idx_assessment_assign_status` (`status`),
+  KEY `idx_assessment_assign_due_date` (`dueDate`),
+  CONSTRAINT `assessment_assignments_ibfk_1` FOREIGN KEY (`assessmentId`) REFERENCES `assessments` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `assessment_assignments_ibfk_2` FOREIGN KEY (`studentId`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `assessment_assignments_ibfk_3` FOREIGN KEY (`assignedBy`) REFERENCES `users` (`id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `assessment_attempts`
+DROP TABLE IF EXISTS `assessment_attempts`;
+CREATE TABLE `assessment_attempts` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL DEFAULT 'org-default',
+  `assessmentId` varchar(36) NOT NULL,
+  `studentId` varchar(36) NOT NULL,
+  `attemptNumber` int NOT NULL DEFAULT '1',
+  `startedAt` varchar(50) NOT NULL,
+  `expiresAt` varchar(50) NOT NULL,
+  `submittedAt` varchar(50) DEFAULT NULL,
+  `timeTakenSeconds` int NOT NULL DEFAULT '0',
+  `status` enum('in_progress','submitted','timed_out','abandoned') NOT NULL DEFAULT 'in_progress',
+  `questionOrder` json DEFAULT NULL,
+  `answers` json DEFAULT NULL,
+  `proctoringEvents` json DEFAULT NULL,
+  `score` int DEFAULT NULL,
+  `totalPoints` int DEFAULT NULL,
+  `percentage` decimal(5,2) DEFAULT NULL,
+  `passed` tinyint(1) DEFAULT NULL,
+  `correctCount` int NOT NULL DEFAULT '0',
+  `incorrectCount` int NOT NULL DEFAULT '0',
+  `unansweredCount` int NOT NULL DEFAULT '0',
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  `deletedAt` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_attempts_assessment_student` (`assessmentId`,`studentId`),
+  KEY `idx_attempts_status` (`status`),
+  KEY `idx_attempts_org` (`organizationId`),
+  KEY `idx_attempts_deleted` (`deletedAt`),
+  KEY `studentId` (`studentId`),
+  CONSTRAINT `assessment_attempts_ibfk_1` FOREIGN KEY (`assessmentId`) REFERENCES `assessments` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `assessment_attempts_ibfk_2` FOREIGN KEY (`studentId`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `submissions`
+DROP TABLE IF EXISTS `submissions`;
+CREATE TABLE `submissions` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) DEFAULT NULL,
+  `assessmentId` varchar(36) NOT NULL,
+  `studentId` varchar(36) NOT NULL,
+  `studentName` varchar(255) NOT NULL,
+  `attemptId` varchar(36) DEFAULT NULL,
+  `attemptNumber` int DEFAULT '1',
+  `answers` json NOT NULL,
+  `score` int NOT NULL,
+  `totalPoints` int NOT NULL,
+  `passed` tinyint(1) NOT NULL,
+  `submittedAt` varchar(50) NOT NULL,
+  `timeTakenSeconds` int NOT NULL,
+  `correctCount` int NOT NULL DEFAULT '0',
+  `incorrectCount` int NOT NULL DEFAULT '0',
+  `unansweredCount` int NOT NULL DEFAULT '0',
+  `percentage` decimal(5,2) NOT NULL DEFAULT '0.00',
+  PRIMARY KEY (`id`),
+  KEY `idx_submissions_org` (`organizationId`),
+  KEY `idx_submissions_student_assessment` (`studentId`,`assessmentId`),
+  KEY `idx_submissions_assessment_date` (`assessmentId`,`submittedAt`),
+  KEY `idx_submissions_attempt` (`attemptId`),
+  KEY `idx_sub_org_passed_score` (`organizationId`,`passed`,`score`),
+  KEY `idx_sub_ass_passed_score` (`assessmentId`,`passed`,`score`),
+  CONSTRAINT `submissions_ibfk_1` FOREIGN KEY (`assessmentId`) REFERENCES `assessments` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `submissions_ibfk_2` FOREIGN KEY (`studentId`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- =====================================================================
+-- Domain: 04_learning_paths.sql
+-- =====================================================================
+
+-- Table: `learning_paths`
+DROP TABLE IF EXISTS `learning_paths`;
+CREATE TABLE `learning_paths` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) DEFAULT NULL,
+  `title` varchar(255) NOT NULL,
+  `slug` varchar(255) NOT NULL,
+  `shortDescription` text,
+  `description` text NOT NULL,
+  `category` varchar(100) NOT NULL,
+  `difficulty` varchar(50) DEFAULT 'Beginner',
+  `thumbnail` text,
+  `estimatedDuration` varchar(50) DEFAULT NULL,
+  `requirements` json DEFAULT NULL,
+  `learningObjectives` json DEFAULT NULL,
+  `status` enum('draft','published','archived') DEFAULT 'draft',
+  `authorId` varchar(36) NOT NULL,
+  `authorName` varchar(255) NOT NULL,
+  `finalAssessmentId` varchar(36) DEFAULT NULL,
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  `deletedAt` varchar(50) DEFAULT NULL,
+  `certificateEnabled` tinyint(1) NOT NULL DEFAULT '1',
+  `certificateTemplateId` varchar(36) DEFAULT NULL,
+  `certificateTitle` varchar(255) DEFAULT NULL,
+  `validityMonths` int DEFAULT NULL,
+  `signatoryName` varchar(255) DEFAULT NULL,
+  `signatoryTitle` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `slug` (`slug`),
+  KEY `authorId` (`authorId`),
+  KEY `idx_learning_paths_org` (`organizationId`),
+  KEY `idx_learning_paths_deleted` (`deletedAt`),
+  CONSTRAINT `learning_paths_ibfk_1` FOREIGN KEY (`authorId`) REFERENCES `users` (`id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `learning_path_sections`
+DROP TABLE IF EXISTS `learning_path_sections`;
+CREATE TABLE `learning_path_sections` (
+  `id` varchar(36) NOT NULL,
+  `learningPathId` varchar(36) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `description` text,
+  `order` int NOT NULL,
+  `createdAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `learningPathId` (`learningPathId`),
+  CONSTRAINT `learning_path_sections_ibfk_1` FOREIGN KEY (`learningPathId`) REFERENCES `learning_paths` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `learning_path_items`
+DROP TABLE IF EXISTS `learning_path_items`;
+CREATE TABLE `learning_path_items` (
+  `id` varchar(36) NOT NULL,
+  `sectionId` varchar(36) NOT NULL,
+  `learningPathId` varchar(36) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `description` text,
+  `type` enum('text','video','pdf','assessment') NOT NULL,
+  `order` int NOT NULL,
+  `durationMinutes` int NOT NULL DEFAULT '10',
+  `isRequired` tinyint(1) DEFAULT '1',
+  `content` longtext,
+  `videoSource` enum('youtube','vimeo','upload') DEFAULT NULL,
+  `videoUrl` text,
+  `fileUrl` text,
+  `fileName` varchar(255) DEFAULT NULL,
+  `assessmentId` varchar(36) DEFAULT NULL,
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `sectionId` (`sectionId`),
+  KEY `learningPathId` (`learningPathId`),
+  CONSTRAINT `learning_path_items_ibfk_1` FOREIGN KEY (`sectionId`) REFERENCES `learning_path_sections` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `learning_path_items_ibfk_2` FOREIGN KEY (`learningPathId`) REFERENCES `learning_paths` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `learning_path_assignments`
+DROP TABLE IF EXISTS `learning_path_assignments`;
+CREATE TABLE `learning_path_assignments` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) DEFAULT NULL,
+  `learningPathId` varchar(36) NOT NULL,
+  `studentId` varchar(36) NOT NULL,
+  `assignedBy` varchar(36) NOT NULL,
+  `assignedAt` varchar(50) NOT NULL,
+  `completedAt` varchar(50) DEFAULT NULL,
+  `status` enum('assigned','not_started','in_progress','completed','expired','revoked') NOT NULL DEFAULT 'assigned',
+  `dueDate` varchar(50) DEFAULT NULL,
+  `isMandatory` tinyint(1) NOT NULL DEFAULT '0',
+  `assignmentSource` enum('individual','bulk','group','self','batch') NOT NULL DEFAULT 'individual',
+  `assignmentSourceId` varchar(36) DEFAULT NULL,
+  `revokedAt` varchar(50) DEFAULT NULL,
+  `revokedBy` varchar(36) DEFAULT NULL,
+  `revocationReason` text,
+  `deletedAt` varchar(50) DEFAULT NULL,
+  `isDenied` tinyint(1) NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `student_path_uniq` (`learningPathId`,`studentId`),
+  KEY `studentId` (`studentId`),
+  KEY `assignedBy` (`assignedBy`),
+  KEY `idx_learning_path_assignments_org` (`organizationId`),
+  KEY `idx_lp_assign_status` (`status`),
+  KEY `idx_lp_assign_due_date` (`dueDate`),
+  KEY `idx_lpa_denied` (`isDenied`),
+  CONSTRAINT `learning_path_assignments_ibfk_1` FOREIGN KEY (`learningPathId`) REFERENCES `learning_paths` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `learning_path_assignments_ibfk_2` FOREIGN KEY (`studentId`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `learning_path_assignments_ibfk_3` FOREIGN KEY (`assignedBy`) REFERENCES `users` (`id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `learning_path_progress`
+DROP TABLE IF EXISTS `learning_path_progress`;
+CREATE TABLE `learning_path_progress` (
+  `id` varchar(36) NOT NULL,
+  `learningPathId` varchar(36) NOT NULL,
+  `studentId` varchar(36) NOT NULL,
+  `itemId` varchar(36) NOT NULL,
+  `completed` tinyint(1) DEFAULT '0',
+  `completedAt` varchar(50) DEFAULT NULL,
+  `timeSpentSeconds` int DEFAULT '0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `student_path_item_uniq` (`studentId`,`itemId`),
+  KEY `learningPathId` (`learningPathId`),
+  KEY `itemId` (`itemId`),
+  CONSTRAINT `learning_path_progress_ibfk_1` FOREIGN KEY (`learningPathId`) REFERENCES `learning_paths` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `learning_path_progress_ibfk_2` FOREIGN KEY (`studentId`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `learning_path_progress_ibfk_3` FOREIGN KEY (`itemId`) REFERENCES `learning_path_items` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- =====================================================================
+-- Domain: 05_coding_and_playground.sql
+-- =====================================================================
+
+-- Table: `coding_chapters`
+DROP TABLE IF EXISTS `coding_chapters`;
+CREATE TABLE `coding_chapters` (
+  `id` varchar(100) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `slug` varchar(255) NOT NULL,
+  `description` text,
+  `icon` varchar(50) DEFAULT NULL,
+  `orderIndex` int NOT NULL DEFAULT '1',
+  `createdAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `slug` (`slug`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `coding_topics`
+DROP TABLE IF EXISTS `coding_topics`;
+CREATE TABLE `coding_topics` (
+  `id` varchar(100) NOT NULL,
+  `chapterId` varchar(100) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `slug` varchar(255) NOT NULL,
+  `description` text,
+  `orderIndex` int NOT NULL DEFAULT '1',
+  `createdAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `slug` (`slug`),
+  KEY `chapterId` (`chapterId`),
+  CONSTRAINT `coding_topics_ibfk_1` FOREIGN KEY (`chapterId`) REFERENCES `coding_chapters` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `coding_challenges`
+DROP TABLE IF EXISTS `coding_challenges`;
+CREATE TABLE `coding_challenges` (
+  `id` varchar(100) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `slug` varchar(255) DEFAULT NULL,
+  `description` text NOT NULL,
+  `difficulty` enum('easy','medium','hard') NOT NULL DEFAULT 'easy',
+  `category` varchar(100) NOT NULL DEFAULT 'General',
+  `challengeType` enum('programming','web') NOT NULL DEFAULT 'programming',
+  `supportedLanguages` json NOT NULL,
+  `starterCode` json NOT NULL,
+  `htmlStarterCode` text,
+  `cssStarterCode` text,
+  `javascriptStarterCode` text,
+  `inputFormat` text,
+  `outputFormat` text,
+  `constraints` text,
+  `examples` json DEFAULT NULL,
+  `publicTestCases` json NOT NULL,
+  `privateTestCases` json NOT NULL,
+  `hints` json DEFAULT NULL,
+  `solutionExplanation` text,
+  `timeLimit` int NOT NULL DEFAULT '3000',
+  `memoryLimit` int NOT NULL DEFAULT '256',
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  `chapterId` varchar(100) DEFAULT NULL,
+  `topicId` varchar(100) DEFAULT NULL,
+  `orderIndex` int NOT NULL DEFAULT '1',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `slug` (`slug`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `coding_saved_code`
+DROP TABLE IF EXISTS `coding_saved_code`;
+CREATE TABLE `coding_saved_code` (
+  `id` varchar(100) NOT NULL,
+  `studentId` varchar(36) NOT NULL,
+  `challengeId` varchar(100) NOT NULL,
+  `language` varchar(50) NOT NULL,
+  `code` text,
+  `htmlCode` text,
+  `cssCode` text,
+  `jsCode` text,
+  `updatedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_student_challenge_lang` (`studentId`,`challengeId`,`language`),
+  CONSTRAINT `coding_saved_code_ibfk_1` FOREIGN KEY (`studentId`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `coding_submissions`
+DROP TABLE IF EXISTS `coding_submissions`;
+CREATE TABLE `coding_submissions` (
+  `id` varchar(36) NOT NULL,
+  `studentId` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL DEFAULT 'org-default',
+  `studentName` varchar(255) NOT NULL,
+  `problemId` varchar(100) NOT NULL,
+  `language` varchar(50) NOT NULL,
+  `code` text NOT NULL,
+  `status` enum('passed','failed','error') NOT NULL,
+  `output` text,
+  `resultsJson` json DEFAULT NULL,
+  `passedCount` int NOT NULL,
+  `totalCount` int NOT NULL,
+  `score` int NOT NULL DEFAULT '0',
+  `executionTimeMs` int NOT NULL DEFAULT '0',
+  `memoryBytes` bigint NOT NULL DEFAULT '0',
+  `submittedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `studentId` (`studentId`),
+  KEY `idx_coding_sub_org` (`organizationId`),
+  CONSTRAINT `coding_submissions_ibfk_1` FOREIGN KEY (`studentId`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `student_playground_programs`
+DROP TABLE IF EXISTS `student_playground_programs`;
+CREATE TABLE `student_playground_programs` (
+  `id` varchar(100) NOT NULL,
+  `studentId` varchar(36) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `language` varchar(50) NOT NULL,
+  `code` text NOT NULL,
+  `input` text,
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `studentId` (`studentId`),
+  CONSTRAINT `student_playground_programs_ibfk_1` FOREIGN KEY (`studentId`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `coding_execution_jobs`
+DROP TABLE IF EXISTS `coding_execution_jobs`;
+CREATE TABLE `coding_execution_jobs` (
+  `id` varchar(36) NOT NULL,
+  `userId` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL,
+  `challengeId` varchar(100) DEFAULT NULL,
+  `language` varchar(50) NOT NULL,
+  `code` mediumtext NOT NULL,
+  `stdin` text,
+  `jobType` enum('run','submit','playground') NOT NULL DEFAULT 'run',
+  `status` enum('queued','running','completed','failed','timeout') NOT NULL DEFAULT 'queued',
+  `result` json DEFAULT NULL,
+  `error` text,
+  `executionDriver` varchar(50) NOT NULL DEFAULT 'isolated-process',
+  `executionTimeMs` int DEFAULT NULL,
+  `memoryBytes` bigint DEFAULT NULL,
+  `enqueuedAt` varchar(50) NOT NULL,
+  `startedAt` varchar(50) DEFAULT NULL,
+  `completedAt` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_jobs_user_org` (`organizationId`,`userId`),
+  KEY `idx_jobs_status` (`status`),
+  KEY `idx_jobs_challenge` (`challengeId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- =====================================================================
+-- Domain: 06_certifications.sql
+-- =====================================================================
+
+-- Table: `certificate_templates`
+DROP TABLE IF EXISTS `certificate_templates`;
+CREATE TABLE `certificate_templates` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL DEFAULT 'org-default',
+  `name` varchar(255) NOT NULL,
+  `description` text,
+  `style` enum('classic_gold','modern_emerald','executive_navy','tech_violet') NOT NULL DEFAULT 'classic_gold',
+  `primaryColor` varchar(50) NOT NULL DEFAULT '#1e3a8a',
+  `accentColor` varchar(50) NOT NULL DEFAULT '#d97706',
+  `badgeIcon` varchar(50) NOT NULL DEFAULT 'award',
+  `borderStyle` varchar(50) NOT NULL DEFAULT 'ornate',
+  `defaultSignatoryName` varchar(255) NOT NULL DEFAULT 'Dr. M. R. Tech',
+  `defaultSignatoryTitle` varchar(255) NOT NULL DEFAULT 'Director of Academic Affairs',
+  `organizationName` varchar(255) NOT NULL DEFAULT 'MRTECH Learning Academy',
+  `isDefault` tinyint(1) NOT NULL DEFAULT '0',
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  `deletedAt` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_templates_org` (`organizationId`),
+  KEY `idx_templates_deleted` (`deletedAt`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `certificates`
+DROP TABLE IF EXISTS `certificates`;
+CREATE TABLE `certificates` (
+  `id` varchar(36) NOT NULL,
+  `certificateNumber` varchar(100) NOT NULL,
+  `verificationCode` varchar(64) NOT NULL,
+  `organizationId` varchar(36) NOT NULL DEFAULT 'org-default',
+  `studentId` varchar(36) NOT NULL,
+  `studentName` varchar(255) NOT NULL,
+  `studentEmail` varchar(255) NOT NULL,
+  `type` enum('course','learning_path') NOT NULL DEFAULT 'course',
+  `courseId` varchar(36) DEFAULT NULL,
+  `learningPathId` varchar(36) DEFAULT NULL,
+  `title` varchar(255) NOT NULL,
+  `certificateTitle` varchar(255) NOT NULL DEFAULT 'Certificate of Completion',
+  `templateId` varchar(36) DEFAULT NULL,
+  `templateStyle` varchar(50) NOT NULL DEFAULT 'classic_gold',
+  `scorePercentage` decimal(5,2) DEFAULT NULL,
+  `issuedAt` varchar(50) NOT NULL,
+  `expiresAt` varchar(50) DEFAULT NULL,
+  `status` enum('active','revoked','expired') NOT NULL DEFAULT 'active',
+  `signatoryName` varchar(255) NOT NULL DEFAULT 'Dr. M. R. Tech',
+  `signatoryTitle` varchar(255) NOT NULL DEFAULT 'Director of Academic Affairs',
+  `organizationName` varchar(255) NOT NULL DEFAULT 'MRTECH Learning Academy',
+  `revokedAt` varchar(50) DEFAULT NULL,
+  `revokedBy` varchar(36) DEFAULT NULL,
+  `revocationReason` text,
+  `metadata` json DEFAULT NULL,
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  `deletedAt` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_cert_number` (`certificateNumber`),
+  UNIQUE KEY `uniq_cert_code` (`verificationCode`),
+  KEY `idx_cert_student` (`studentId`),
+  KEY `idx_cert_org` (`organizationId`),
+  KEY `idx_cert_status` (`status`),
+  KEY `idx_cert_deleted` (`deletedAt`),
+  KEY `idx_cert_org_status_issued` (`organizationId`,`status`,`issuedAt`),
+  CONSTRAINT `certificates_ibfk_1` FOREIGN KEY (`studentId`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- =====================================================================
+-- Domain: 07_organization_and_batches.sql
+-- =====================================================================
+
+-- Table: `institutions`
+DROP TABLE IF EXISTS `institutions`;
+CREATE TABLE `institutions` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL DEFAULT 'org-default',
+  `name` varchar(255) NOT NULL,
+  `code` varchar(50) NOT NULL,
+  `contactEmail` varchar(255) DEFAULT NULL,
+  `contactPhone` varchar(50) DEFAULT NULL,
+  `address` text,
+  `academicYears` json DEFAULT NULL,
+  `status` enum('active','inactive','archived') NOT NULL DEFAULT 'active',
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  `deletedAt` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `inst_code_uniq` (`organizationId`,`code`),
+  KEY `idx_inst_org` (`organizationId`),
+  KEY `idx_inst_code` (`code`),
+  KEY `idx_inst_status` (`status`),
+  KEY `idx_inst_deleted` (`deletedAt`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `batches`
+DROP TABLE IF EXISTS `batches`;
+CREATE TABLE `batches` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL DEFAULT 'org-default',
+  `institutionId` varchar(36) NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `code` varchar(50) NOT NULL,
+  `academicYear` varchar(50) NOT NULL,
+  `courseId` varchar(36) DEFAULT NULL,
+  `startDate` varchar(50) DEFAULT NULL,
+  `endDate` varchar(50) DEFAULT NULL,
+  `maxStudents` int DEFAULT NULL,
+  `description` text,
+  `status` enum('active','inactive','archived') NOT NULL DEFAULT 'active',
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  `deletedAt` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `batch_inst_code_uniq` (`institutionId`,`code`),
+  KEY `idx_batches_org` (`organizationId`),
+  KEY `idx_batches_inst` (`institutionId`),
+  KEY `idx_batches_year` (`academicYear`),
+  KEY `idx_batches_course` (`courseId`),
+  KEY `idx_batches_status` (`status`),
+  KEY `idx_batches_code` (`code`),
+  KEY `idx_batches_deleted` (`deletedAt`),
+  CONSTRAINT `batches_ibfk_1` FOREIGN KEY (`institutionId`) REFERENCES `institutions` (`id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `batch_students`
+DROP TABLE IF EXISTS `batch_students`;
+CREATE TABLE `batch_students` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL DEFAULT 'org-default',
+  `batchId` varchar(36) NOT NULL,
+  `studentId` varchar(36) NOT NULL,
+  `enrolledAt` varchar(50) NOT NULL,
+  `status` enum('active','inactive','completed','dropped') NOT NULL DEFAULT 'active',
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `batch_student_uniq` (`batchId`,`studentId`),
+  KEY `idx_bs_batch` (`batchId`),
+  KEY `idx_bs_student` (`studentId`),
+  KEY `idx_bs_status` (`status`),
+  CONSTRAINT `batch_students_ibfk_1` FOREIGN KEY (`batchId`) REFERENCES `batches` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `batch_students_ibfk_2` FOREIGN KEY (`studentId`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `batch_courses`
+DROP TABLE IF EXISTS `batch_courses`;
+CREATE TABLE `batch_courses` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL DEFAULT 'org-default',
+  `batchId` varchar(36) NOT NULL,
+  `courseId` varchar(36) NOT NULL,
+  `assignedAt` varchar(50) NOT NULL,
+  `assignedBy` varchar(36) DEFAULT NULL,
+  `status` enum('active','revoked') NOT NULL DEFAULT 'active',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `batch_course_uniq` (`batchId`,`courseId`),
+  KEY `idx_bc_batch` (`batchId`),
+  KEY `idx_bc_course` (`courseId`),
+  KEY `idx_bc_status` (`status`),
+  CONSTRAINT `batch_courses_ibfk_1` FOREIGN KEY (`batchId`) REFERENCES `batches` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `batch_courses_ibfk_2` FOREIGN KEY (`courseId`) REFERENCES `courses` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `batch_assessments`
+DROP TABLE IF EXISTS `batch_assessments`;
+CREATE TABLE `batch_assessments` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL DEFAULT 'org-default',
+  `batchId` varchar(36) NOT NULL,
+  `assessmentId` varchar(36) NOT NULL,
+  `assignedAt` varchar(50) NOT NULL,
+  `assignedBy` varchar(36) DEFAULT NULL,
+  `status` enum('active','revoked') NOT NULL DEFAULT 'active',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `batch_ass_uniq` (`batchId`,`assessmentId`),
+  KEY `idx_ba_batch` (`batchId`),
+  KEY `idx_ba_ass` (`assessmentId`),
+  KEY `idx_ba_status` (`status`),
+  CONSTRAINT `batch_assessments_ibfk_1` FOREIGN KEY (`batchId`) REFERENCES `batches` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `batch_assessments_ibfk_2` FOREIGN KEY (`assessmentId`) REFERENCES `assessments` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `batch_learning_paths`
+DROP TABLE IF EXISTS `batch_learning_paths`;
+CREATE TABLE `batch_learning_paths` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL DEFAULT 'org-default',
+  `batchId` varchar(36) NOT NULL,
+  `learningPathId` varchar(36) NOT NULL,
+  `assignedAt` varchar(50) NOT NULL,
+  `assignedBy` varchar(36) DEFAULT NULL,
+  `status` enum('active','revoked') NOT NULL DEFAULT 'active',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `batch_lp_uniq` (`batchId`,`learningPathId`),
+  KEY `idx_blp_batch` (`batchId`),
+  KEY `idx_blp_path` (`learningPathId`),
+  KEY `idx_blp_status` (`status`),
+  CONSTRAINT `batch_learning_paths_ibfk_1` FOREIGN KEY (`batchId`) REFERENCES `batches` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `batch_learning_paths_ibfk_2` FOREIGN KEY (`learningPathId`) REFERENCES `learning_paths` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `departments`
+DROP TABLE IF EXISTS `departments`;
+CREATE TABLE `departments` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL DEFAULT 'org-default',
+  `name` varchar(255) NOT NULL,
+  `code` varchar(50) NOT NULL,
+  `description` text,
+  `managerId` varchar(36) DEFAULT NULL,
+  `status` enum('active','archived') NOT NULL DEFAULT 'active',
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  `deletedAt` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_dept_org` (`organizationId`),
+  KEY `idx_dept_manager` (`managerId`),
+  KEY `idx_dept_code` (`code`),
+  KEY `idx_dept_status` (`status`),
+  KEY `idx_dept_deleted` (`deletedAt`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `department_members`
+DROP TABLE IF EXISTS `department_members`;
+CREATE TABLE `department_members` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL DEFAULT 'org-default',
+  `departmentId` varchar(36) NOT NULL,
+  `userId` varchar(36) NOT NULL,
+  `role` varchar(50) NOT NULL DEFAULT 'member',
+  `joinedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `dept_user_uniq` (`departmentId`,`userId`),
+  KEY `idx_dept_mem_dept` (`departmentId`),
+  KEY `idx_dept_mem_user` (`userId`),
+  CONSTRAINT `department_members_ibfk_1` FOREIGN KEY (`departmentId`) REFERENCES `departments` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `department_members_ibfk_2` FOREIGN KEY (`userId`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `cohorts`
+DROP TABLE IF EXISTS `cohorts`;
+CREATE TABLE `cohorts` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL DEFAULT 'org-default',
+  `name` varchar(255) NOT NULL,
+  `code` varchar(50) NOT NULL,
+  `description` text,
+  `startDate` varchar(50) DEFAULT NULL,
+  `endDate` varchar(50) DEFAULT NULL,
+  `status` enum('upcoming','active','completed','archived') NOT NULL DEFAULT 'active',
+  `managerId` varchar(36) DEFAULT NULL,
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  `deletedAt` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_cohorts_org` (`organizationId`),
+  KEY `idx_cohorts_manager` (`managerId`),
+  KEY `idx_cohorts_status` (`status`),
+  KEY `idx_cohorts_code` (`code`),
+  KEY `idx_cohorts_deleted` (`deletedAt`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `cohort_members`
+DROP TABLE IF EXISTS `cohort_members`;
+CREATE TABLE `cohort_members` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL DEFAULT 'org-default',
+  `cohortId` varchar(36) NOT NULL,
+  `userId` varchar(36) NOT NULL,
+  `status` enum('active','completed','dropped') NOT NULL DEFAULT 'active',
+  `joinedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `cohort_user_uniq` (`cohortId`,`userId`),
+  KEY `idx_cohort_mem_cohort` (`cohortId`),
+  KEY `idx_cohort_mem_user` (`userId`),
+  KEY `idx_cohort_mem_status` (`status`),
+  CONSTRAINT `cohort_members_ibfk_1` FOREIGN KEY (`cohortId`) REFERENCES `cohorts` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `cohort_members_ibfk_2` FOREIGN KEY (`userId`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `groups`
+DROP TABLE IF EXISTS `groups`;
+CREATE TABLE `groups` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL DEFAULT 'org-default',
+  `name` varchar(255) NOT NULL,
+  `description` text,
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  `deletedAt` varchar(50) DEFAULT NULL,
+  `type` enum('general','department','cohort','team','track') NOT NULL DEFAULT 'general',
+  `departmentId` varchar(36) DEFAULT NULL,
+  `cohortId` varchar(36) DEFAULT NULL,
+  `managerId` varchar(36) DEFAULT NULL,
+  `status` enum('active','archived') NOT NULL DEFAULT 'active',
+  PRIMARY KEY (`id`),
+  KEY `idx_groups_org` (`organizationId`),
+  KEY `idx_groups_deleted` (`deletedAt`),
+  KEY `idx_groups_type` (`type`),
+  KEY `idx_groups_manager` (`managerId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `group_members`
+DROP TABLE IF EXISTS `group_members`;
+CREATE TABLE `group_members` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL DEFAULT 'org-default',
+  `groupId` varchar(36) NOT NULL,
+  `userId` varchar(36) NOT NULL,
+  `addedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `group_user_uniq` (`groupId`,`userId`),
+  KEY `idx_group_members_group` (`groupId`),
+  KEY `idx_group_members_user` (`userId`),
+  CONSTRAINT `group_members_ibfk_1` FOREIGN KEY (`groupId`) REFERENCES `groups` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `group_members_ibfk_2` FOREIGN KEY (`userId`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- =====================================================================
+-- Domain: 08_notifications_and_gamification.sql
+-- =====================================================================
+
+-- Table: `notification_templates`
+DROP TABLE IF EXISTS `notification_templates`;
+CREATE TABLE `notification_templates` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL DEFAULT 'org-default',
+  `type` varchar(50) NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `description` text,
+  `inAppTitleTemplate` varchar(255) NOT NULL,
+  `inAppBodyTemplate` text NOT NULL,
+  `emailSubjectTemplate` varchar(255) NOT NULL,
+  `emailBodyTemplate` mediumtext NOT NULL,
+  `enabled` tinyint(1) NOT NULL DEFAULT '1',
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `type` (`type`),
+  KEY `idx_nt_type` (`type`),
+  KEY `idx_nt_org` (`organizationId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `notifications`
+DROP TABLE IF EXISTS `notifications`;
+CREATE TABLE `notifications` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL DEFAULT 'org-default',
+  `userId` varchar(36) NOT NULL,
+  `type` varchar(50) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `message` text NOT NULL,
+  `data` text,
+  `read` tinyint(1) NOT NULL DEFAULT '0',
+  `readAt` varchar(50) DEFAULT NULL,
+  `channel` varchar(20) NOT NULL DEFAULT 'in_app',
+  `deliveryStatus` varchar(20) NOT NULL DEFAULT 'delivered',
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  `deletedAt` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_notif_user_read` (`userId`,`read`,`deletedAt`),
+  KEY `idx_notif_user_created` (`userId`,`createdAt`),
+  KEY `idx_notif_org` (`organizationId`),
+  KEY `idx_notif_type` (`type`),
+  KEY `idx_notif_deleted` (`deletedAt`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `notification_preferences`
+DROP TABLE IF EXISTS `notification_preferences`;
+CREATE TABLE `notification_preferences` (
+  `id` varchar(36) NOT NULL,
+  `userId` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL DEFAULT 'org-default',
+  `emailNotifications` tinyint(1) NOT NULL DEFAULT '1',
+  `inAppNotifications` tinyint(1) NOT NULL DEFAULT '1',
+  `courseAssigned` tinyint(1) NOT NULL DEFAULT '1',
+  `learningPathAssigned` tinyint(1) NOT NULL DEFAULT '1',
+  `assessmentAssigned` tinyint(1) NOT NULL DEFAULT '1',
+  `dueDateReminders` tinyint(1) NOT NULL DEFAULT '1',
+  `overdueAlerts` tinyint(1) NOT NULL DEFAULT '1',
+  `assessmentResults` tinyint(1) NOT NULL DEFAULT '1',
+  `certificateAlerts` tinyint(1) NOT NULL DEFAULT '1',
+  `coursePublished` tinyint(1) NOT NULL DEFAULT '1',
+  `announcements` tinyint(1) NOT NULL DEFAULT '1',
+  `reminderDaysBefore` varchar(50) NOT NULL DEFAULT '7,3,1',
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `userId` (`userId`),
+  KEY `idx_np_user` (`userId`),
+  KEY `idx_np_org` (`organizationId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `email_queue`
+DROP TABLE IF EXISTS `email_queue`;
+CREATE TABLE `email_queue` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL DEFAULT 'org-default',
+  `recipientEmail` varchar(255) NOT NULL,
+  `recipientName` varchar(255) DEFAULT NULL,
+  `userId` varchar(36) DEFAULT NULL,
+  `subject` varchar(255) NOT NULL,
+  `bodyText` text NOT NULL,
+  `bodyHtml` mediumtext NOT NULL,
+  `notificationType` varchar(50) NOT NULL,
+  `status` enum('pending','processing','sent','failed') NOT NULL DEFAULT 'pending',
+  `attempts` int NOT NULL DEFAULT '0',
+  `maxAttempts` int NOT NULL DEFAULT '3',
+  `lastError` text,
+  `scheduledAt` varchar(50) NOT NULL,
+  `sentAt` varchar(50) DEFAULT NULL,
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_eq_status_sched` (`status`,`scheduledAt`),
+  KEY `idx_eq_user` (`userId`),
+  KEY `idx_eq_email` (`recipientEmail`),
+  KEY `idx_eq_org` (`organizationId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `reminder_logs`
+DROP TABLE IF EXISTS `reminder_logs`;
+CREATE TABLE `reminder_logs` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL DEFAULT 'org-default',
+  `userId` varchar(36) NOT NULL,
+  `entityType` varchar(50) NOT NULL,
+  `entityId` varchar(36) NOT NULL,
+  `reminderType` varchar(50) NOT NULL,
+  `dedupKey` varchar(255) NOT NULL,
+  `sentAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `dedupKey` (`dedupKey`),
+  KEY `idx_rl_dedup` (`dedupKey`),
+  KEY `idx_rl_user_entity` (`userId`,`entityType`,`entityId`),
+  KEY `idx_rl_org` (`organizationId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `gamification_badges`
+DROP TABLE IF EXISTS `gamification_badges`;
+CREATE TABLE `gamification_badges` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL,
+  `code` varchar(50) NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `description` text NOT NULL,
+  `icon` varchar(50) NOT NULL DEFAULT 'Award',
+  `tier` enum('bronze','silver','gold','platinum','diamond') NOT NULL DEFAULT 'bronze',
+  `criteriaType` enum('lessons_completed','courses_completed','assessments_passed','streak_days','points_earned','coding_solved','manual') NOT NULL,
+  `criteriaThreshold` int NOT NULL DEFAULT '1',
+  `bonusPoints` int NOT NULL DEFAULT '0',
+  `status` enum('active','archived') NOT NULL DEFAULT 'active',
+  `isSystem` tinyint(1) NOT NULL DEFAULT '0',
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_gamif_badge_code_org` (`code`,`organizationId`),
+  KEY `idx_badge_org_status` (`organizationId`,`status`,`criteriaType`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `gamification_configs`
+DROP TABLE IF EXISTS `gamification_configs`;
+CREATE TABLE `gamification_configs` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL,
+  `isEnabled` tinyint(1) NOT NULL DEFAULT '0',
+  `pointsLessonComplete` int NOT NULL DEFAULT '10',
+  `pointsCourseComplete` int NOT NULL DEFAULT '100',
+  `pointsAssessmentPass` int NOT NULL DEFAULT '50',
+  `pointsLearningPathComplete` int NOT NULL DEFAULT '200',
+  `pointsCodingChallengeSolve` int NOT NULL DEFAULT '30',
+  `pointsDailyStreakBonus` int NOT NULL DEFAULT '15',
+  `leaderboardEnabled` tinyint(1) NOT NULL DEFAULT '1',
+  `leaderboardScope` enum('organization','department','cohort','group') NOT NULL DEFAULT 'organization',
+  `leaderboardAnonymity` enum('real_name','partial_name','optional_anonymous') NOT NULL DEFAULT 'optional_anonymous',
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `organizationId` (`organizationId`),
+  KEY `idx_gamif_cfg_org` (`organizationId`,`isEnabled`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `gamification_profiles`
+DROP TABLE IF EXISTS `gamification_profiles`;
+CREATE TABLE `gamification_profiles` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL,
+  `studentId` varchar(36) NOT NULL,
+  `totalPoints` int NOT NULL DEFAULT '0',
+  `currentStreakDays` int NOT NULL DEFAULT '0',
+  `longestStreakDays` int NOT NULL DEFAULT '0',
+  `lastActiveDate` varchar(10) DEFAULT NULL,
+  `tier` enum('novice','apprentice','scholar','master','grandmaster','legend') NOT NULL DEFAULT 'novice',
+  `leaderboardAnonymous` tinyint(1) NOT NULL DEFAULT '0',
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_gamif_student_org` (`studentId`,`organizationId`),
+  KEY `idx_gamif_org_points` (`organizationId`,`totalPoints` DESC),
+  KEY `idx_gamif_org_streak` (`organizationId`,`currentStreakDays` DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `gamification_points_ledger`
+DROP TABLE IF EXISTS `gamification_points_ledger`;
+CREATE TABLE `gamification_points_ledger` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL,
+  `studentId` varchar(36) NOT NULL,
+  `eventType` enum('lesson_completed','course_completed','assessment_passed','learning_path_completed','coding_solved','streak_bonus','manual_adjustment','badge_unlocked') NOT NULL,
+  `eventReferenceId` varchar(100) DEFAULT NULL,
+  `points` int NOT NULL,
+  `balanceAfter` int NOT NULL,
+  `description` varchar(255) NOT NULL,
+  `metadata` json DEFAULT NULL,
+  `awardedBy` varchar(36) DEFAULT NULL,
+  `createdAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_ledger_student_created` (`studentId`,`organizationId`,`createdAt` DESC),
+  KEY `idx_ledger_event_ref` (`studentId`,`eventType`,`eventReferenceId`),
+  KEY `idx_ledger_org_created` (`organizationId`,`createdAt` DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `gamification_student_badges`
+DROP TABLE IF EXISTS `gamification_student_badges`;
+CREATE TABLE `gamification_student_badges` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL,
+  `studentId` varchar(36) NOT NULL,
+  `badgeId` varchar(36) NOT NULL,
+  `awardedAt` varchar(50) NOT NULL,
+  `awardedBy` varchar(36) DEFAULT NULL,
+  `isRevoked` tinyint(1) NOT NULL DEFAULT '0',
+  `revokedAt` varchar(50) DEFAULT NULL,
+  `revokedBy` varchar(36) DEFAULT NULL,
+  `revocationReason` text,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_gamif_student_badge` (`studentId`,`badgeId`,`organizationId`),
+  KEY `idx_student_badge_active` (`studentId`,`organizationId`,`isRevoked`),
+  KEY `idx_badge_awards` (`badgeId`,`isRevoked`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `gamification_streak_logs`
+DROP TABLE IF EXISTS `gamification_streak_logs`;
+CREATE TABLE `gamification_streak_logs` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL,
+  `studentId` varchar(36) NOT NULL,
+  `activityDate` varchar(10) NOT NULL,
+  `activityType` varchar(50) NOT NULL,
+  `activityRefId` varchar(100) NOT NULL,
+  `createdAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_gamif_student_date` (`studentId`,`activityDate`),
+  KEY `idx_streak_org_date` (`organizationId`,`activityDate`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- =====================================================================
+-- Domain: 09_integrations_and_ai.sql
+-- =====================================================================
+
+-- Table: `blogs`
+DROP TABLE IF EXISTS `blogs`;
+CREATE TABLE `blogs` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) DEFAULT NULL,
+  `title` varchar(255) NOT NULL,
+  `content` text NOT NULL,
+  `summary` text NOT NULL,
+  `coverImage` text,
+  `authorId` varchar(36) NOT NULL,
+  `authorName` varchar(255) NOT NULL,
+  `category` varchar(100) NOT NULL,
+  `tags` json DEFAULT NULL,
+  `likesCount` int DEFAULT '0',
+  `bookmarksCount` int DEFAULT '0',
+  `status` enum('pending','approved','rejected') DEFAULT 'pending',
+  `createdAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `authorId` (`authorId`),
+  KEY `idx_blogs_org` (`organizationId`),
+  CONSTRAINT `blogs_ibfk_1` FOREIGN KEY (`authorId`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `comments`
+DROP TABLE IF EXISTS `comments`;
+CREATE TABLE `comments` (
+  `id` varchar(36) NOT NULL,
+  `blogId` varchar(36) NOT NULL,
+  `authorId` varchar(36) NOT NULL,
+  `authorName` varchar(255) NOT NULL,
+  `authorRole` enum('student','trainer','admin') NOT NULL,
+  `content` text NOT NULL,
+  `createdAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `blogId` (`blogId`),
+  KEY `authorId` (`authorId`),
+  CONSTRAINT `comments_ibfk_1` FOREIGN KEY (`blogId`) REFERENCES `blogs` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `comments_ibfk_2` FOREIGN KEY (`authorId`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `sso_configs`
+DROP TABLE IF EXISTS `sso_configs`;
+CREATE TABLE `sso_configs` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL,
+  `isEnabled` tinyint(1) NOT NULL DEFAULT '0',
+  `providerType` enum('saml','oidc') NOT NULL DEFAULT 'saml',
+  `idpEntityId` varchar(255) DEFAULT NULL,
+  `idpSignInUrl` varchar(500) DEFAULT NULL,
+  `idpCertificate` text,
+  `spEntityId` varchar(255) NOT NULL,
+  `spAcsUrl` varchar(500) NOT NULL,
+  `oidcIssuer` varchar(500) DEFAULT NULL,
+  `oidcClientId` varchar(255) DEFAULT NULL,
+  `oidcClientSecret` varchar(500) DEFAULT NULL,
+  `attributeMapping` json DEFAULT NULL,
+  `enforceSso` tinyint(1) NOT NULL DEFAULT '0',
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `organizationId` (`organizationId`),
+  KEY `idx_sso_org` (`organizationId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `api_keys`
+DROP TABLE IF EXISTS `api_keys`;
+CREATE TABLE `api_keys` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `keyPrefix` varchar(20) NOT NULL,
+  `keyHash` varchar(255) NOT NULL,
+  `scopes` json NOT NULL,
+  `rateLimitPerMin` int NOT NULL DEFAULT '60',
+  `status` enum('active','revoked','expired') NOT NULL DEFAULT 'active',
+  `expiresAt` varchar(50) DEFAULT NULL,
+  `lastUsedAt` varchar(50) DEFAULT NULL,
+  `createdBy` varchar(36) NOT NULL,
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_api_keys_org` (`organizationId`),
+  KEY `idx_api_keys_hash` (`keyHash`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `webhook_subscriptions`
+DROP TABLE IF EXISTS `webhook_subscriptions`;
+CREATE TABLE `webhook_subscriptions` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `targetUrl` varchar(500) NOT NULL,
+  `secretKey` varchar(255) NOT NULL,
+  `subscribedEvents` json NOT NULL,
+  `status` enum('active','disabled') NOT NULL DEFAULT 'active',
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_webhook_org` (`organizationId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `webhook_deliveries`
+DROP TABLE IF EXISTS `webhook_deliveries`;
+CREATE TABLE `webhook_deliveries` (
+  `id` varchar(36) NOT NULL,
+  `subscriptionId` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL,
+  `eventType` varchar(100) NOT NULL,
+  `payload` json NOT NULL,
+  `statusCode` int DEFAULT NULL,
+  `responseBody` text,
+  `attemptCount` int NOT NULL DEFAULT '1',
+  `status` enum('success','failed','retrying') NOT NULL,
+  `durationMs` int DEFAULT NULL,
+  `createdAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_webhook_deliv_sub` (`subscriptionId`),
+  KEY `idx_webhook_deliv_org` (`organizationId`,`createdAt`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `user_mfa_settings`
+DROP TABLE IF EXISTS `user_mfa_settings`;
+CREATE TABLE `user_mfa_settings` (
+  `userId` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL,
+  `isEnabled` tinyint(1) NOT NULL DEFAULT '0',
+  `totpSecret` varchar(255) DEFAULT NULL,
+  `recoveryCodesHash` json DEFAULT NULL,
+  `enrolledAt` varchar(50) DEFAULT NULL,
+  `lastVerifiedAt` varchar(50) DEFAULT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`userId`),
+  KEY `idx_mfa_org_user` (`organizationId`,`userId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `scorm_packages`
+DROP TABLE IF EXISTS `scorm_packages`;
+CREATE TABLE `scorm_packages` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL,
+  `courseId` varchar(36) DEFAULT NULL,
+  `title` varchar(255) NOT NULL,
+  `version` enum('SCORM_12','SCORM_2004') NOT NULL DEFAULT 'SCORM_12',
+  `manifestData` json DEFAULT NULL,
+  `entryPoint` varchar(500) NOT NULL,
+  `storageDir` varchar(500) NOT NULL,
+  `status` enum('active','archived') NOT NULL DEFAULT 'active',
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_scorm_org_course` (`organizationId`,`courseId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `scorm_registrations`
+DROP TABLE IF EXISTS `scorm_registrations`;
+CREATE TABLE `scorm_registrations` (
+  `id` varchar(36) NOT NULL,
+  `scormPackageId` varchar(36) NOT NULL,
+  `studentId` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL,
+  `lessonStatus` varchar(50) NOT NULL DEFAULT 'not attempted',
+  `rawScore` decimal(5,2) DEFAULT NULL,
+  `minScore` decimal(5,2) DEFAULT NULL,
+  `maxScore` decimal(5,2) DEFAULT NULL,
+  `lessonLocation` varchar(255) DEFAULT NULL,
+  `suspendData` text,
+  `totalTimeSeconds` int NOT NULL DEFAULT '0',
+  `sessionTimeSeconds` int NOT NULL DEFAULT '0',
+  `completedAt` varchar(50) DEFAULT NULL,
+  `lastAccessedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_scorm_reg` (`scormPackageId`,`studentId`),
+  KEY `idx_scorm_org_student` (`organizationId`,`studentId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `xapi_lrs_destinations`
+DROP TABLE IF EXISTS `xapi_lrs_destinations`;
+CREATE TABLE `xapi_lrs_destinations` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL,
+  `endpointUrl` varchar(500) NOT NULL,
+  `authKey` varchar(255) NOT NULL,
+  `authSecret` varchar(255) NOT NULL,
+  `isEnabled` tinyint(1) NOT NULL DEFAULT '1',
+  `createdAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_lrs_org` (`organizationId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `xapi_statements`
+DROP TABLE IF EXISTS `xapi_statements`;
+CREATE TABLE `xapi_statements` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL,
+  `actorEmail` varchar(255) NOT NULL,
+  `actorName` varchar(255) DEFAULT NULL,
+  `verbId` varchar(255) NOT NULL,
+  `verbDisplay` varchar(100) NOT NULL,
+  `activityId` varchar(500) NOT NULL,
+  `activityName` varchar(255) DEFAULT NULL,
+  `activityType` varchar(255) DEFAULT NULL,
+  `scaledScore` decimal(4,3) DEFAULT NULL,
+  `rawScore` decimal(6,2) DEFAULT NULL,
+  `success` tinyint(1) DEFAULT NULL,
+  `completion` tinyint(1) DEFAULT NULL,
+  `duration` varchar(50) DEFAULT NULL,
+  `context` json DEFAULT NULL,
+  `statementJson` json NOT NULL,
+  `timestamp` varchar(50) NOT NULL,
+  `storedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_xapi_org_actor` (`organizationId`,`actorEmail`),
+  KEY `idx_xapi_verb` (`verbId`),
+  KEY `idx_xapi_activity` (`activityId`(191))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `lti_registrations`
+DROP TABLE IF EXISTS `lti_registrations`;
+CREATE TABLE `lti_registrations` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `version` enum('LTI_13') NOT NULL DEFAULT 'LTI_13',
+  `issuer` varchar(500) NOT NULL,
+  `clientId` varchar(255) NOT NULL,
+  `deploymentId` varchar(255) NOT NULL,
+  `authLoginUrl` varchar(500) NOT NULL,
+  `authTokensUrl` varchar(500) NOT NULL,
+  `keyJwksUrl` varchar(500) NOT NULL,
+  `status` enum('active','inactive','pending_configuration') NOT NULL DEFAULT 'pending_configuration',
+  `createdAt` varchar(50) NOT NULL,
+  `updatedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_lti_org` (`organizationId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `integration_jobs`
+DROP TABLE IF EXISTS `integration_jobs`;
+CREATE TABLE `integration_jobs` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL,
+  `jobType` enum('import','export') NOT NULL,
+  `entityType` enum('users','courses','groups','enrollments','assessments','results') NOT NULL,
+  `status` enum('queued','processing','completed','failed') NOT NULL DEFAULT 'queued',
+  `totalRecords` int NOT NULL DEFAULT '0',
+  `processedRecords` int NOT NULL DEFAULT '0',
+  `successRecords` int NOT NULL DEFAULT '0',
+  `failedRecords` int NOT NULL DEFAULT '0',
+  `errorsLog` json DEFAULT NULL,
+  `fileUrl` varchar(500) DEFAULT NULL,
+  `createdBy` varchar(36) NOT NULL,
+  `createdAt` varchar(50) NOT NULL,
+  `completedAt` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_int_jobs_org` (`organizationId`,`createdAt`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `ai_organization_settings`
+DROP TABLE IF EXISTS `ai_organization_settings`;
+CREATE TABLE `ai_organization_settings` (
+  `organizationId` varchar(36) NOT NULL,
+  `aiEnabled` tinyint(1) NOT NULL DEFAULT '1',
+  `courseGeneratorEnabled` tinyint(1) NOT NULL DEFAULT '1',
+  `quizGeneratorEnabled` tinyint(1) NOT NULL DEFAULT '1',
+  `lessonTutorEnabled` tinyint(1) NOT NULL DEFAULT '1',
+  `codingHintsEnabled` tinyint(1) NOT NULL DEFAULT '1',
+  `assessmentExplanationsEnabled` tinyint(1) NOT NULL DEFAULT '1',
+  `skillGapAnalysisEnabled` tinyint(1) NOT NULL DEFAULT '1',
+  `monthlyTokenQuota` int NOT NULL DEFAULT '500000',
+  `monthlyTokensUsed` int NOT NULL DEFAULT '0',
+  `dailyUserRequestLimit` int NOT NULL DEFAULT '50',
+  `quotaResetMonth` varchar(7) NOT NULL DEFAULT '2026-10',
+  `updatedAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`organizationId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `ai_interaction_logs`
+DROP TABLE IF EXISTS `ai_interaction_logs`;
+CREATE TABLE `ai_interaction_logs` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL,
+  `userId` varchar(36) NOT NULL,
+  `feature` varchar(50) NOT NULL,
+  `contextType` varchar(50) DEFAULT NULL,
+  `contextId` varchar(100) DEFAULT NULL,
+  `promptTokensEstimate` int NOT NULL DEFAULT '0',
+  `completionTokensEstimate` int NOT NULL DEFAULT '0',
+  `totalTokens` int NOT NULL DEFAULT '0',
+  `latencyMs` int NOT NULL DEFAULT '0',
+  `safetyPassed` tinyint(1) NOT NULL DEFAULT '1',
+  `safetyNotes` text,
+  `createdAt` varchar(50) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_ai_log_org_created` (`organizationId`,`createdAt`),
+  KEY `idx_ai_log_user_created` (`userId`,`createdAt`),
+  KEY `idx_ai_log_feature` (`feature`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `ai_generated_courses`
+DROP TABLE IF EXISTS `ai_generated_courses`;
+CREATE TABLE `ai_generated_courses` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL,
+  `adminUserId` varchar(36) NOT NULL,
+  `topic` varchar(255) NOT NULL,
+  `targetAudience` varchar(255) NOT NULL,
+  `difficulty` varchar(50) NOT NULL,
+  `durationHours` int NOT NULL DEFAULT '10',
+  `learningObjectives` json NOT NULL,
+  `generatedStructure` json NOT NULL,
+  `reviewStatus` enum('draft','reviewed','published','rejected') NOT NULL DEFAULT 'draft',
+  `publishedCourseId` varchar(36) DEFAULT NULL,
+  `createdAt` varchar(50) NOT NULL,
+  `reviewedAt` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_ai_course_org_status` (`organizationId`,`reviewStatus`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Table: `ai_generated_quizzes`
+DROP TABLE IF EXISTS `ai_generated_quizzes`;
+CREATE TABLE `ai_generated_quizzes` (
+  `id` varchar(36) NOT NULL,
+  `organizationId` varchar(36) NOT NULL,
+  `adminUserId` varchar(36) NOT NULL,
+  `courseId` varchar(36) NOT NULL,
+  `lessonId` varchar(36) DEFAULT NULL,
+  `questionsCount` int NOT NULL DEFAULT '5',
+  `difficulty` varchar(50) NOT NULL DEFAULT 'intermediate',
+  `generatedQuestions` json NOT NULL,
+  `reviewStatus` enum('draft','reviewed','published','rejected') NOT NULL DEFAULT 'draft',
+  `publishedAssessmentId` varchar(36) DEFAULT NULL,
+  `createdAt` varchar(50) NOT NULL,
+  `reviewedAt` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_ai_quiz_org_status` (`organizationId`,`reviewStatus`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- =====================================================================
+-- 3. Reference & Foundation Seed Data
+-- =====================================================================
+
+-- Reference Seed Data for `organizations` (1 records)
+INSERT INTO `organizations` (`id`, `name`, `slug`, `domain`, `logoUrl`, `settings`, `status`, `createdAt`, `updatedAt`, `deletedAt`)
+VALUES
+  ('org-default', 'Default Institution', 'default', NULL, NULL, NULL, 'active', '2026-09-28T11:06:32.760Z', NULL, NULL)
+ON DUPLICATE KEY UPDATE `id` = `id`;
+
+-- Reference Seed Data for `schema_migrations` (19 records)
+INSERT INTO `schema_migrations` (`id`, `version`, `name`, `batch`, `appliedAt`)
+VALUES
+  (1, '001_initial_baseline', 'Record existing 26 core tables as baseline schema', 1, '2026-09-28T11:06:32.000Z'),
+  (2, '002_multi_tenancy_organizations', 'Create organizations table, default organization, and organizationId on tenant-scoped tables', 1, '2026-09-28T11:06:34.000Z'),
+  (3, '003_soft_deletes_and_roles', 'Expand user roles (super_admin, manager) and add soft delete columns (deletedAt) with indexes', 1, '2026-09-28T11:06:34.000Z'),
+  (4, '004_composite_indexes', 'Add composite performance indexes for multi-tenant querying and high-volume workloads', 1, '2026-09-28T11:06:35.000Z'),
+  (5, '005_core_learning_engine', 'Core learning engine enhancements: course lifecycle, module/lesson management, progress tracking & resume learning', 2, '2026-09-29T05:25:50.000Z'),
+  (6, '006_enrollment_access_control', 'Unified Enrollment & Access-Control: Groups, Access States, Due Dates, Mandatory Training, and Non-destructive Revocation', 3, '2026-09-29T05:55:35.000Z'),
+  (7, '007_assessment_attempts', 'Assessment Engine: Server-side attempts tracking, time enforcement, and attempt linking', 4, '2026-09-29T06:34:44.000Z'),
+  (8, '008_certification_system', 'Certification System: Templates, issued certificates, verification, and revocation', 5, '2026-09-29T07:24:57.000Z'),
+  (9, '009_organization_management', 'Organization Management Layer: Departments, Cohorts, Groups, Manager Scoping and Hierarchy', 6, '2026-09-29T09:31:06.000Z'),
+  (10, '010_notifications_and_reminders', 'Notification and Reminder System: In-App Notifications, Email Queue, Preferences, Dedup Logs, and Configurable Templates', 7, '2026-09-30T05:28:56.000Z'),
+  (11, '011_analytics_reporting_indexes', 'Analytics & Reporting Performance Optimization Composite Indexes', 8, '2026-09-30T06:03:56.000Z'),
+  (12, '012_gamification_system', 'Gamification System Points Ledger Badges Streaks and Leaderboards', 9, '2026-09-30T07:03:39.000Z'),
+  (13, '013_enterprise_integrations', 'Enterprise Integrations Foundation (SSO, MFA, SCORM, xAPI, LTI, Webhooks, Public API, Import/Export)', 10, '2026-09-30T07:22:45.000Z'),
+  (14, '014_secure_coding_execution', 'Secure Coding Execution Engine (Job Queue, Resource Telemetry & Sandboxing)', 11, '2026-09-30T11:15:24.000Z'),
+  (15, '015_ai_learning_layer', 'AI Learning Layer (Scoped Tutor, Course/Quiz Generators, Guardrails, Logs & Quotas)', 12, '2026-10-01T05:07:39.000Z'),
+  (16, '016_batch_management', 'Batch Management Layer: Institutions, Batches, Multi-Batch Student Memberships, and Batch Course Access', 13, '2026-10-07T06:39:42.000Z'),
+  (17, '017_user_phone_and_location', 'Add phoneNumber and location contact fields to users table', 14, '2026-10-16T09:28:14.000Z'),
+  (18, '018_batch_learning_paths_and_denials', 'Batch Learning Paths and Explicit Student Learning Path Denials', 15, '2026-10-21T06:08:31.000Z'),
+  (19, '019_proctoring_and_answer_persistence', 'Full-screen Exam Mode, Proctoring Events, and Answer Persistence', 16, '2026-11-02T08:10:02.000Z')
+ON DUPLICATE KEY UPDATE `id` = `id`;
+
+-- Reference Seed Data for `certificate_templates` (4 records)
+INSERT INTO `certificate_templates` (`id`, `organizationId`, `name`, `description`, `style`, `primaryColor`, `accentColor`, `badgeIcon`, `borderStyle`, `defaultSignatoryName`, `defaultSignatoryTitle`, `organizationName`, `isDefault`, `createdAt`, `updatedAt`, `deletedAt`)
+VALUES
+  ('tmpl-classic-gold', 'org-default', 'Classic Gold Honor', 'Prestigious traditional certificate design with warm gold accents and royal borders', 'classic_gold', '#1E3A8A', '#D97706', 'award', 'ornate', 'Dr. M. R. Tech', 'Director of Academic Affairs', 'MRTECH Learning Academy', 1, '2026-09-29T07:59:50.291Z', '2026-09-29T07:59:50.291Z', NULL),
+  ('tmpl-executive-navy', 'org-default', 'Executive Navy Professional', 'Formal executive layout with deep navy and vibrant cobalt highlights for career paths', 'executive_navy', '#0F172A', '#3B82F6', 'shield-check', 'geometric', 'Dr. M. R. Tech', 'Executive Program Director', 'MRTECH Learning Academy', 0, '2026-09-29T07:59:50.291Z', '2026-09-29T07:59:50.291Z', NULL),
+  ('tmpl-modern-emerald', 'org-default', 'Modern Emerald Achievement', 'Contemporary clean design featuring vibrant emerald tones for practical competencies', 'modern_emerald', '#064E3B', '#10B981', 'check-circle', 'clean', 'Dr. M. R. Tech', 'Dean of Practical Studies', 'MRTECH Learning Academy', 0, '2026-09-29T07:59:50.291Z', '2026-09-29T07:59:50.291Z', NULL),
+  ('tmpl-tech-violet', 'org-default', 'Tech Violet Innovation', 'Futuristic violet design crafted for software engineering and technical tracks', 'tech_violet', '#4C1D95', '#8B5CF6', 'cpu', 'modern', 'Dr. M. R. Tech', 'Head of Technology & Innovation', 'MRTECH Learning Academy', 0, '2026-09-29T07:59:50.291Z', '2026-09-29T07:59:50.291Z', NULL)
+ON DUPLICATE KEY UPDATE `id` = `id`;
+
+-- Reference Seed Data for `gamification_badges` (12 records)
+INSERT INTO `gamification_badges` (`id`, `organizationId`, `code`, `name`, `description`, `icon`, `tier`, `criteriaType`, `criteriaThreshold`, `bonusPoints`, `status`, `isSystem`, `createdAt`, `updatedAt`)
+VALUES
+  ('badge-assessment-master', 'org-default', 'assessment_master_5', 'Assessment Master', 'Passed 5 formal evaluation assessments', 'ShieldCheck', 'gold', 'assessments_passed', 5, 100, 'active', 1, '2026-09-30T07:03:39.111Z', '2026-09-30T07:03:39.111Z'),
+  ('badge-code-first', 'org-default', 'code_warrior_1', 'Code Warrior', 'Solved and passed an interactive coding challenge', 'Code', 'bronze', 'coding_solved', 1, 25, 'active', 1, '2026-09-30T07:03:39.111Z', '2026-09-30T07:03:39.111Z'),
+  ('badge-course-finisher', 'org-default', 'course_finisher_1', 'Course Champion', 'Graduated from your first complete course', 'Trophy', 'bronze', 'courses_completed', 1, 50, 'active', 1, '2026-09-30T07:03:39.111Z', '2026-09-30T07:03:39.111Z'),
+  ('badge-curious-mind', 'org-default', 'curious_mind_10', 'Curious Mind', 'Mastered 10 individual curriculum lessons', 'BookOpen', 'silver', 'lessons_completed', 10, 25, 'active', 1, '2026-09-30T07:03:39.111Z', '2026-09-30T07:03:39.111Z'),
+  ('badge-first-lesson', 'org-default', 'first_lesson', 'First Step', 'Completed your very first learning lesson', 'Footprints', 'bronze', 'lessons_completed', 1, 10, 'active', 1, '2026-09-30T07:03:39.111Z', '2026-09-30T07:03:39.111Z'),
+  ('badge-knowledge-sponge', 'org-default', 'knowledge_sponge_50', 'Knowledge Sponge', 'Mastered 50 comprehensive course topics', 'GraduationCap', 'gold', 'lessons_completed', 50, 100, 'active', 1, '2026-09-30T07:03:39.111Z', '2026-09-30T07:03:39.111Z'),
+  ('badge-point-pioneer', 'org-default', 'point_pioneer_500', 'Point Pioneer', 'Accumulated 500 total mastery points', 'Target', 'silver', 'points_earned', 500, 50, 'active', 1, '2026-09-30T07:03:39.111Z', '2026-09-30T07:03:39.111Z'),
+  ('badge-quiz-ace', 'org-default', 'quiz_ace_1', 'Quiz Ace', 'Successfully passed a formal evaluation assessment', 'Award', 'bronze', 'assessments_passed', 1, 25, 'active', 1, '2026-09-30T07:03:39.111Z', '2026-09-30T07:03:39.111Z'),
+  ('badge-streak-3', 'org-default', 'streak_starter_3', 'Momentum Starter', 'Maintained a 3-day continuous learning streak', 'Flame', 'bronze', 'streak_days', 3, 20, 'active', 1, '2026-09-30T07:03:39.111Z', '2026-09-30T07:03:39.111Z'),
+  ('badge-streak-30', 'org-default', 'streak_unstoppable_30', 'Unstoppable Habit', 'Achieved an extraordinary 30-day streak', 'Zap', 'platinum', 'streak_days', 30, 250, 'active', 1, '2026-09-30T07:03:39.111Z', '2026-09-30T07:03:39.111Z'),
+  ('badge-streak-7', 'org-default', 'streak_fire_7', 'Week of Fire', 'Maintained a 7-day daily learning streak', 'Flame', 'silver', 'streak_days', 7, 50, 'active', 1, '2026-09-30T07:03:39.111Z', '2026-09-30T07:03:39.111Z'),
+  ('badge-triple-threat', 'org-default', 'triple_threat_3', 'Triple Threat', 'Successfully completed 3 full courses', 'Crown', 'silver', 'courses_completed', 3, 150, 'active', 1, '2026-09-30T07:03:39.111Z', '2026-09-30T07:03:39.111Z')
+ON DUPLICATE KEY UPDATE `id` = `id`;
+
+-- Reference Seed Data for `gamification_configs` (1 records)
+INSERT INTO `gamification_configs` (`id`, `organizationId`, `isEnabled`, `pointsLessonComplete`, `pointsCourseComplete`, `pointsAssessmentPass`, `pointsLearningPathComplete`, `pointsCodingChallengeSolve`, `pointsDailyStreakBonus`, `leaderboardEnabled`, `leaderboardScope`, `leaderboardAnonymity`, `createdAt`, `updatedAt`)
+VALUES
+  ('cfg-gamif-default', 'org-default', 1, 10, 100, 50, 200, 30, 15, 1, 'organization', 'optional_anonymous', '2026-09-30T07:03:38.903Z', '2026-09-30T07:03:38.903Z')
+ON DUPLICATE KEY UPDATE `id` = `id`;
+
+-- Reference Seed Data for `notification_templates` (10 records)
+INSERT INTO `notification_templates` (`id`, `organizationId`, `type`, `name`, `description`, `inAppTitleTemplate`, `inAppBodyTemplate`, `emailSubjectTemplate`, `emailBodyTemplate`, `enabled`, `createdAt`, `updatedAt`)
+VALUES
+  ('tmpl-admin-announcement', 'org-default', 'admin_announcement', 'Important Organization Announcement', 'Sent when administrators broadcast an announcement', '{{title}}', '{{message}}', 'Announcement: {{title}}', '<p>Hello {{name}},</p><p>An announcement has been issued by your learning administration:</p><blockquote>{{message}}</blockquote>{{#actionUrl}}<p><a href="{{actionUrl}}">View Details</a></p>{{/actionUrl}}', 1, '2026-09-30T05:28:56.538Z', '2026-10-06T05:55:32.739Z'),
+  ('tmpl-assess-assigned', 'org-default', 'assessment_assigned', 'Assessment Assigned', 'Sent when an assessment is assigned to a learner', 'Assessment Assigned: {{title}}', 'You have a new assessment to complete: {{title}}. {{#dueDate}}Due: {{dueDate}}{{/dueDate}}', 'Assessment Assigned: {{title}}', '<p>Hello {{name}},</p><p>An assessment has been assigned to you: <strong>{{title}}</strong>.</p>{{#dueDate}}<p><strong>Due Date:</strong> {{dueDate}}</p>{{/dueDate}}<p><a href="{{actionUrl}}">Take Assessment Now</a></p>', 1, '2026-09-30T05:28:56.538Z', '2026-09-30T05:28:56.538Z'),
+  ('tmpl-assess-result', 'org-default', 'assessment_result', 'Assessment Graded Result', 'Sent when an assessment is submitted and scored', 'Assessment Result: {{title}} ({{statusText}})', 'You scored {{percentage}}% on {{title}}. Status: {{statusText}}.', 'Assessment Scorecard: {{title}} - {{statusText}}', '<p>Hello {{name}},</p><p>Your submission for <strong>{{title}}</strong> has been evaluated.</p><p><strong>Score:</strong> {{score}} / {{totalPoints}} ({{percentage}}%)<br/><strong>Outcome:</strong> {{statusText}}</p><p><a href="{{actionUrl}}">View Detailed Scorecard</a></p>', 1, '2026-09-30T05:28:56.538Z', '2026-09-30T05:28:56.538Z'),
+  ('tmpl-cert-expiring', 'org-default', 'certificate_expiring', 'Certificate Expiring Warning', 'Sent when a certificate is nearing its expiration date', 'Certificate Expiring: {{title}}', 'Your certification for {{title}} expires on {{expiresAt}} (in {{daysRemaining}} days).', 'Certificate Expiring Soon: {{title}}', '<p>Hello {{name}},</p><p>This is an advisory notice that your certification for <strong>{{title}}</strong> will expire on <strong>{{expiresAt}}</strong>.</p><p><a href="{{actionUrl}}">Renew / View Certification</a></p>', 1, '2026-09-30T05:28:56.538Z', '2026-09-30T05:28:56.538Z'),
+  ('tmpl-cert-issued', 'org-default', 'certificate_issued', 'Certificate Issued', 'Sent when an official certificate is awarded', 'Certificate Awarded: {{title}}', 'Congratulations! Your certificate for {{title}} is now ready to view and download.', 'Congratulations! You earned a Certificate for {{title}}', '<p>Hello {{name}},</p><p>Congratulations on satisfying all requirements for <strong>{{title}}</strong>!</p><p>Your official Certificate Number is: <strong>{{certificateNumber}}</strong>.</p><p><a href="{{actionUrl}}">View and Download Certificate</a></p>', 1, '2026-09-30T05:28:56.538Z', '2026-09-30T05:28:56.538Z'),
+  ('tmpl-course-assigned', 'org-default', 'course_assigned', 'Course Assigned Notification', 'Sent when a course is assigned to a learner', 'Course Assigned: {{title}}', 'You have been enrolled in {{title}}. {{#dueDate}}Due by {{dueDate}}.{{/dueDate}}', '[Updated] New Course Assigned: {{title}}', '<p>Hello {{name}},</p><p>You have been assigned to the course <strong>{{title}}</strong>.</p>{{#dueDate}}<p><strong>Target Completion Date:</strong> {{dueDate}}</p>{{/dueDate}}<p><a href="{{actionUrl}}">Click here to access your course</a>.</p>', 1, '2026-09-30T05:28:56.538Z', '2026-10-06T05:51:28.241Z'),
+  ('tmpl-course-published', 'org-default', 'course_published', 'Course Published Announcement', 'Sent to learners when a new course is published to the catalog', 'New Course Available: {{title}}', 'Check out the newly published course: {{title}} ({{category}}).', 'New Course Published: {{title}}', '<p>Hello {{name}},</p><p>A new course has just been published: <strong>{{title}}</strong> in <em>{{category}}</em>.</p><p>{{description}}</p><p><a href="{{actionUrl}}">Explore Course</a></p>', 1, '2026-09-30T05:28:56.538Z', '2026-09-30T05:28:56.538Z'),
+  ('tmpl-due-reminder', 'org-default', 'approaching_due_date', 'Approaching Due Date Reminder', 'Sent 7, 3, or 1 days prior to an assignment due date', 'Upcoming Due Date: {{title}}', 'Reminder: {{title}} is due in {{daysRemaining}} day(s) on {{dueDate}}.', 'Reminder: {{title}} is due in {{daysRemaining}} day(s)', '<p>Hello {{name}},</p><p>This is a reminder that your assignment <strong>{{title}}</strong> is due on <strong>{{dueDate}}</strong> (in {{daysRemaining}} day(s)).</p><p><a href="{{actionUrl}}">Continue Learning</a></p>', 1, '2026-09-30T05:28:56.538Z', '2026-09-30T05:28:56.538Z'),
+  ('tmpl-lp-assigned', 'org-default', 'learning_path_assigned', 'Learning Path Assigned', 'Sent when a learning path is assigned to a learner', 'Learning Path Assigned: {{title}}', 'You have been assigned to the learning path {{title}} containing {{totalItems}} modules.', 'New Learning Path Assigned: {{title}}', '<p>Hello {{name}},</p><p>You have been enrolled in the structured learning path: <strong>{{title}}</strong>.</p><p><a href="{{actionUrl}}">Start Learning Path</a></p>', 1, '2026-09-30T05:28:56.538Z', '2026-09-30T05:28:56.538Z'),
+  ('tmpl-overdue', 'org-default', 'overdue_learning', 'Overdue Learning Alert', 'Sent when learning deadline has lapsed without completion', 'Overdue Alert: {{title}}', 'Your assignment {{title}} was due on {{dueDate}} and is currently overdue.', 'Action Required: Overdue Learning - {{title}}', '<p>Hello {{name}},</p><p>Your assignment <strong>{{title}}</strong> was due on <strong>{{dueDate}}</strong> and has not yet been marked completed.</p><p>Please prioritize finishing this requirement.</p><p><a href="{{actionUrl}}">Complete Assignment</a></p>', 1, '2026-09-30T05:28:56.538Z', '2026-09-30T05:28:56.538Z')
+ON DUPLICATE KEY UPDATE `id` = `id`;
+
+-- Reference Seed Data for `coding_chapters` (5 records)
+INSERT INTO `coding_chapters` (`id`, `title`, `slug`, `description`, `icon`, `orderIndex`, `createdAt`)
+VALUES
+  ('chapter-dsa', 'Data Structures & Algorithms', 'data-structures-and-algorithms', 'Master essential DSA patterns from Arrays, Two Pointers, and Binary Search to Trees, BFS/DFS, and Dynamic Programming.', 'Binary', 1, '2026-09-10T10:36:28.828Z'),
+  ('chapter-java', 'Core Java & Object-Oriented Design', 'core-java', 'Solidify Java fundamentals, memory model, OOP design patterns, Collections Framework, and algorithmic problem solving.', 'Coffee', 4, '2026-09-10T10:36:28.828Z'),
+  ('chapter-python', 'Python Mastery & Scripting', 'python-mastery', 'Deep-dive into Python fundamentals, data structures, list comprehensions, object-oriented concepts, and standard libraries.', 'Code2', 3, '2026-09-10T10:36:28.828Z'),
+  ('chapter-sql', 'Database Design & SQL Mastery', 'sql-mastery', 'Relational database querying, aggregation, filtering, complex multi-table joins, subqueries, and window analytical functions.', 'Database', 5, '2026-09-10T10:36:28.828Z'),
+  ('chapter-web', 'Full Stack Web Development', 'web-development', 'Interactive HTML5, modern CSS3 layout and flexbox, vanilla DOM manipulation, event handling, and interactive micro-apps.', 'Globe', 2, '2026-09-10T10:36:28.828Z')
+ON DUPLICATE KEY UPDATE `id` = `id`;
+
+-- Reference Seed Data for `coding_topics` (41 records)
+INSERT INTO `coding_topics` (`id`, `chapterId`, `title`, `slug`, `description`, `orderIndex`, `createdAt`)
+VALUES
+  ('topic-dsa-arrays', 'chapter-dsa', 'Arrays', 'arrays', 'Contiguous memory structures, prefixes, sliding boundaries, and in-place transformations.', 3, '2026-09-10T10:36:28.828Z'),
+  ('topic-dsa-backtracking', 'chapter-dsa', 'Backtracking', 'backtracking', 'Combinatorial exploration, pruning unpromising branches, permutations, combinations, and N-Queens.', 21, '2026-09-10T10:36:28.828Z'),
+  ('topic-dsa-bfs', 'chapter-dsa', 'BFS (Breadth-First Search)', 'bfs', 'Level-order tree traversal, shortest path in unweighted graphs and grids using queue-driven frontier expansion.', 14, '2026-09-10T10:36:28.828Z'),
+  ('topic-dsa-binary-search', 'chapter-dsa', 'Binary Search', 'binary-search', 'Logarithmic interval bisection, search-space reduction, rotated arrays, and lower/upper bounds.', 6, '2026-09-10T10:36:28.828Z'),
+  ('topic-dsa-dfs', 'chapter-dsa', 'DFS (Depth-First Search)', 'dfs', 'Recursive and stack-based exploration of trees, connected components, graph cycles, and flood fills.', 15, '2026-09-10T10:36:28.828Z'),
+  ('topic-dsa-dp', 'chapter-dsa', 'Dynamic Programming', 'dynamic-programming', 'Overlapping subproblems, optimal substructure, memoization, and bottom-up tabulation.', 20, '2026-09-10T10:36:28.828Z'),
+  ('topic-dsa-greedy', 'chapter-dsa', 'Greedy Algorithms', 'greedy', 'Locally optimal choices leading to global solutions: interval scheduling, gas stations, jump games.', 19, '2026-09-10T10:36:28.828Z'),
+  ('topic-dsa-hashing', 'chapter-dsa', 'Hashing', 'hashing', 'Hash maps, hash sets, frequency counting, fast O(1) lookups, and collision resolution principles.', 16, '2026-09-10T10:36:28.828Z'),
+  ('topic-dsa-lifo', 'chapter-dsa', 'LIFO Problems', 'lifo-problems', 'Last-in First-out practical problems: backtracking undo buffers, path simplification, and recursion simulation.', 10, '2026-09-10T10:36:28.828Z'),
+  ('topic-dsa-linear-search', 'chapter-dsa', 'Linear Search', 'linear-search', 'Sequential traversal, sentinel search, and minimum/maximum tracking in unsorted collections.', 5, '2026-09-10T10:36:28.828Z'),
+  ('topic-dsa-linked-lists', 'chapter-dsa', 'Linked Lists', 'linked-lists', 'Singly and doubly linked nodes, pointer manipulation, fast-and-slow pointers, and cycle detection.', 8, '2026-09-10T10:36:28.828Z'),
+  ('topic-dsa-queue', 'chapter-dsa', 'Queue', 'queue', 'First-in First-out buffers, circular queues, double-ended queues (deque), and stream processing.', 11, '2026-09-10T10:36:28.828Z'),
+  ('topic-dsa-recursion', 'chapter-dsa', 'Recursion', 'recursion', 'Base cases, recursive call stacks, divide and conquer, and recursive problem formulation.', 12, '2026-09-10T10:36:28.828Z'),
+  ('topic-dsa-sliding-window', 'chapter-dsa', 'Sliding Window', 'sliding-window', 'Fixed and dynamic size sliding subarrays and substrings for optimization and constraint matching.', 18, '2026-09-10T10:36:28.828Z'),
+  ('topic-dsa-sorting', 'chapter-dsa', 'Sorting', 'sorting', 'Comparison and non-comparison sorting: Quick Sort, Merge Sort, Insertion Sort, and Interval sorting.', 7, '2026-09-10T10:36:28.828Z'),
+  ('topic-dsa-space-complexity', 'chapter-dsa', 'Space Complexity', 'space-complexity', 'Memory footprints, auxiliary stack frames, in-place vs out-of-place algorithmic trade-offs.', 2, '2026-09-10T10:36:28.828Z'),
+  ('topic-dsa-stack', 'chapter-dsa', 'Stack', 'stack', 'Push, pop, monotonic stack techniques, parenthesis validation, and expression evaluation.', 9, '2026-09-10T10:36:28.828Z'),
+  ('topic-dsa-strings', 'chapter-dsa', 'Strings', 'strings', 'Character manipulation, palindromes, anagrams, parsing, and string matching.', 4, '2026-09-10T10:36:28.828Z'),
+  ('topic-dsa-time-complexity', 'chapter-dsa', 'Time Complexity', 'time-complexity', 'Big-O notation, asymptotic analysis, worst-case, best-case, and amortized running time.', 1, '2026-09-10T10:36:28.828Z'),
+  ('topic-dsa-trees', 'chapter-dsa', 'Trees', 'trees', 'Binary trees, binary search trees (BST), balanced trees, and tree traversals (inorder, preorder, postorder).', 13, '2026-09-10T10:36:28.828Z'),
+  ('topic-dsa-two-pointers', 'chapter-dsa', 'Two Pointers', 'two-pointers', 'Left-right converging pointers, fast-slow chasing pointers, and paired array inspections.', 17, '2026-09-10T10:36:28.828Z'),
+  ('topic-java-basics', 'chapter-java', 'Java Fundamentals', 'java-fundamentals', 'Static typing, primitive data types, scanner input, control structures, and loops.', 1, '2026-09-10T10:36:28.828Z'),
+  ('topic-java-collections', 'chapter-java', 'Java Collections Framework', 'java-collections', 'ArrayList, LinkedList, HashMap, HashSet, PriorityQueue, and Iterators.', 3, '2026-09-10T10:36:28.828Z'),
+  ('topic-java-oop', 'chapter-java', 'Classes & OOP Principles', 'java-oop', 'Encapsulation, inheritance, polymorphism, interfaces, and abstract classes.', 2, '2026-09-10T10:36:28.828Z'),
+  ('topic-py-basics', 'chapter-python', 'Python Basics & Syntax', 'python-basics', 'Variables, dynamic typing, operators, string formatting, and standard I/O in Python.', 1, '2026-09-10T10:36:28.828Z'),
+  ('topic-py-control', 'chapter-python', 'Control Flow & Collections', 'python-control-flow', 'If-else statements, for/while loops, lists, dictionaries, sets, and list comprehensions.', 2, '2026-09-10T10:36:28.828Z'),
+  ('topic-py-functions', 'chapter-python', 'Functions & Modules', 'python-functions', 'Function definitions, *args, **kwargs, lambda functions, map/filter, and importing standard modules.', 3, '2026-09-10T10:36:28.828Z'),
+  ('topic-py-oop', 'chapter-python', 'Object-Oriented Python', 'python-oop', 'Classes, dunder methods (__init__, __str__), inheritance, encapsulation, and classmethods.', 4, '2026-09-10T10:36:28.828Z'),
+  ('topic-sql-aggregates', 'chapter-sql', 'Aggregation & Grouping', 'sql-aggregation', 'COUNT, SUM, AVG, MIN, MAX, GROUP BY, and HAVING clauses.', 2, '2026-09-10T10:36:28.828Z'),
+  ('topic-sql-basics', 'chapter-sql', 'SQL Basics & Filtering', 'sql-basics', 'SELECT, WHERE, ORDER BY, LIMIT, DISTINCT, and boolean logical operators.', 1, '2026-09-10T10:36:28.828Z'),
+  ('topic-sql-joins', 'chapter-sql', 'Multi-Table Joins', 'sql-joins', 'INNER JOIN, LEFT OUTER JOIN, RIGHT JOIN, FULL JOIN, and table aliasing.', 3, '2026-09-10T10:36:28.828Z'),
+  ('topic-web-css-basics', 'chapter-web', 'CSS Basics', 'css-basics', 'Selectors, cascading rules, specificity, box model, margins, padding, and typography.', 2, '2026-09-10T10:36:28.828Z'),
+  ('topic-web-css-layout', 'chapter-web', 'CSS Layout', 'css-layout', 'Modern CSS Flexbox, Grid layouts, positioning, alignment, and modern component structure.', 3, '2026-09-10T10:36:28.828Z'),
+  ('topic-web-dom', 'chapter-web', 'DOM Manipulation', 'dom-manipulation', 'Selecting elements (querySelector), mutating attributes, manipulating classes, and injecting nodes.', 6, '2026-09-10T10:36:28.828Z'),
+  ('topic-web-events', 'chapter-web', 'Events', 'events', 'Event listeners, click, keyup, change, event delegation, bubbling, and event objects.', 7, '2026-09-10T10:36:28.828Z'),
+  ('topic-web-fetch', 'chapter-web', 'Fetch / API', 'fetch-api', 'Asynchronous JavaScript, Promises, async/await, fetching JSON data, and loading indicators.', 9, '2026-09-10T10:36:28.828Z'),
+  ('topic-web-forms', 'chapter-web', 'Forms', 'forms', 'Input fields, checkboxes, radio groups, preventDefault, and client-side form validation.', 8, '2026-09-10T10:36:28.828Z'),
+  ('topic-web-html-basics', 'chapter-web', 'HTML Basics', 'html-basics', 'Semantic elements, text formatting, hyperlinks, document structuring, and accessible markup.', 1, '2026-09-10T10:36:28.828Z'),
+  ('topic-web-js-basics', 'chapter-web', 'JavaScript Basics', 'javascript-basics', 'Variables (let, const), primitives, functions, arrow functions, arrays, and template literals.', 5, '2026-09-10T10:36:28.828Z'),
+  ('topic-web-projects', 'chapter-web', 'Mini Projects', 'mini-projects', 'End-to-end frontend interactive mini-applications combining HTML, modern CSS, and dynamic JS.', 10, '2026-09-10T10:36:28.828Z'),
+  ('topic-web-responsive', 'chapter-web', 'Responsive Design', 'responsive-design', 'Media queries, mobile-first design, fluid units (rem, vw, vh), and adaptive viewports.', 4, '2026-09-10T10:36:28.828Z')
+ON DUPLICATE KEY UPDATE `id` = `id`;
+
+-- Reference Seed Data for `coding_challenges` (38 records)
+INSERT INTO `coding_challenges` (`id`, `title`, `slug`, `description`, `difficulty`, `category`, `challengeType`, `supportedLanguages`, `starterCode`, `htmlStarterCode`, `cssStarterCode`, `javascriptStarterCode`, `inputFormat`, `outputFormat`, `constraints`, `examples`, `publicTestCases`, `privateTestCases`, `hints`, `solutionExplanation`, `timeLimit`, `memoryLimit`, `createdAt`, `updatedAt`, `chapterId`, `topicId`, `orderIndex`)
+VALUES
+  ('challenge-arr-1-max-subarray', 'Maximum Subarray (Kadane\'s Algorithm)', 'maximum-subarray-kadane', 'Given an integer array `nums`, find the subarray with the largest sum, and return its sum.', 'medium', 'Arrays', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static int maxSubArray(int[] nums) {\\n        // TODO: Find contiguous subarray with largest sum (Kadane\'s algorithm)\\n        return 0;\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String[] parts = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        int[] nums = new int[parts.length];\\n        for (int i = 0; i < parts.length; i++) nums[i] = Integer.parseInt(parts[i]);\\n        System.out.println(maxSubArray(nums));\\n    }\\n}\\n","python":"import sys\\n\\ndef max_sub_array(nums):\\n    # TODO: Find contiguous subarray with largest sum (Kadane\'s algorithm)\\n    return 0\\n\\nif __name__ == \\"__main__\\":\\n    line = sys.stdin.read().strip()\\n    if line:\\n        nums = [int(x) for x in line.split()]\\n        print(max_sub_array(nums))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction maxSubArray(nums) {\\n    // TODO: Find contiguous subarray with largest sum (Kadane\'s algorithm)\\n    return 0;\\n}\\n\\nconst input = fs.readFileSync(0, \'utf-8\').trim();\\nif (input) {\\n    const nums = input.split(/\\\\s+/).map(Number);\\n    console.log(maxSubArray(nums));\\n}\\n"}', NULL, NULL, NULL, 'Single line of space-separated integers', 'Single integer representing the maximum subarray sum', '1 <= nums.length <= 10^5\n-10^4 <= nums[i] <= 10^4', '[{"input":"-2 1 -3 4 -1 2 1 -5 4","output":"6"},{"input":"5 4 -1 7 8","output":"23"}]', '[{"id":"tc-1","input":"-2 1 -3 4 -1 2 1 -5 4","isPublic":true,"expectedOutput":"6"},{"id":"tc-2","input":"5 4 -1 7 8","isPublic":true,"expectedOutput":"23"}]', '[{"id":"tc-3","input":"-1","isPublic":false,"expectedOutput":"-1"}]', '["Use Kadane\'s Algorithm: at each position decide whether to add to current running sum or start fresh."]', 'Kadane\'s algorithm computes max subarray ending at each index in O(n) time and O(1) space.', 3000, 256, '2026-09-10T10:36:28.828Z', '2026-09-10T10:36:28.828Z', 'chapter-dsa', 'topic-dsa-arrays', 1),
+  ('challenge-arr-2-stock-profit', 'Best Time to Buy and Sell Stock', 'best-time-to-buy-and-sell-stock', 'You are given an array `prices` where `prices[i]` is the price of a given stock on the `i-th` day.\nYou want to maximize your profit by choosing a single day to buy one stock and choosing a different day in the future to sell that stock.\n\nReturn the maximum profit you can achieve. If you cannot achieve any profit, return `0`.', 'easy', 'Arrays', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static int maxProfit(int[] prices) {\\n        // TODO: Calculate maximum profit achievable from a single buy and sell\\n        return 0;\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String[] parts = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        int[] prices = new int[parts.length];\\n        for (int i = 0; i < parts.length; i++) prices[i] = Integer.parseInt(parts[i]);\\n        System.out.println(maxProfit(prices));\\n    }\\n}\\n","python":"import sys\\n\\ndef max_profit(prices):\\n    # TODO: Calculate maximum profit achievable from a single buy and sell\\n    return 0\\n\\nif __name__ == \\"__main__\\":\\n    line = sys.stdin.read().strip()\\n    if line:\\n        prices = [int(x) for x in line.split()]\\n        print(max_profit(prices))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction maxProfit(prices) {\\n    // TODO: Calculate maximum profit achievable from a single buy and sell\\n    return 0;\\n}\\n\\nconst input = fs.readFileSync(0, \'utf-8\').trim();\\nif (input) {\\n    const prices = input.split(/\\\\s+/).map(Number);\\n    console.log(maxProfit(prices));\\n}\\n"}', NULL, NULL, NULL, 'Single line of space-separated daily stock prices', 'Single integer maximum profit', '1 <= prices.length <= 10^5\n0 <= prices[i] <= 10^4', '[{"input":"7 1 5 3 6 4","output":"5"},{"input":"7 6 4 3 1","output":"0"}]', '[{"id":"tc-1","input":"7 1 5 3 6 4","isPublic":true,"expectedOutput":"5"},{"id":"tc-2","input":"7 6 4 3 1","isPublic":true,"expectedOutput":"0"}]', '[{"id":"tc-3","input":"2 4 1","isPublic":false,"expectedOutput":"2"}]', '["Track the minimum price observed so far as you iterate through the list."]', 'Maintain the lowest valley encountered so far and calculate profit at each peak.', 3000, 256, '2026-09-10T10:36:28.828Z', '2026-09-10T10:36:28.828Z', 'chapter-dsa', 'topic-dsa-arrays', 2),
+  ('challenge-arr-3-contains-duplicate', 'Contains Duplicate', 'contains-duplicate', 'Given an integer array `nums`, return `true` if any value appears at least twice in the array, and return `false` if every element is distinct.', 'easy', 'Arrays', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static boolean containsDuplicate(int[] nums) {\\n        // TODO: Return true if any value appears at least twice, false otherwise\\n        return false;\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String[] parts = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        int[] nums = new int[parts.length];\\n        for (int i = 0; i < parts.length; i++) nums[i] = Integer.parseInt(parts[i]);\\n        System.out.println(containsDuplicate(nums) ? \\"true\\" : \\"false\\");\\n    }\\n}\\n","python":"import sys\\n\\ndef contains_duplicate(nums):\\n    # TODO: Return True if any value appears at least twice, False otherwise\\n    return False\\n\\nif __name__ == \\"__main__\\":\\n    line = sys.stdin.read().strip()\\n    if line:\\n        nums = [int(x) for x in line.split()]\\n        print(\\"true\\" if contains_duplicate(nums) else \\"false\\")\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction containsDuplicate(nums) {\\n    // TODO: Return true if any value appears at least twice, false otherwise\\n    return false;\\n}\\n\\nconst input = fs.readFileSync(0, \'utf-8\').trim();\\nif (input) {\\n    const nums = input.split(/\\\\s+/).map(Number);\\n    console.log(containsDuplicate(nums) ? \\"true\\" : \\"false\\");\\n}\\n"}', NULL, NULL, NULL, 'Single line of space-separated integers', '\'true\' or \'false\'', '1 <= nums.length <= 10^5', '[{"input":"1 2 3 1","output":"true"},{"input":"1 2 3 4","output":"false"}]', '[{"id":"tc-1","input":"1 2 3 1","isPublic":true,"expectedOutput":"true"},{"id":"tc-2","input":"1 2 3 4","isPublic":true,"expectedOutput":"false"}]', '[{"id":"tc-3","input":"1 1 1 3 3 4 3 2 4 2","isPublic":false,"expectedOutput":"true"}]', '["Use a Hash Set to track seen elements in O(1) amortized time."]', 'HashSet gives an O(n) time and O(n) space solution.', 3000, 256, '2026-09-10T10:36:28.828Z', '2026-09-10T10:36:28.828Z', 'chapter-dsa', 'topic-dsa-arrays', 3),
+  ('challenge-arr-4-move-zeroes', 'Move Zeroes', 'move-zeroes', 'Given an integer array `nums`, move all `0`\'s to the end of it while maintaining the relative order of the non-zero elements.\n\nNote that you must do this in-place without making a copy of the array. Print the space-separated resulting array.', 'easy', 'Arrays', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static void moveZeroes(int[] nums) {\\n        // TODO: Move all 0\'s to the end while maintaining the relative order of non-zeros in-place\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String[] parts = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        int[] nums = new int[parts.length];\\n        for (int i = 0; i < parts.length; i++) nums[i] = Integer.parseInt(parts[i]);\\n        moveZeroes(nums);\\n        StringBuilder sb = new StringBuilder();\\n        for (int i = 0; i < nums.length; i++) {\\n            sb.append(nums[i]);\\n            if (i < nums.length - 1) sb.append(\\" \\");\\n        }\\n        System.out.println(sb.toString());\\n    }\\n}\\n","python":"import sys\\n\\ndef move_zeroes(nums):\\n    # TODO: Move all 0\'s to the end while maintaining the relative order of non-zeros in-place\\n    pass\\n\\nif __name__ == \\"__main__\\":\\n    line = sys.stdin.read().strip()\\n    if line:\\n        nums = [int(x) for x in line.split()]\\n        move_zeroes(nums)\\n        print(\\" \\".join(str(x) for x in nums))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction moveZeroes(nums) {\\n    // TODO: Move all 0\'s to the end while maintaining the relative order of non-zeros in-place\\n}\\n\\nconst input = fs.readFileSync(0, \'utf-8\').trim();\\nif (input) {\\n    const nums = input.split(/\\\\s+/).map(Number);\\n    moveZeroes(nums);\\n    console.log(nums.join(\' \'));\\n}\\n"}', NULL, NULL, NULL, 'Single line of space-separated integers', 'Single line of space-separated integers with zeroes moved to end', '1 <= nums.length <= 10^4', '[{"input":"0 1 0 3 12","output":"1 3 12 0 0"},{"input":"0","output":"0"}]', '[{"id":"tc-1","input":"0 1 0 3 12","isPublic":true,"expectedOutput":"1 3 12 0 0"},{"id":"tc-2","input":"0","isPublic":true,"expectedOutput":"0"}]', '[{"id":"tc-3","input":"4 2 4 0 0 3 0 5 1 0","isPublic":false,"expectedOutput":"4 2 4 3 5 1 0 0 0 0"}]', '["Use a two-pointer approach: one reads all numbers, the other writes non-zero values."]', 'Iterate to overwrite non-zero elements at the front, then fill remaining slots with zeroes.', 3000, 256, '2026-09-10T10:36:28.829Z', '2026-09-10T10:36:28.829Z', 'chapter-dsa', 'topic-dsa-arrays', 4),
+  ('challenge-arr-5-rotate-array', 'Rotate Array', 'rotate-array-k-steps', 'Given an integer array `nums`, rotate the array to the right by `k` steps, where `k` is non-negative.\nPrint the rotated space-separated array.', 'medium', 'Arrays', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static void rotate(int[] nums, int k) {\\n        // TODO: Rotate the array to the right by k steps in-place\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String[] parts = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        int[] nums = new int[parts.length];\\n        for (int i = 0; i < parts.length; i++) nums[i] = Integer.parseInt(parts[i]);\\n        if (!sc.hasNextInt()) return;\\n        int k = sc.nextInt();\\n        rotate(nums, k);\\n        StringBuilder sb = new StringBuilder();\\n        for (int i = 0; i < nums.length; i++) {\\n            sb.append(nums[i]);\\n            if (i < nums.length - 1) sb.append(\\" \\");\\n        }\\n        System.out.println(sb.toString());\\n    }\\n}\\n","python":"import sys\\n\\ndef rotate(nums, k):\\n    # TODO: Rotate the array to the right by k steps in-place\\n    pass\\n\\nif __name__ == \\"__main__\\":\\n    lines = sys.stdin.read().strip().splitlines()\\n    if len(lines) >= 2:\\n        nums = [int(x) for x in lines[0].split()]\\n        k = int(lines[1])\\n        rotate(nums, k)\\n        print(\\" \\".join(str(x) for x in nums))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction rotate(nums, k) {\\n    // TODO: Rotate the array to the right by k steps in-place\\n}\\n\\nconst lines = fs.readFileSync(0, \'utf-8\').trim().split(\'\\\\n\');\\nif (lines.length >= 2) {\\n    const nums = lines[0].trim().split(/\\\\s+/).map(Number);\\n    const k = Number(lines[1].trim());\\n    rotate(nums, k);\\n    console.log(nums.join(\' \'));\\n}\\n"}', NULL, NULL, NULL, 'Line 1: space-separated integers\nLine 2: non-negative integer k', 'Single line of rotated integers', '1 <= nums.length <= 10^5\n0 <= k <= 10^5', '[{"input":"1 2 3 4 5 6 7\\n3","output":"5 6 7 1 2 3 4"},{"input":"-1 -100 3 99\\n2","output":"3 99 -1 -100"}]', '[{"id":"tc-1","input":"1 2 3 4 5 6 7\\n3","isPublic":true,"expectedOutput":"5 6 7 1 2 3 4"},{"id":"tc-2","input":"-1 -100 3 99\\n2","isPublic":true,"expectedOutput":"3 99 -1 -100"}]', '[{"id":"tc-3","input":"1 2\\n3","isPublic":false,"expectedOutput":"2 1"}]', '["Reversing the whole array, then reversing first k and remaining n-k elements rotates in O(1) extra space."]', 'Three reverse steps achieve in-place rotation in O(n) time and O(1) space.', 3000, 256, '2026-09-10T10:36:28.829Z', '2026-09-10T10:36:28.829Z', 'chapter-dsa', 'topic-dsa-arrays', 5),
+  ('challenge-arr-6-majority-element', 'Majority Element (Boyer-Moore)', 'majority-element-boyer-moore', 'Given an array `nums` of size `n`, return the majority element.\nThe majority element is the element that appears more than `⌊n / 2⌋` times. You may assume that the majority element always exists in the array.', 'easy', 'Arrays', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static int majorityElement(int[] nums) {\\n        // TODO: Find element appearing more than ⌊n / 2⌋ times (Boyer-Moore voting)\\n        return 0;\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String[] parts = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        int[] nums = new int[parts.length];\\n        for (int i = 0; i < parts.length; i++) nums[i] = Integer.parseInt(parts[i]);\\n        System.out.println(majorityElement(nums));\\n    }\\n}\\n","python":"import sys\\n\\ndef majority_element(nums):\\n    # TODO: Find element appearing more than ⌊n / 2⌋ times (Boyer-Moore voting)\\n    return 0\\n\\nif __name__ == \\"__main__\\":\\n    line = sys.stdin.read().strip()\\n    if line:\\n        nums = [int(x) for x in line.split()]\\n        print(majority_element(nums))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction majorityElement(nums) {\\n    // TODO: Find element appearing more than ⌊n / 2⌋ times (Boyer-Moore voting)\\n    return 0;\\n}\\n\\nconst input = fs.readFileSync(0, \'utf-8\').trim();\\nif (input) {\\n    const nums = input.split(/\\\\s+/).map(Number);\\n    console.log(majorityElement(nums));\\n}\\n"}', NULL, NULL, NULL, 'Single line of space-separated integers', 'Single integer majority element', '1 <= nums.length <= 5 * 10^4', '[{"input":"3 2 3","output":"3"},{"input":"2 2 1 1 1 2 2","output":"2"}]', '[{"id":"tc-1","input":"3 2 3","isPublic":true,"expectedOutput":"3"},{"id":"tc-2","input":"2 2 1 1 1 2 2","isPublic":true,"expectedOutput":"2"}]', '[{"id":"tc-3","input":"6 5 5","isPublic":false,"expectedOutput":"5"}]', '["Boyer-Moore Voting Algorithm finds the majority in O(n) time and O(1) space."]', 'Since majority element occurs > n/2 times, its count will strictly dominate all other elements combined.', 3000, 256, '2026-09-10T10:36:28.829Z', '2026-09-10T10:36:28.829Z', 'chapter-dsa', 'topic-dsa-arrays', 6),
+  ('challenge-arr-7-merge-sorted', 'Merge Two Sorted Arrays', 'merge-two-sorted-arrays', 'Given two sorted arrays of integers `nums1` and `nums2`, merge `nums2` into a single sorted array.\nPrint all elements of the merged sorted array separated by spaces.', 'easy', 'Arrays', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static void merge(int[] nums1, int m, int[] nums2, int n) {\\n        // TODO: Merge nums2 into nums1 as one sorted array in-place\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String[] p1 = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        int[] nums1 = new int[p1.length];\\n        for (int i = 0; i < p1.length; i++) nums1[i] = Integer.parseInt(p1[i]);\\n        int m = sc.nextInt();\\n        sc.nextLine();\\n        String line3 = sc.hasNextLine() ? sc.nextLine().trim() : \\"\\";\\n        int[] nums2 = line3.isEmpty() ? new int[0] : Arrays.stream(line3.split(\\"\\\\\\\\s+\\")).mapToInt(Integer::parseInt).toArray();\\n        int n = sc.hasNextInt() ? sc.nextInt() : 0;\\n        merge(nums1, m, nums2, n);\\n        StringBuilder sb = new StringBuilder();\\n        for (int i = 0; i < nums1.length; i++) {\\n            sb.append(nums1[i]);\\n            if (i < nums1.length - 1) sb.append(\\" \\");\\n        }\\n        System.out.println(sb.toString());\\n    }\\n}\\n","python":"import sys\\n\\ndef merge(nums1, m, nums2, n):\\n    # TODO: Merge nums2 into nums1 as one sorted array in-place\\n    pass\\n\\nif __name__ == \\"__main__\\":\\n    lines = sys.stdin.read().strip().splitlines()\\n    if len(lines) >= 4:\\n        nums1 = [int(x) for x in lines[0].split()]\\n        m = int(lines[1])\\n        nums2 = [int(x) for x in lines[2].split()] if lines[2].strip() else []\\n        n = int(lines[3])\\n        merge(nums1, m, nums2, n)\\n        print(\\" \\".join(str(x) for x in nums1))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction merge(nums1, m, nums2, n) {\\n    // TODO: Merge nums2 into nums1 as one sorted array in-place\\n}\\n\\nconst lines = fs.readFileSync(0, \'utf-8\').trim().split(\'\\\\n\');\\nif (lines.length >= 4) {\\n    const nums1 = lines[0].trim().split(/\\\\s+/).map(Number);\\n    const m = Number(lines[1].trim());\\n    const nums2 = lines[2].trim() ? lines[2].trim().split(/\\\\s+/).map(Number) : [];\\n    const n = Number(lines[3].trim());\\n    merge(nums1, m, nums2, n);\\n    console.log(nums1.join(\' \'));\\n}\\n"}', NULL, NULL, NULL, 'Line 1: space-separated integers for nums1\nLine 2: space-separated integers for nums2', 'Single line of merged space-separated integers', '1 <= nums1.length, nums2.length <= 10^5', '[{"input":"1 3 5\\n2 4 6","output":"1 2 3 4 5 6"}]', '[{"id":"tc-1","input":"1 3 5\\n2 4 6","isPublic":true,"expectedOutput":"1 2 3 4 5 6"}]', '[{"id":"tc-2","input":"5\\n1","isPublic":false,"expectedOutput":"1 5"}]', '["Use two pointers starting at the beginning of each array."]', 'Classic O(n + m) two-pointer merge operation.', 3000, 256, '2026-09-10T10:36:28.829Z', '2026-09-10T10:36:28.829Z', 'chapter-dsa', 'topic-dsa-arrays', 7),
+  ('challenge-arr-8-product-except-self', 'Product of Array Except Self', 'product-of-array-except-self', 'Given an integer array `nums`, return an array `answer` such that `answer[i]` is equal to the product of all the elements of `nums` except `nums[i]`.\n\nYou must write an algorithm that runs in `O(n)` time and without using the division operation.\nPrint space-separated results.', 'medium', 'Arrays', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static int[] productExceptSelf(int[] nums) {\\n        // TODO: Return array where output[i] is product of all elements except nums[i] in O(n) without division\\n        return new int[0];\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String[] parts = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        int[] nums = new int[parts.length];\\n        for (int i = 0; i < parts.length; i++) nums[i] = Integer.parseInt(parts[i]);\\n        int[] res = productExceptSelf(nums);\\n        StringBuilder sb = new StringBuilder();\\n        for (int i = 0; i < res.length; i++) {\\n            sb.append(res[i]);\\n            if (i < res.length - 1) sb.append(\\" \\");\\n        }\\n        System.out.println(sb.toString());\\n    }\\n}\\n","python":"import sys\\n\\ndef product_except_self(nums):\\n    # TODO: Return array where output[i] is product of all elements except nums[i] in O(n) without division\\n    return []\\n\\nif __name__ == \\"__main__\\":\\n    line = sys.stdin.read().strip()\\n    if line:\\n        nums = [int(x) for x in line.split()]\\n        print(\\" \\".join(str(x) for x in product_except_self(nums)))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction productExceptSelf(nums) {\\n    // TODO: Return array where output[i] is product of all elements except nums[i] in O(n) without division\\n    return [];\\n}\\n\\nconst input = fs.readFileSync(0, \'utf-8\').trim();\\nif (input) {\\n    const nums = input.split(/\\\\s+/).map(Number);\\n    console.log(productExceptSelf(nums).join(\' \'));\\n}\\n"}', NULL, NULL, NULL, 'Single line of space-separated integers', 'Space-separated integers for answer array', '2 <= nums.length <= 10^5\n-30 <= nums[i] <= 30', '[{"input":"1 2 3 4","output":"24 12 8 6"},{"input":"-1 1 0 -3 3","output":"0 0 9 0 0"}]', '[{"id":"tc-1","input":"1 2 3 4","isPublic":true,"expectedOutput":"24 12 8 6"},{"id":"tc-2","input":"-1 1 0 -3 3","isPublic":true,"expectedOutput":"0 0 9 0 0"}]', '[{"id":"tc-3","input":"2 3","isPublic":false,"expectedOutput":"3 2"}]', '["Compute prefix products from left to right, then postfix products from right to left."]', 'The product for index i is prefix[i-1] * postfix[i+1], achievable in two linear passes.', 3000, 256, '2026-09-10T10:36:28.829Z', '2026-09-10T10:36:28.829Z', 'chapter-dsa', 'topic-dsa-arrays', 8),
+  ('challenge-bfs-1-grid-path', 'Shortest Path in Unweighted Grid (BFS)', 'shortest-path-unweighted-grid-bfs', 'Given an `m x n` binary grid where `0` represents an open cell and `1` represents an obstacle, return the length of the shortest clear path from top-left `(0,0)` to bottom-right `(m-1, n-1)`.\nYou can move in 4 cardinal directions (Up, Down, Left, Right).\nIf no clear path exists, return `-1`.\nPath length is measured by number of cells visited.', 'medium', 'BFS', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static int shortestPathGrid(int[][] grid) {\\n        // TODO: Find shortest path from top-left to bottom-right using 8-directional BFS\\n        return -1;\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        List<int[]> rows = new ArrayList<>();\\n        while (sc.hasNextLine()) {\\n            String line = sc.nextLine().trim();\\n            if (line.isEmpty()) continue;\\n            String[] parts = line.split(\\"\\\\\\\\s+\\");\\n            int[] row = new int[parts.length];\\n            for (int i = 0; i < parts.length; i++) row[i] = Integer.parseInt(parts[i]);\\n            rows.add(row);\\n        }\\n        int[][] grid = rows.toArray(new int[0][]);\\n        System.out.println(shortestPathGrid(grid));\\n    }\\n}\\n","python":"import sys\\nfrom collections import deque\\n\\ndef shortest_path_grid(grid):\\n    # TODO: Find shortest path from top-left to bottom-right using 8-directional BFS\\n    return -1\\n\\nif __name__ == \\"__main__\\":\\n    lines = sys.stdin.read().strip().splitlines()\\n    if lines:\\n        grid = [[int(x) for x in line.split()] for line in lines if line.strip()]\\n        print(shortest_path_grid(grid))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction shortestPathGrid(grid) {\\n    // TODO: Find shortest path from top-left to bottom-right using 8-directional BFS\\n    return -1;\\n}\\n\\nconst lines = fs.readFileSync(0, \'utf-8\').trim().split(\'\\\\n\');\\nif (lines.length > 0) {\\n    const grid = lines.filter(l => l.trim()).map(l => l.trim().split(/\\\\s+/).map(Number));\\n    console.log(shortestPathGrid(grid));\\n}\\n"}', NULL, NULL, NULL, 'Rows of space-separated 0s and 1s', 'Single integer shortest path distance or -1', '1 <= m, n <= 100', '[{"input":"0 0 0\\n1 1 0\\n1 1 0","output":"5"}]', '[{"id":"tc-1","input":"0 0 0\\n1 1 0\\n1 1 0","isPublic":true,"expectedOutput":"5"}]', '[{"id":"tc-2","input":"0 1\\n1 0","isPublic":false,"expectedOutput":"-1"}]', '["BFS with a queue guarantees finding the shortest path first in an unweighted grid."]', 'Queue explores nodes in increasing order of distance, guaranteeing optimal path length upon arrival.', 3000, 256, '2026-09-10T10:36:28.829Z', '2026-09-10T10:36:28.829Z', 'chapter-dsa', 'topic-dsa-bfs', 1),
+  ('challenge-bfs-2-level-order', 'Binary Tree Level Order Traversal', 'binary-tree-level-order-traversal-bfs', 'Given the root of a binary tree encoded in level-order array format with `null` representing absent nodes, return the level order traversal of its nodes\' values.\nPrint each level on a new line with space-separated values.', 'medium', 'BFS', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static String levelOrder(String[] nodes) {\\n        // TODO: Return level-order traversal formatted as JSON string\\n        return \\"[]\\";\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String[] nodes = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        System.out.println(levelOrder(nodes));\\n    }\\n}\\n","python":"import sys\\nfrom collections import deque\\nimport json\\n\\ndef level_order(nodes):\\n    # TODO: Return level-order traversal of the tree nodes as list of lists\\n    return []\\n\\nif __name__ == \\"__main__\\":\\n    line = sys.stdin.read().strip()\\n    if line:\\n        nodes = line.split()\\n        res = level_order(nodes)\\n        print(json.dumps(res))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction levelOrder(nodes) {\\n    // TODO: Return level-order traversal of the tree nodes as array of arrays\\n    return [];\\n}\\n\\nconst input = fs.readFileSync(0, \'utf-8\').trim();\\nif (input) {\\n    const nodes = input.split(/\\\\s+/);\\n    console.log(JSON.stringify(levelOrder(nodes)));\\n}\\n"}', NULL, NULL, NULL, 'Space-separated tree elements in level order (e.g. 3 9 20 null null 15 7)', 'Each level values printed on a separate line', 'Number of nodes <= 2000', '[{"input":"3 9 20 null null 15 7","output":"3\\n9 20\\n15 7"}]', '[{"id":"tc-1","input":"3 9 20 null null 15 7","isPublic":true,"expectedOutput":"3\\n9 20\\n15 7"}]', '[{"id":"tc-2","input":"1 2 3 4 5","isPublic":false,"expectedOutput":"1\\n2 3\\n4 5"}]', '["Use BFS queue tracking node count at each level."]', 'FIFO queue processes trees layer by layer cleanly.', 3000, 256, '2026-09-10T10:36:28.829Z', '2026-09-10T10:36:28.829Z', 'chapter-dsa', 'topic-dsa-bfs', 2),
+  ('challenge-bfs-3-rotten-oranges', 'Rotting Oranges (Multi-source BFS)', 'rotting-oranges-multisource-bfs', 'You are given an `m x n` grid where each cell has one of three values:\n- `0` representing an empty cell\n- `1` representing a fresh orange\n- `2` representing a rotten orange\n\nEvery minute, any fresh orange that is 4-directionally adjacent to a rotten orange becomes rotten.\nReturn the minimum number of minutes that must elapse until no cell has a fresh orange. If this is impossible, return `-1`.', 'medium', 'BFS', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static int orangesRotting(int[][] grid) {\\n        // TODO: Multi-source BFS to calculate minimum minutes until no fresh orange remains\\n        return -1;\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        List<int[]> rows = new ArrayList<>();\\n        while (sc.hasNextLine()) {\\n            String line = sc.nextLine().trim();\\n            if (line.isEmpty()) continue;\\n            String[] parts = line.split(\\"\\\\\\\\s+\\");\\n            int[] row = new int[parts.length];\\n            for (int i = 0; i < parts.length; i++) row[i] = Integer.parseInt(parts[i]);\\n            rows.add(row);\\n        }\\n        int[][] grid = rows.toArray(new int[0][]);\\n        System.out.println(orangesRotting(grid));\\n    }\\n}\\n","python":"import sys\\nfrom collections import deque\\n\\ndef oranges_rotting(grid):\\n    # TODO: Multi-source BFS to calculate minimum minutes until no fresh orange remains\\n    return -1\\n\\nif __name__ == \\"__main__\\":\\n    lines = sys.stdin.read().strip().splitlines()\\n    if lines:\\n        grid = [[int(x) for x in line.split()] for line in lines if line.strip()]\\n        print(oranges_rotting(grid))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction orangesRotting(grid) {\\n    // TODO: Multi-source BFS to calculate minimum minutes until no fresh orange remains\\n    return -1;\\n}\\n\\nconst lines = fs.readFileSync(0, \'utf-8\').trim().split(\'\\\\n\');\\nif (lines.length > 0) {\\n    const grid = lines.filter(l => l.trim()).map(l => l.trim().split(/\\\\s+/).map(Number));\\n    console.log(orangesRotting(grid));\\n}\\n"}', NULL, NULL, NULL, 'Grid rows representing orange states', 'Single integer minutes or -1', '1 <= m, n <= 10', '[{"input":"2 1 1\\n1 1 0\\n0 1 1","output":"4"}]', '[{"id":"tc-1","input":"2 1 1\\n1 1 0\\n0 1 1","isPublic":true,"expectedOutput":"4"}]', '[{"id":"tc-2","input":"0 2","isPublic":false,"expectedOutput":"0"}]', '["Initialize BFS queue with all initially rotten oranges simultaneously (multi-source BFS)."]', 'Simultaneous multi-source frontier expansion records exact time steps in O(R * C).', 3000, 256, '2026-09-10T10:36:28.829Z', '2026-09-10T10:36:28.829Z', 'chapter-dsa', 'topic-dsa-bfs', 3),
+  ('challenge-bfs-4-word-ladder-dist', 'Word Ladder Transformation Length', 'word-ladder-transformation-length', 'A transformation sequence from word `beginWord` to word `endWord` using a dictionary `wordList` is a sequence of words `beginWord -> s1 -> s2 -> ... -> sk` such that every adjacent pair differs by exactly one letter.\n\nGiven `beginWord`, `endWord`, and `wordList`, return the number of words in the shortest transformation sequence from `beginWord` to `endWord`, or `0` if no such sequence exists.', 'hard', 'BFS', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static int ladderLength(String beginWord, String endWord, List<String> wordList) {\\n        // TODO: Return length of shortest transformation sequence from beginWord to endWord using BFS\\n        return 0;\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String begin = sc.nextLine().trim();\\n        if (!sc.hasNextLine()) return;\\n        String end = sc.nextLine().trim();\\n        if (!sc.hasNextLine()) return;\\n        List<String> words = Arrays.asList(sc.nextLine().trim().split(\\"\\\\\\\\s+\\"));\\n        System.out.println(ladderLength(begin, end, words));\\n    }\\n}\\n","python":"import sys\\nfrom collections import deque\\n\\ndef ladder_length(begin_word, end_word, word_list):\\n    # TODO: Return length of shortest transformation sequence from begin_word to end_word using BFS\\n    return 0\\n\\nif __name__ == \\"__main__\\":\\n    lines = sys.stdin.read().strip().splitlines()\\n    if len(lines) >= 3:\\n        begin = lines[0].strip()\\n        end = lines[1].strip()\\n        words = lines[2].strip().split()\\n        print(ladder_length(begin, end, words))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction ladderLength(beginWord, endWord, wordList) {\\n    // TODO: Return length of shortest transformation sequence from beginWord to endWord using BFS\\n    return 0;\\n}\\n\\nconst lines = fs.readFileSync(0, \'utf-8\').trim().split(\'\\\\n\');\\nif (lines.length >= 3) {\\n    const begin = lines[0].trim();\\n    const end = lines[1].trim();\\n    const words = lines[2].trim().split(/\\\\s+/);\\n    console.log(ladderLength(begin, end, words));\\n}\\n"}', NULL, NULL, NULL, 'Line 1: beginWord\nLine 2: endWord\nLine 3: space-separated wordList', 'Single integer length or 0', '1 <= beginWord.length <= 10\nwordList.length <= 5000', '[{"input":"hit\\ncog\\nhot dot dog lot log cog","output":"5"}]', '[{"id":"tc-1","input":"hit\\ncog\\nhot dot dog lot log cog","isPublic":true,"expectedOutput":"5"}]', '[{"id":"tc-2","input":"hit\\ncog\\nhot dot dog lot log","isPublic":false,"expectedOutput":"0"}]', '["Treat words as graph vertices and single letter mutations as edges. BFS finds shortest distance."]', 'Standard unweighted shortest path BFS from source string to target string.', 3000, 256, '2026-09-10T10:36:28.829Z', '2026-09-10T10:36:28.829Z', 'chapter-dsa', 'topic-dsa-bfs', 4),
+  ('challenge-bs-1-basic', 'Binary Search', 'binary-search-basic', 'Given an array of integers `nums` sorted in ascending order, and an integer `target`, write a function to search for `target` in `nums`.\n\nIf target exists, return its 0-based index. Otherwise, return -1.\nYou must write an algorithm with `O(log n)` runtime complexity.', 'easy', 'Binary Search', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static int search(int[] nums, int target) {\\n        // TODO: Write your binary search solution here (O(log n))\\n        return -1;\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String[] parts = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        int[] nums = new int[parts.length];\\n        for (int i = 0; i < parts.length; i++) nums[i] = Integer.parseInt(parts[i]);\\n        if (!sc.hasNextInt()) return;\\n        int target = sc.nextInt();\\n        System.out.println(search(nums, target));\\n    }\\n}\\n","python":"import sys\\n\\ndef search(nums, target):\\n    # TODO: Write your binary search solution here (O(log n))\\n    return -1\\n\\nif __name__ == \\"__main__\\":\\n    lines = sys.stdin.read().strip().splitlines()\\n    if len(lines) >= 2:\\n        nums = [int(x) for x in lines[0].split()]\\n        target = int(lines[1])\\n        print(search(nums, target))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction search(nums, target) {\\n    // TODO: Write your binary search solution here (O(log n))\\n    return -1;\\n}\\n\\nconst lines = fs.readFileSync(0, \'utf-8\').trim().split(\'\\\\n\');\\nif (lines.length >= 2) {\\n    const nums = lines[0].trim().split(/\\\\s+/).map(Number);\\n    const target = Number(lines[1].trim());\\n    console.log(search(nums, target));\\n}\\n"}', NULL, NULL, NULL, 'Line 1: space-separated sorted integers\nLine 2: integer target', 'Single integer representing the index or -1', '1 <= nums.length <= 10^5\nAll integers are distinct\nnums is sorted in ascending order', '[{"input":"-1 0 3 5 9 12\\n9","output":"4","explanation":"9 exists in nums and its index is 4"},{"input":"-1 0 3 5 9 12\\n2","output":"-1","explanation":"2 does not exist in nums so return -1"}]', '[{"id":"tc-1","input":"-1 0 3 5 9 12\\n9","isPublic":true,"expectedOutput":"4"},{"id":"tc-2","input":"-1 0 3 5 9 12\\n2","isPublic":true,"expectedOutput":"-1"}]', '[{"id":"tc-3","input":"5\\n5","isPublic":false,"expectedOutput":"0"},{"id":"tc-4","input":"2 4 6 8 10 12 14 16 18 20\\n16","isPublic":false,"expectedOutput":"7"}]', '["Use two pointers left and right, and compare nums[mid] with target."]', 'Standard binary search dividing search interval in half each iteration achieving O(log n) time.', 3000, 256, '2026-09-10T10:36:28.828Z', '2026-09-10T10:36:28.828Z', 'chapter-dsa', 'topic-dsa-binary-search', 1),
+  ('challenge-bs-2-insert-position', 'Search Insert Position', 'search-insert-position', 'Given a sorted array of distinct integers and a target value, return the index if the target is found. If not, return the index where it would be if it were inserted in order.\n\nYou must write an algorithm with `O(log n)` runtime complexity.', 'easy', 'Binary Search', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static int searchInsert(int[] nums, int target) {\\n        // TODO: Write your solution here\\n        return 0;\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String[] parts = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        int[] nums = new int[parts.length];\\n        for (int i = 0; i < parts.length; i++) nums[i] = Integer.parseInt(parts[i]);\\n        if (!sc.hasNextInt()) return;\\n        int target = sc.nextInt();\\n        System.out.println(searchInsert(nums, target));\\n    }\\n}\\n","python":"import sys\\n\\ndef search_insert(nums, target):\\n    # TODO: Write your solution here\\n    return 0\\n\\nif __name__ == \\"__main__\\":\\n    lines = sys.stdin.read().strip().splitlines()\\n    if len(lines) >= 2:\\n        nums = [int(x) for x in lines[0].split()]\\n        target = int(lines[1])\\n        print(search_insert(nums, target))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction searchInsert(nums, target) {\\n    // TODO: Write your solution here\\n    return 0;\\n}\\n\\nconst lines = fs.readFileSync(0, \'utf-8\').trim().split(\'\\\\n\');\\nif (lines.length >= 2) {\\n    const nums = lines[0].trim().split(/\\\\s+/).map(Number);\\n    const target = Number(lines[1].trim());\\n    console.log(searchInsert(nums, target));\\n}\\n"}', NULL, NULL, NULL, 'Line 1: space-separated sorted integers\nLine 2: target integer', 'Integer representing insertion index', '1 <= nums.length <= 10^4\nnums contains distinct values sorted in ascending order', '[{"input":"1 3 5 6\\n5","output":"2"},{"input":"1 3 5 6\\n2","output":"1"}]', '[{"id":"tc-1","input":"1 3 5 6\\n5","isPublic":true,"expectedOutput":"2"},{"id":"tc-2","input":"1 3 5 6\\n2","isPublic":true,"expectedOutput":"1"}]', '[{"id":"tc-3","input":"1 3 5 6\\n7","isPublic":false,"expectedOutput":"4"}]', '["When binary search terminates without finding the target, \'left\' points to the insertion point."]', 'Binary search stops when left > right, where left holds the exact lower bound index.', 3000, 256, '2026-09-10T10:36:28.828Z', '2026-09-10T10:36:28.828Z', 'chapter-dsa', 'topic-dsa-binary-search', 2),
+  ('challenge-bs-3-first-last-position', 'Find First and Last Position of Element', 'find-first-and-last-position', 'Given an array of integers `nums` sorted in non-decreasing order, find the starting and ending position of a given `target` value.\n\nIf target is not found in the array, return `-1 -1`.\nYou must write an algorithm with `O(log n)` runtime complexity.', 'medium', 'Binary Search', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static String findRange(int[] nums, int target) {\\n        // TODO: Return starting and ending position as \\"start end\\" or \\"-1 -1\\"\\n        return \\"-1 -1\\";\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String[] parts = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        int[] nums = new int[parts.length];\\n        for (int i = 0; i < parts.length; i++) nums[i] = Integer.parseInt(parts[i]);\\n        if (!sc.hasNextInt()) return;\\n        int target = sc.nextInt();\\n        System.out.println(findRange(nums, target));\\n    }\\n}\\n","python":"import sys\\n\\ndef find_range(nums, target):\\n    # TODO: Return starting and ending position as \\"start end\\" or \\"-1 -1\\"\\n    return \\"-1 -1\\"\\n\\nif __name__ == \\"__main__\\":\\n    lines = sys.stdin.read().strip().splitlines()\\n    if len(lines) >= 2:\\n        nums = [int(x) for x in lines[0].split()]\\n        target = int(lines[1])\\n        print(find_range(nums, target))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction findRange(nums, target) {\\n    // TODO: Return starting and ending position as \\"start end\\" or \\"-1 -1\\"\\n    return \\"-1 -1\\";\\n}\\n\\nconst lines = fs.readFileSync(0, \'utf-8\').trim().split(\'\\\\n\');\\nif (lines.length >= 2) {\\n    const nums = lines[0].trim().split(/\\\\s+/).map(Number);\\n    const target = Number(lines[1].trim());\\n    console.log(findRange(nums, target));\\n}\\n"}', NULL, NULL, NULL, 'Line 1: space-separated sorted integers\nLine 2: target integer', 'Two space-separated integers e.g. \'3 4\' or \'-1 -1\'', '0 <= nums.length <= 10^5\n-10^9 <= nums[i] <= 10^9\nnums is sorted in non-decreasing order', '[{"input":"5 7 7 8 8 10\\n8","output":"3 4"},{"input":"5 7 7 8 8 10\\n6","output":"-1 -1"}]', '[{"id":"tc-1","input":"5 7 7 8 8 10\\n8","isPublic":true,"expectedOutput":"3 4"},{"id":"tc-2","input":"5 7 7 8 8 10\\n6","isPublic":true,"expectedOutput":"-1 -1"}]', '[{"id":"tc-3","input":"8 8 8 8 8\\n8","isPublic":false,"expectedOutput":"0 4"}]', '["Run binary search twice: once biasing left to find the first occurrence, once biasing right."]', 'Two binary search passes: first searches with right = mid - 1 on match, second with left = mid + 1 on match.', 3000, 256, '2026-09-10T10:36:28.828Z', '2026-09-10T10:36:28.828Z', 'chapter-dsa', 'topic-dsa-binary-search', 3),
+  ('challenge-bs-4-rotated-min', 'Find Minimum in Rotated Sorted Array', 'find-minimum-in-rotated-sorted-array', 'Suppose an array of length `n` sorted in ascending order is rotated between `1` and `n` times.\nGiven the sorted rotated array `nums` of unique elements, return the minimum element of this array.\n\nYou must write an algorithm that runs in `O(log n)` time.', 'medium', 'Binary Search', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static int findMin(int[] nums) {\\n        // TODO: Return minimum element in O(log n) time\\n        return 0;\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String[] parts = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        int[] nums = new int[parts.length];\\n        for (int i = 0; i < parts.length; i++) nums[i] = Integer.parseInt(parts[i]);\\n        System.out.println(findMin(nums));\\n    }\\n}\\n","python":"import sys\\n\\ndef find_min(nums):\\n    # TODO: Return minimum element in O(log n) time\\n    return 0\\n\\nif __name__ == \\"__main__\\":\\n    line = sys.stdin.read().strip()\\n    if line:\\n        nums = [int(x) for x in line.split()]\\n        print(find_min(nums))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction findMin(nums) {\\n    // TODO: Return minimum element in O(log n) time\\n    return 0;\\n}\\n\\nconst input = fs.readFileSync(0, \'utf-8\').trim();\\nif (input) {\\n    const nums = input.split(/\\\\s+/).map(Number);\\n    console.log(findMin(nums));\\n}\\n"}', NULL, NULL, NULL, 'Single line of space-separated integers', 'Single integer representing the minimum element', '1 <= nums.length <= 5000\nAll values are unique', '[{"input":"3 4 5 1 2","output":"1"},{"input":"4 5 6 7 0 1 2","output":"0"}]', '[{"id":"tc-1","input":"3 4 5 1 2","isPublic":true,"expectedOutput":"1"},{"id":"tc-2","input":"4 5 6 7 0 1 2","isPublic":true,"expectedOutput":"0"}]', '[{"id":"tc-3","input":"11 13 15 17","isPublic":false,"expectedOutput":"11"}]', '["Compare nums[mid] to nums[right]. If nums[mid] > nums[right], the minimum is strictly in the right half."]', 'The inflection point where the array wraps around contains the minimum element.', 3000, 256, '2026-09-10T10:36:28.828Z', '2026-09-10T10:36:28.828Z', 'chapter-dsa', 'topic-dsa-binary-search', 4),
+  ('challenge-bs-5-mountain-peak', 'Peak Index in Mountain Array', 'peak-index-in-mountain-array', 'An array `arr` is a mountain if `arr.length >= 3` and there exists some `i` with `0 < i < arr.length - 1` such that:\n- `arr[0] < arr[1] < ... < arr[i - 1] < arr[i]`\n- `arr[i] > arr[i + 1] > ... > arr[arr.length - 1]`\n\nGiven a mountain array `arr`, return the index `i` of the peak element in `O(log n)` time.', 'medium', 'Binary Search', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static int peakIndexInMountainArray(int[] arr) {\\n        // TODO: Find peak index in mountain array in O(log n) time\\n        return 0;\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String[] parts = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        int[] arr = new int[parts.length];\\n        for (int i = 0; i < parts.length; i++) arr[i] = Integer.parseInt(parts[i]);\\n        System.out.println(peakIndexInMountainArray(arr));\\n    }\\n}\\n","python":"import sys\\n\\ndef peak_index_in_mountain_array(arr):\\n    # TODO: Find peak index in mountain array in O(log n) time\\n    return 0\\n\\nif __name__ == \\"__main__\\":\\n    line = sys.stdin.read().strip()\\n    if line:\\n        arr = [int(x) for x in line.split()]\\n        print(peak_index_in_mountain_array(arr))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction peakIndexInMountainArray(arr) {\\n    // TODO: Find peak index in mountain array in O(log n) time\\n    return 0;\\n}\\n\\nconst input = fs.readFileSync(0, \'utf-8\').trim();\\nif (input) {\\n    const arr = input.split(/\\\\s+/).map(Number);\\n    console.log(peakIndexInMountainArray(arr));\\n}\\n"}', NULL, NULL, NULL, 'Single line of space-separated integers representing the mountain array', 'Single integer representing the peak index', '3 <= arr.length <= 10^5\narr is guaranteed to be a mountain array', '[{"input":"0 1 0","output":"1"},{"input":"0 2 1 0","output":"1"}]', '[{"id":"tc-1","input":"0 1 0","isPublic":true,"expectedOutput":"1"},{"id":"tc-2","input":"0 2 1 0","isPublic":true,"expectedOutput":"1"}]', '[{"id":"tc-3","input":"1 3 5 4 2","isPublic":false,"expectedOutput":"2"}]', '["Compare arr[mid] with arr[mid + 1]. If it is climbing upwards, the peak is to the right."]', 'Binary search on slope gradient identifies the highest point in O(log n) comparisons.', 3000, 256, '2026-09-10T10:36:28.828Z', '2026-09-10T10:36:28.828Z', 'chapter-dsa', 'topic-dsa-binary-search', 5),
+  ('challenge-bs-6-sqrt', 'Square Root (Integer Sqrt)', 'integer-square-root', 'Given a non-negative integer `x`, return the square root of `x` rounded down to the nearest integer. The returned integer should be non-negative as well.\n\nYou must not use any built-in exponent function or operator, such as `pow(x, 0.5)` in Python or `Math.sqrt`.\nCalculate the result in `O(log x)`.', 'easy', 'Binary Search', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static int mySqrt(int x) {\\n        // TODO: Compute and return the integer square root of x in O(log x) time\\n        return 0;\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (sc.hasNextInt()) {\\n            int x = sc.nextInt();\\n            System.out.println(mySqrt(x));\\n        }\\n    }\\n}\\n","python":"import sys\\n\\ndef my_sqrt(x):\\n    # TODO: Compute and return the integer square root of x in O(log x) time\\n    return 0\\n\\nif __name__ == \\"__main__\\":\\n    line = sys.stdin.read().strip()\\n    if line:\\n        x = int(line)\\n        print(my_sqrt(x))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction mySqrt(x) {\\n    // TODO: Compute and return the integer square root of x in O(log x) time\\n    return 0;\\n}\\n\\nconst input = fs.readFileSync(0, \'utf-8\').trim();\\nif (input) {\\n    const x = Number(input);\\n    console.log(mySqrt(x));\\n}\\n"}', NULL, NULL, NULL, 'Single non-negative integer x', 'Single integer representing integer square root', '0 <= x <= 2^31 - 1', '[{"input":"4","output":"2"},{"input":"8","output":"2"}]', '[{"id":"tc-1","input":"4","isPublic":true,"expectedOutput":"2"},{"id":"tc-2","input":"8","isPublic":true,"expectedOutput":"2"}]', '[{"id":"tc-3","input":"0","isPublic":false,"expectedOutput":"0"}]', '["Binary search on range [1, x // 2]. Check if mid * mid <= x."]', 'Binary search on monotonic function f(k) = k^2 <= x.', 3000, 256, '2026-09-10T10:36:28.828Z', '2026-09-10T10:36:28.828Z', 'chapter-dsa', 'topic-dsa-binary-search', 6),
+  ('challenge-dfs-1-islands', 'Number of Islands (DFS)', 'number-of-islands-dfs', 'Given an `m x n` 2D binary grid `grid` which represents a map of \'1\'s (land) and \'0\'s (water), return the number of islands.\nAn island is surrounded by water and is formed by connecting adjacent lands horizontally or vertically.', 'medium', 'DFS', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static int numIslands(char[][] grid) {\\n        // TODO: Count connected components of \'1\'s (islands) using DFS\\n        return 0;\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        List<char[]> rows = new ArrayList<>();\\n        while (sc.hasNextLine()) {\\n            String line = sc.nextLine().trim().replace(\\" \\", \\"\\");\\n            if (line.isEmpty()) continue;\\n            rows.add(line.toCharArray());\\n        }\\n        char[][] grid = rows.toArray(new char[0][]);\\n        System.out.println(numIslands(grid));\\n    }\\n}\\n","python":"import sys\\n\\ndef num_islands(grid):\\n    # TODO: Count connected components of \'1\'s (islands) using DFS\\n    return 0\\n\\nif __name__ == \\"__main__\\":\\n    lines = sys.stdin.read().strip().splitlines()\\n    if lines:\\n        grid = [list(line.strip().replace(\\" \\", \\"\\")) for line in lines if line.strip()]\\n        print(num_islands(grid))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction numIslands(grid) {\\n    // TODO: Count connected components of \'1\'s (islands) using DFS\\n    return 0;\\n}\\n\\nconst lines = fs.readFileSync(0, \'utf-8\').trim().split(\'\\\\n\');\\nif (lines.length > 0) {\\n    const grid = lines.filter(l => l.trim()).map(l => l.trim().replace(/\\\\s+/g, \'\').split(\'\'));\\n    console.log(numIslands(grid));\\n}\\n"}', NULL, NULL, NULL, 'Grid matrix of 1s and 0s separated by spaces', 'Single integer total island count', '1 <= m, n <= 300', '[{"input":"1 1 1 1 0\\n1 1 0 1 0\\n1 1 0 0 0\\n0 0 0 0 0","output":"1"}]', '[{"id":"tc-1","input":"1 1 1 1 0\\n1 1 0 1 0\\n1 1 0 0 0\\n0 0 0 0 0","isPublic":true,"expectedOutput":"1"}]', '[{"id":"tc-2","input":"1 1 0 0 0\\n1 1 0 0 0\\n0 0 1 0 0\\n0 0 0 1 1","isPublic":false,"expectedOutput":"3"}]', '["Whenever an unvisited \'1\' is reached, launch DFS to sink the entire connected land mass."]', 'Connected components traversal with DFS marks visited lands in O(R * C) time.', 3000, 256, '2026-09-10T10:36:28.829Z', '2026-09-10T10:36:28.829Z', 'chapter-dsa', 'topic-dsa-dfs', 1),
+  ('challenge-dfs-2-flood-fill', 'Flood Fill Algorithm', 'flood-fill-algorithm-dfs', 'An image is represented by an `m x n` integer grid `image` where `image[i][j]` represents the pixel value.\nYou are also given three integers `sr`, `sc`, and `color`. Perform a flood fill on the image starting from pixel `image[sr][sc]`.\n\nPrint the modified image rows.', 'easy', 'DFS', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static int[][] floodFill(int[][] image, int sr, int sc, int color) {\\n        // TODO: Perform flood fill from pixel (sr, sc) with new color using DFS\\n        return image;\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        List<int[]> rows = new ArrayList<>();\\n        while (sc.hasNextLine()) {\\n            String line = sc.nextLine().trim();\\n            if (line.isEmpty()) continue;\\n            String[] parts = line.split(\\"\\\\\\\\s+\\");\\n            int[] row = new int[parts.length];\\n            for (int i = 0; i < parts.length; i++) row[i] = Integer.parseInt(parts[i]);\\n            rows.add(row);\\n        }\\n        int[] params = rows.remove(rows.size() - 1);\\n        int sr = params[0], scCoord = params[1], color = params[2];\\n        int[][] image = rows.toArray(new int[0][]);\\n        int[][] res = floodFill(image, sr, scCoord, color);\\n        for (int[] row : res) {\\n            StringBuilder sb = new StringBuilder();\\n            for (int i = 0; i < row.length; i++) {\\n                sb.append(row[i]);\\n                if (i < row.length - 1) sb.append(\\" \\");\\n            }\\n            System.out.println(sb.toString());\\n        }\\n    }\\n}\\n","python":"import sys\\n\\ndef flood_fill(image, sr, sc, color):\\n    # TODO: Perform flood fill from pixel (sr, sc) with new color using DFS\\n    return image\\n\\nif __name__ == \\"__main__\\":\\n    lines = sys.stdin.read().strip().splitlines()\\n    if lines:\\n        # First lines are rows of image, last line has sr, sc, color\\n        params = [int(x) for x in lines[-1].split()]\\n        sr, sc_coord, color = params[0], params[1], params[2]\\n        image = [[int(x) for x in l.split()] for l in lines[:-1] if l.strip()]\\n        res = flood_fill(image, sr, sc_coord, color)\\n        for row in res:\\n            print(\\" \\".join(str(x) for x in row))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction floodFill(image, sr, sc, color) {\\n    // TODO: Perform flood fill from pixel (sr, sc) with new color using DFS\\n    return image;\\n}\\n\\nconst lines = fs.readFileSync(0, \'utf-8\').trim().split(\'\\\\n\').filter(l => l.trim());\\nif (lines.length >= 2) {\\n    const params = lines[lines.length - 1].trim().split(/\\\\s+/).map(Number);\\n    const [sr, sc, color] = params;\\n    const image = lines.slice(0, -1).map(l => l.trim().split(/\\\\s+/).map(Number));\\n    const res = floodFill(image, sr, sc, color);\\n    res.forEach(row => console.log(row.join(\' \')));\\n}\\n"}', NULL, NULL, NULL, 'Line 1: sr sc color\nLines 2+: image matrix rows', 'Modified matrix rows', '1 <= m, n <= 50', '[{"input":"1 1 2\\n1 1 1\\n1 1 0\\n1 0 1","output":"2 2 2\\n2 2 0\\n2 0 1"}]', '[{"id":"tc-1","input":"1 1 2\\n1 1 1\\n1 1 0\\n1 0 1","isPublic":true,"expectedOutput":"2 2 2\\n2 2 0\\n2 0 1"}]', '[{"id":"tc-2","input":"0 0 0\\n0 0 0\\n0 0 0","isPublic":false,"expectedOutput":"0 0 0\\n0 0 0"}]', '["Use recursion to re-color adjacent cells that share the original pixel value."]', 'Classic bucket fill algorithm recursively replacing connected matching pixels.', 3000, 256, '2026-09-10T10:36:28.829Z', '2026-09-10T10:36:28.829Z', 'chapter-dsa', 'topic-dsa-dfs', 2),
+  ('challenge-dfs-3-max-depth', 'Maximum Depth of Binary Tree', 'maximum-depth-of-binary-tree-dfs', 'Given a binary tree encoded in level-order format where \'null\' indicates missing nodes, return its maximum depth.\nA binary tree\'s maximum depth is the number of nodes along the longest path from the root node down to the farthest leaf node.', 'easy', 'DFS', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static int maxDepth(String[] nodes) {\\n        // TODO: Compute maximum depth of binary tree using recursive DFS\\n        return 0;\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String[] nodes = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        System.out.println(maxDepth(nodes));\\n    }\\n}\\n","python":"import sys\\n\\ndef max_depth(nodes):\\n    # TODO: Compute maximum depth of binary tree using recursive DFS\\n    return 0\\n\\nif __name__ == \\"__main__\\":\\n    line = sys.stdin.read().strip()\\n    if line:\\n        nodes = line.split()\\n        print(max_depth(nodes))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction maxDepth(nodes) {\\n    // TODO: Compute maximum depth of binary tree using recursive DFS\\n    return 0;\\n}\\n\\nconst input = fs.readFileSync(0, \'utf-8\').trim();\\nif (input) {\\n    const nodes = input.split(/\\\\s+/);\\n    console.log(maxDepth(nodes));\\n}\\n"}', NULL, NULL, NULL, 'Level order tree representation space-separated', 'Single integer maximum depth', 'Tree size <= 10^4', '[{"input":"3 9 20 null null 15 7","output":"3"},{"input":"1 null 2","output":"2"}]', '[{"id":"tc-1","input":"3 9 20 null null 15 7","isPublic":true,"expectedOutput":"3"},{"id":"tc-2","input":"1 null 2","isPublic":true,"expectedOutput":"2"}]', '[{"id":"tc-3","input":"1","isPublic":false,"expectedOutput":"1"}]', '["Depth of tree is 1 + max(depth(left), depth(right))."]', 'DFS recursively visits each subtree to evaluate maximum branch depth.', 3000, 256, '2026-09-10T10:36:28.829Z', '2026-09-10T10:36:28.829Z', 'chapter-dsa', 'topic-dsa-dfs', 3),
+  ('challenge-dfs-4-path-sum', 'Path Sum in Binary Tree', 'path-sum-binary-tree-dfs', 'Given a binary tree and an integer `targetSum`, return `true` if the tree has a root-to-leaf path such that adding up all the values along the path equals `targetSum`.\nA leaf is a node with no children.', 'easy', 'DFS', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static boolean hasPathSum(String[] nodes, int targetSum) {\\n        // TODO: Return true if tree has a root-to-leaf path summing to targetSum\\n        return false;\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String[] nodes = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        if (!sc.hasNextInt()) return;\\n        int target = sc.nextInt();\\n        System.out.println(hasPathSum(nodes, target) ? \\"true\\" : \\"false\\");\\n    }\\n}\\n","python":"import sys\\n\\ndef has_path_sum(nodes, target_sum):\\n    # TODO: Return True if tree has a root-to-leaf path summing to target_sum\\n    return False\\n\\nif __name__ == \\"__main__\\":\\n    lines = sys.stdin.read().strip().splitlines()\\n    if len(lines) >= 2:\\n        nodes = lines[0].split()\\n        target = int(lines[1])\\n        print(\\"true\\" if has_path_sum(nodes, target) else \\"false\\")\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction hasPathSum(nodes, targetSum) {\\n    // TODO: Return true if tree has a root-to-leaf path summing to targetSum\\n    return false;\\n}\\n\\nconst lines = fs.readFileSync(0, \'utf-8\').trim().split(\'\\\\n\');\\nif (lines.length >= 2) {\\n    const nodes = lines[0].trim().split(/\\\\s+/);\\n    const target = Number(lines[1].trim());\\n    console.log(hasPathSum(nodes, target) ? \\"true\\" : \\"false\\");\\n}\\n"}', NULL, NULL, NULL, 'Line 1: level order tree\nLine 2: target sum', '\'true\' or \'false\'', 'Number of nodes <= 5000', '[{"input":"5 4 8 11 null 13 4 7 2 null null null 1\\n22","output":"true"}]', '[{"id":"tc-1","input":"5 4 8 11 null 13 4 7 2 null null null 1\\n22","isPublic":true,"expectedOutput":"true"}]', '[{"id":"tc-2","input":"1 2 3\\n5","isPublic":false,"expectedOutput":"false"}]', '["Subtract current node value from target at each recursive step until reaching a leaf node."]', 'DFS recursively evaluates path accumulations from root down to all leaves.', 3000, 256, '2026-09-10T10:36:28.829Z', '2026-09-10T10:36:28.829Z', 'chapter-dsa', 'topic-dsa-dfs', 4),
+  ('challenge-dfs-5-target-sum-subsets', 'Target Sum Subsets (Backtracking DFS)', 'target-sum-subsets-dfs', 'You are given an integer array `nums` and an integer `target`.\nYou want to build an expression out of nums by adding one of the symbols \'+\' and \'-\' before each integer in nums and then concatenate all the integers.\nReturn the number of different expressions that you can build, which evaluate to `target`.', 'medium', 'DFS', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static String targetSumSubsets(int[] nums, int target) {\\n        // TODO: Use backtracking DFS to find all unique combinations of nums that sum to target\\n        return \\"[]\\";\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String[] parts = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        int[] nums = new int[parts.length];\\n        for (int i = 0; i < parts.length; i++) nums[i] = Integer.parseInt(parts[i]);\\n        if (!sc.hasNextInt()) return;\\n        int target = sc.nextInt();\\n        System.out.println(targetSumSubsets(nums, target));\\n    }\\n}\\n","python":"import sys\\nimport json\\n\\ndef target_sum_subsets(nums, target):\\n    # TODO: Use backtracking DFS to find all unique combinations of nums that sum to target\\n    return []\\n\\nif __name__ == \\"__main__\\":\\n    lines = sys.stdin.read().strip().splitlines()\\n    if len(lines) >= 2:\\n        nums = [int(x) for x in lines[0].split()]\\n        target = int(lines[1])\\n        res = target_sum_subsets(nums, target)\\n        print(json.dumps(res))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction targetSumSubsets(nums, target) {\\n    // TODO: Use backtracking DFS to find all unique combinations of nums that sum to target\\n    return [];\\n}\\n\\nconst lines = fs.readFileSync(0, \'utf-8\').trim().split(\'\\\\n\');\\nif (lines.length >= 2) {\\n    const nums = lines[0].trim().split(/\\\\s+/).map(Number);\\n    const target = Number(lines[1].trim());\\n    console.log(JSON.stringify(targetSumSubsets(nums, target)));\\n}\\n"}', NULL, NULL, NULL, 'Line 1: space-separated integers nums\nLine 2: integer target', 'Single integer total number of valid expressions', '1 <= nums.length <= 20\n0 <= nums[i] <= 1000', '[{"input":"1 1 1 1 1\\n3","output":"5"}]', '[{"id":"tc-1","input":"1 1 1 1 1\\n3","isPublic":true,"expectedOutput":"5"}]', '[{"id":"tc-2","input":"1 0\\n1","isPublic":false,"expectedOutput":"2"}]', '["At each index explore both +nums[i] and -nums[i] with memoization."]', 'Binary decision tree evaluated via depth-first search with state memoization.', 3000, 256, '2026-09-10T10:36:28.829Z', '2026-09-10T10:36:28.829Z', 'chapter-dsa', 'topic-dsa-dfs', 5),
+  ('challenge-lifo-4-simplify-path', 'Simplify Unix Path (LIFO Path Resolution)', 'simplify-unix-path-lifo', 'Given a string `path`, which is an absolute path (starting with a slash \'/\') to a file or directory in a Unix-style file system, convert it to the simplified canonical path.\n\nIn Unix-style:\n- A period \'.\' refers to the current directory.\n- A double period \'..\' refers to the parent directory (pop from LIFO stack).\n- Multiple consecutive slashes \'//\' are treated as a single slash \'/\'.\n\nReturn the simplified canonical path.', 'medium', 'LIFO Problems', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static String simplifyPath(String path) {\\n        // TODO: Simplify Unix file path using LIFO stack\\n        return \\"/\\";\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        String path = sc.hasNextLine() ? sc.nextLine().trim() : \\"\\";\\n        System.out.println(simplifyPath(path));\\n    }\\n}\\n","python":"import sys\\n\\ndef simplify_path(path):\\n    # TODO: Simplify Unix file path using LIFO stack\\n    return \\"/\\"\\n\\nif __name__ == \\"__main__\\":\\n    path = sys.stdin.read().strip()\\n    print(simplify_path(path))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction simplifyPath(path) {\\n    // TODO: Simplify Unix file path using LIFO stack\\n    return \\"/\\";\\n}\\n\\nconst input = fs.readFileSync(0, \'utf-8\').trim();\\nconsole.log(simplifyPath(input));\\n"}', NULL, NULL, NULL, 'Single line Unix path string', 'Canonical simplified Unix path', '1 <= path.length <= 3000', '[{"input":"/home/","output":"/home"},{"input":"/../","output":"/"}]', '[{"id":"tc-1","input":"/home/","isPublic":true,"expectedOutput":"/home"},{"id":"tc-2","input":"/../","isPublic":true,"expectedOutput":"/"}]', '[{"id":"tc-3","input":"/a/./b/../../c/","isPublic":false,"expectedOutput":"/c"}]', '["Split by \'/\' and push directory names to a LIFO stack. Pop on \'..\'."]', 'Directories are pushed sequentially; \'..\' pops the last inserted element obeying LIFO semantics.', 3000, 256, '2026-09-10T10:36:28.829Z', '2026-09-10T10:36:28.829Z', 'chapter-dsa', 'topic-dsa-lifo', 4),
+  ('challenge-lifo-5-min-stack', 'Min Stack Operations', 'min-stack-operations', 'Implement a LIFO stack that supports `push`, `pop`, and retrieving the minimum element in `O(1)` time.\nInput is a sequence of operations: `PUSH x`, `POP`, `MIN`.\nOutput the value of each `MIN` query on a new line.', 'medium', 'LIFO Problems', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\nclass MinStack {\\n    // TODO: Declare internal stacks for values and minimums\\n\\n    public MinStack() {\\n        // TODO: Initialize internal data structures\\n    }\\n\\n    public void push(int val) {\\n        // TODO: Push element onto stack\\n    }\\n\\n    public void pop() {\\n        // TODO: Remove element on top of stack\\n    }\\n\\n    public int top() {\\n        // TODO: Return top element\\n        return 0;\\n    }\\n\\n    public int getMin() {\\n        // TODO: Retrieve minimum element in stack\\n        return 0;\\n    }\\n}\\n\\npublic class Solution {\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String[] ops = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        if (!sc.hasNextLine()) return;\\n        String[] valStrs = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        int[] vals = new int[valStrs.length];\\n        for (int i = 0; i < valStrs.length; i++) {\\n            vals[i] = valStrs[i].equals(\\"null\\") ? 0 : Integer.parseInt(valStrs[i]);\\n        }\\n\\n        MinStack ms = new MinStack();\\n        List<String> out = new ArrayList<>();\\n        for (int i = 0; i < ops.length; i++) {\\n            if (ops[i].equals(\\"push\\")) ms.push(vals[i]);\\n            else if (ops[i].equals(\\"pop\\")) ms.pop();\\n            else if (ops[i].equals(\\"top\\")) out.add(String.valueOf(ms.top()));\\n            else if (ops[i].equals(\\"getMin\\")) out.add(String.valueOf(ms.getMin()));\\n        }\\n        System.out.println(String.join(\\" \\", out));\\n    }\\n}\\n","python":"import sys\\n\\nclass MinStack:\\n    def __init__(self):\\n        # TODO: Initialize stack data structures\\n        pass\\n\\n    def push(self, val: int) -> None:\\n        # TODO: Push element val onto stack\\n        pass\\n\\n    def pop(self) -> None:\\n        # TODO: Remove element on top of stack\\n        pass\\n\\n    def top(self) -> int:\\n        # TODO: Get top element\\n        return 0\\n\\n    def get_min(self) -> int:\\n        # TODO: Retrieve minimum element in stack\\n        return 0\\n\\ndef run_min_stack(ops, vals):\\n    ms = MinStack()\\n    out = []\\n    for op, val in zip(ops, vals):\\n        if op == \\"push\\":\\n            ms.push(val)\\n        elif op == \\"pop\\":\\n            ms.pop()\\n        elif op == \\"top\\":\\n            out.append(str(ms.top()))\\n        elif op == \\"getMin\\":\\n            out.append(str(ms.get_min()))\\n    return \\" \\".join(out)\\n\\nif __name__ == \\"__main__\\":\\n    lines = sys.stdin.read().strip().splitlines()\\n    if len(lines) >= 2:\\n        ops = lines[0].split()\\n        vals = [int(x) if x != \\"null\\" else 0 for x in lines[1].split()]\\n        print(run_min_stack(ops, vals))\\n","javascript":"const fs = require(\'fs\');\\n\\nclass MinStack {\\n    constructor() {\\n        // TODO: Initialize stack data structures\\n    }\\n\\n    push(val) {\\n        // TODO: Push element val onto stack\\n    }\\n\\n    pop() {\\n        // TODO: Remove element on top of stack\\n    }\\n\\n    top() {\\n        // TODO: Get top element\\n        return 0;\\n    }\\n\\n    getMin() {\\n        // TODO: Retrieve minimum element in stack\\n        return 0;\\n    }\\n}\\n\\nfunction runMinStack(ops, vals) {\\n    const ms = new MinStack();\\n    const out = [];\\n    for (let i = 0; i < ops.length; i++) {\\n        if (ops[i] === \\"push\\") ms.push(vals[i]);\\n        else if (ops[i] === \\"pop\\") ms.pop();\\n        else if (ops[i] === \\"top\\") out.push(ms.top());\\n        else if (ops[i] === \\"getMin\\") out.push(ms.getMin());\\n    }\\n    return out.join(\' \');\\n}\\n\\nconst lines = fs.readFileSync(0, \'utf-8\').trim().split(\'\\\\n\');\\nif (lines.length >= 2) {\\n    const ops = lines[0].trim().split(/\\\\s+/);\\n    const vals = lines[1].trim().split(/\\\\s+/).map(x => x === \\"null\\" ? 0 : Number(x));\\n    console.log(runMinStack(ops, vals));\\n}\\n"}', NULL, NULL, NULL, 'Multiple lines with commands: PUSH x, POP, MIN', 'Minimum values printed line by line', 'At most 10^4 operations', '[{"input":"PUSH -2\\nPUSH 0\\nPUSH -3\\nMIN\\nPOP\\nMIN","output":"-3\\n-2"}]', '[{"id":"tc-1","input":"PUSH -2\\nPUSH 0\\nPUSH -3\\nMIN\\nPOP\\nMIN","isPublic":true,"expectedOutput":"-3\\n-2"}]', '[{"id":"tc-2","input":"PUSH 5\\nMIN\\nPUSH 3\\nMIN","isPublic":false,"expectedOutput":"5\\n3"}]', '["Use an auxiliary min-stack that only tracks non-increasing minimums."]', 'Auxiliary stack stores prefix minimums with synchronized push and pop.', 3000, 256, '2026-09-10T10:36:28.829Z', '2026-09-10T10:36:28.829Z', 'chapter-dsa', 'topic-dsa-lifo', 5),
+  ('challenge-palindrome', 'Valid Palindrome String', 'valid-palindrome', 'A phrase is a palindrome if, after converting all uppercase letters into lowercase letters and removing all non-alphanumeric characters, it reads the same forward and backward.\n\nPrint `true` if the input is a valid palindrome, and `false` otherwise.', 'easy', 'Strings', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static boolean isPalindrome(String s) {\\n        // TODO: Write your palindrome validation logic here\\n        return false;\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        String s = sc.hasNextLine() ? sc.nextLine() : \\"\\";\\n        System.out.println(isPalindrome(s) ? \\"true\\" : \\"false\\");\\n    }\\n}\\n","python":"import sys\\nimport re\\n\\ndef is_palindrome(s):\\n    # TODO: Write your palindrome validation logic here\\n    return False\\n\\nif __name__ == \\"__main__\\":\\n    s = sys.stdin.read().rstrip(\'\\\\r\\\\n\')\\n    print(\\"true\\" if is_palindrome(s) else \\"false\\")\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction isPalindrome(s) {\\n    // TODO: Write your palindrome validation logic here\\n    return false;\\n}\\n\\nconst input = fs.readFileSync(0, \'utf-8\').replace(/[\\\\r\\\\n]+$/, \'\');\\nconsole.log(isPalindrome(input) ? \\"true\\" : \\"false\\");\\n"}', NULL, NULL, NULL, 'Single line string', '\'true\' or \'false\'', '1 <= s.length <= 10^5', '[{"input":"racecar","output":"true"},{"input":"hello","output":"false"}]', '[{"id":"tc-1","input":"racecar","isPublic":true,"expectedOutput":"true"},{"id":"tc-2","input":"hello","isPublic":true,"expectedOutput":"false"}]', '[{"id":"tc-3","input":"A man a plan a canal Panama","isPublic":false,"expectedOutput":"true"},{"id":"tc-4","input":"0P","isPublic":false,"expectedOutput":"false"}]', '["Filter out non-alphanumerics and compare string with its reverse."]', 'Sanitize characters to lowercase alphanumeric and test two pointers or reversed string equality.', 3000, 256, '2026-09-10T07:40:22.649Z', '2026-09-10T07:40:22.649Z', 'chapter-dsa', 'topic-dsa-strings', 1),
+  ('challenge-prime', 'Check If Prime Number', 'check-if-prime', 'Given an integer `n`, determine whether `n` is a prime number. A prime number is a natural number strictly greater than 1 that has no positive divisors other than 1 and itself.\n\nPrint `true` if `n` is prime, and `false` otherwise.', 'easy', 'Mathematics', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static boolean isPrime(long n) {\\n        // TODO: Write your primality test here\\n        return false;\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (sc.hasNextLong()) {\\n            long n = sc.nextLong();\\n            System.out.println(isPrime(n) ? \\"true\\" : \\"false\\");\\n        }\\n    }\\n}\\n","python":"import sys\\n\\ndef is_prime(n):\\n    # TODO: Write your primality test here\\n    return False\\n\\nif __name__ == \\"__main__\\":\\n    line = sys.stdin.read().strip()\\n    if line:\\n        n = int(line)\\n        print(\\"true\\" if is_prime(n) else \\"false\\")\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction isPrime(n) {\\n    // TODO: Write your primality test here\\n    return false;\\n}\\n\\nconst input = fs.readFileSync(0, \'utf-8\').trim();\\nif (input) {\\n    const n = Number(input);\\n    console.log(isPrime(n) ? \\"true\\" : \\"false\\");\\n}\\n"}', NULL, NULL, NULL, 'Single integer n', '\'true\' or \'false\'', '-10^9 <= n <= 10^9', '[{"input":"5","output":"true"},{"input":"4","output":"false"}]', '[{"id":"tc-1","input":"5","isPublic":true,"expectedOutput":"true"},{"id":"tc-2","input":"4","isPublic":true,"expectedOutput":"false"}]', '[{"id":"tc-3","input":"1","isPublic":false,"expectedOutput":"false"},{"id":"tc-4","input":"2","isPublic":false,"expectedOutput":"true"},{"id":"tc-5","input":"29","isPublic":false,"expectedOutput":"true"},{"id":"tc-6","input":"100","isPublic":false,"expectedOutput":"false"}]', '["Numbers less than or equal to 1 are not prime.","2 is the only even prime number.","You only need to check divisors up to the square root of n."]', 'Check base cases, then skip multiples of 2 and 3. Loop from 5 up to sqrt(n) with step 6.', 3000, 256, '2026-09-10T07:40:22.649Z', '2026-09-10T07:40:22.649Z', 'chapter-python', 'topic-py-basics', 1),
+  ('challenge-reverse-words', 'Reverse Words in a String', 'reverse-words', 'Given an input string `s`, reverse the order of the words.\n\nA word is defined as a sequence of non-space characters. The words in `s` will be separated by at least one space.\n\nReturn a string of the words in reverse order concatenated by a single space.', 'medium', 'Strings', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static String reverseWords(String s) {\\n        // TODO: Write your logic to reverse the words in s\\n        return \\"\\";\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        String s = sc.hasNextLine() ? sc.nextLine().trim() : \\"\\";\\n        System.out.println(reverseWords(s));\\n    }\\n}\\n","python":"import sys\\n\\ndef reverse_words(s):\\n    # TODO: Write your logic to reverse the words in s\\n    return \\"\\"\\n\\nif __name__ == \\"__main__\\":\\n    s = sys.stdin.read().strip()\\n    print(reverse_words(s))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction reverseWords(s) {\\n    // TODO: Write your logic to reverse the words in s\\n    return \\"\\";\\n}\\n\\nconst input = fs.readFileSync(0, \'utf-8\').trim();\\nconsole.log(reverseWords(input));\\n"}', NULL, NULL, NULL, 'Single string containing words separated by whitespace', 'Single string with words reversed and single spaced', '1 <= s.length <= 10^4', '[{"input":"the sky is blue","output":"blue is sky the"},{"input":"  hello world  ","output":"world hello"}]', '[{"id":"tc-1","input":"the sky is blue","isPublic":true,"expectedOutput":"blue is sky the"},{"id":"tc-2","input":"  hello world  ","isPublic":true,"expectedOutput":"world hello"}]', '[{"id":"tc-3","input":"a good   example","isPublic":false,"expectedOutput":"example good a"},{"id":"tc-4","input":"single","isPublic":false,"expectedOutput":"single"}]', '["Split by regular expression for one or more whitespaces, reverse list, and join with space."]', 'Tokenize words ignoring variable length whitespace, then reconstruct in reverse order.', 3000, 256, '2026-09-10T07:40:22.649Z', '2026-09-10T07:40:22.649Z', 'chapter-dsa', 'topic-dsa-strings', 2),
+  ('challenge-sql-grades', 'Highest Scoring Students by Department', 'sql-highest-scoring-students', 'You are given a table named `students` with columns: `id`, `name`, `department`, `score`.\n\nWrite an SQL query to retrieve the `name`, `department`, and `score` of all students who scored 85 or above, ordered by `score` in descending order.', 'easy', 'Database & SQL', 'programming', '["sql"]', '{"sql":"-- Write your SQL query below:\\n-- Select name, department, score for students with score >= 85\\n-- ordered by score DESC\\n\\n"}', NULL, NULL, NULL, 'students table with (id, name, department, score)', 'Pipe-delimited records matching: name|department|score', 'Scores are integers between 0 and 100', '[{"input":"RUN_DEFAULT_TEST","output":"Alice|Computer Science|95\\nCharlie|Electrical|90\\nEve|Computer Science|88"}]', '[{"id":"tc-1","input":"RUN_DEFAULT_TEST","isPublic":true,"expectedOutput":"Alice|Computer Science|95\\nCharlie|Electrical|90\\nEve|Computer Science|88"}]', '[{"id":"tc-2","input":"RUN_EXTENDED_TEST","isPublic":false,"expectedOutput":"Alice|Computer Science|95\\nCharlie|Electrical|90\\nEve|Computer Science|88"}]', '["Filter with WHERE score >= 85 and sort with ORDER BY score DESC."]', 'Standard SELECT with conditional predicate and DESC order.', 3000, 256, '2026-09-10T07:40:22.649Z', '2026-09-10T07:40:22.649Z', 'chapter-sql', 'topic-sql-basics', 1),
+  ('challenge-stk-1-valid-parentheses', 'Valid Parentheses', 'valid-parentheses', 'Given a string `s` containing just the characters \'(\', \')\', \'{\', \'}\', \'[\' and \']\', determine if the input string is valid.\n\nAn input string is valid if:\n1. Open brackets must be closed by the same type of brackets.\n2. Open brackets must be closed in the correct order.\n3. Every close bracket has a corresponding open bracket of the same type.\n\nPrint `true` or `false`.', 'easy', 'Stack', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static boolean isValid(String s) {\\n        // TODO: Use stack to determine if the input brackets are valid\\n        return false;\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        String s = sc.hasNextLine() ? sc.nextLine().trim() : \\"\\";\\n        System.out.println(isValid(s) ? \\"true\\" : \\"false\\");\\n    }\\n}\\n","python":"import sys\\n\\ndef is_valid(s):\\n    # TODO: Use stack to determine if the input brackets are valid\\n    return False\\n\\nif __name__ == \\"__main__\\":\\n    s = sys.stdin.read().strip()\\n    print(\\"true\\" if is_valid(s) else \\"false\\")\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction isValid(s) {\\n    // TODO: Use stack to determine if the input brackets are valid\\n    return false;\\n}\\n\\nconst input = fs.readFileSync(0, \'utf-8\').trim();\\nconsole.log(isValid(input) ? \\"true\\" : \\"false\\");\\n"}', NULL, NULL, NULL, 'Single line string s', '\'true\' or \'false\'', '1 <= s.length <= 10^4', '[{"input":"()","output":"true"},{"input":"()[]{}","output":"true"}]', '[{"id":"tc-1","input":"()","isPublic":true,"expectedOutput":"true"},{"id":"tc-2","input":"()[]{}","isPublic":true,"expectedOutput":"true"}]', '[{"id":"tc-3","input":"([)]","isPublic":false,"expectedOutput":"false"}]', '["Push closing bracket counterparts to stack when seeing openers."]', 'Classic LIFO stack data structure: each closing bracket must match the most recently pushed opening bracket.', 3000, 256, '2026-09-10T10:36:28.829Z', '2026-09-10T10:36:28.829Z', 'chapter-dsa', 'topic-dsa-stack', 1),
+  ('challenge-stk-2-eval-rpn', 'Evaluate Reverse Polish Notation', 'evaluate-reverse-polish-notation', 'Evaluate the value of an arithmetic expression in Reverse Polish Notation (Postfix).\nValid operators are `+`, `-`, `*`, and `/`. Each operand may be an integer or another expression.\nDivision between two integers should truncate toward zero.', 'medium', 'Stack', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static int evalRPN(String[] tokens) {\\n        // TODO: Evaluate arithmetic expression in Reverse Polish Notation using stack\\n        return 0;\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String[] tokens = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        System.out.println(evalRPN(tokens));\\n    }\\n}\\n","python":"import sys\\n\\ndef eval_rpn(tokens):\\n    # TODO: Evaluate arithmetic expression in Reverse Polish Notation using stack\\n    return 0\\n\\nif __name__ == \\"__main__\\":\\n    line = sys.stdin.read().strip()\\n    if line:\\n        tokens = line.split()\\n        print(eval_rpn(tokens))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction evalRPN(tokens) {\\n    // TODO: Evaluate arithmetic expression in Reverse Polish Notation using stack\\n    return 0;\\n}\\n\\nconst input = fs.readFileSync(0, \'utf-8\').trim();\\nif (input) {\\n    const tokens = input.split(/\\\\s+/);\\n    console.log(evalRPN(tokens));\\n}\\n"}', NULL, NULL, NULL, 'Space-separated postfix tokens on one line', 'Single integer evaluated result', '1 <= tokens.length <= 10^4', '[{"input":"2 1 + 3 *","output":"9"},{"input":"4 13 5 / +","output":"6"}]', '[{"id":"tc-1","input":"2 1 + 3 *","isPublic":true,"expectedOutput":"9"},{"id":"tc-2","input":"4 13 5 / +","isPublic":true,"expectedOutput":"6"}]', '[{"id":"tc-3","input":"10 6 9 3 + -11 * / * 17 + 5 +","isPublic":false,"expectedOutput":"22"}]', '["Push numbers onto stack. When encountering an operator, pop the two most recent operands and apply."]', 'Postfix notation naturally matches the stack\'s LIFO evaluation model.', 3000, 256, '2026-09-10T10:36:28.829Z', '2026-09-10T10:36:28.829Z', 'chapter-dsa', 'topic-dsa-stack', 2),
+  ('challenge-stk-3-daily-temperatures', 'Daily Temperatures (Monotonic Stack)', 'daily-temperatures-monotonic-stack', 'Given an array of integers `temperatures` represents the daily temperatures, return an array `answer` such that `answer[i]` is the number of days you have to wait after the `i-th` day to get a warmer temperature. If there is no future day for which this is possible, keep `answer[i] == 0` instead.\n\nPrint space-separated waiting days.', 'medium', 'Stack', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static int[] dailyTemperatures(int[] temperatures) {\\n        // TODO: Use monotonic stack to calculate days until a warmer temperature\\n        return new int[0];\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String[] parts = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        int[] temps = new int[parts.length];\\n        for (int i = 0; i < parts.length; i++) temps[i] = Integer.parseInt(parts[i]);\\n        int[] res = dailyTemperatures(temps);\\n        StringBuilder sb = new StringBuilder();\\n        for (int i = 0; i < res.length; i++) {\\n            sb.append(res[i]);\\n            if (i < res.length - 1) sb.append(\\" \\");\\n        }\\n        System.out.println(sb.toString());\\n    }\\n}\\n","python":"import sys\\n\\ndef daily_temperatures(temperatures):\\n    # TODO: Use monotonic stack to calculate days until a warmer temperature\\n    return []\\n\\nif __name__ == \\"__main__\\":\\n    line = sys.stdin.read().strip()\\n    if line:\\n        temps = [int(x) for x in line.split()]\\n        print(\\" \\".join(str(x) for x in daily_temperatures(temps)))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction dailyTemperatures(temperatures) {\\n    // TODO: Use monotonic stack to calculate days until a warmer temperature\\n    return [];\\n}\\n\\nconst input = fs.readFileSync(0, \'utf-8\').trim();\\nif (input) {\\n    const temps = input.split(/\\\\s+/).map(Number);\\n    console.log(dailyTemperatures(temps).join(\' \'));\\n}\\n"}', NULL, NULL, NULL, 'Single line of space-separated temperatures', 'Single line of space-separated waiting days', '1 <= temperatures.length <= 10^5', '[{"input":"73 74 75 71 69 72 76 73","output":"1 1 4 2 1 1 0 0"}]', '[{"id":"tc-1","input":"73 74 75 71 69 72 76 73","isPublic":true,"expectedOutput":"1 1 4 2 1 1 0 0"}]', '[{"id":"tc-2","input":"30 40 50 60","isPublic":false,"expectedOutput":"1 1 1 0"}]', '["Maintain a decreasing monotonic stack of indices."]', 'Monotonic decreasing stack resolves the next greater element in amortized O(n) time.', 3000, 256, '2026-09-10T10:36:28.829Z', '2026-09-10T10:36:28.829Z', 'chapter-dsa', 'topic-dsa-stack', 3),
+  ('challenge-stk-6-next-greater', 'Next Greater Element', 'next-greater-element', 'Given an array `nums`, find the first greater element for each element in the array.\nThe next greater element of an element `x` is the first greater element to its right.\nIf it does not exist, return `-1` for this number.\n\nPrint space-separated next greater values.', 'medium', 'Stack', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static int[] nextGreaterElements(int[] nums) {\\n        // TODO: Return next greater element for each number using stack\\n        return new int[0];\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String[] parts = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        int[] nums = new int[parts.length];\\n        for (int i = 0; i < parts.length; i++) nums[i] = Integer.parseInt(parts[i]);\\n        int[] res = nextGreaterElements(nums);\\n        StringBuilder sb = new StringBuilder();\\n        for (int i = 0; i < res.length; i++) {\\n            sb.append(res[i]);\\n            if (i < res.length - 1) sb.append(\\" \\");\\n        }\\n        System.out.println(sb.toString());\\n    }\\n}\\n","python":"import sys\\n\\ndef next_greater_elements(nums):\\n    # TODO: Return next greater element for each number using stack\\n    return []\\n\\nif __name__ == \\"__main__\\":\\n    line = sys.stdin.read().strip()\\n    if line:\\n        nums = [int(x) for x in line.split()]\\n        print(\\" \\".join(str(x) for x in next_greater_elements(nums)))\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction nextGreaterElements(nums) {\\n    // TODO: Return next greater element for each number using stack\\n    return [];\\n}\\n\\nconst input = fs.readFileSync(0, \'utf-8\').trim();\\nif (input) {\\n    const nums = input.split(/\\\\s+/).map(Number);\\n    console.log(nextGreaterElements(nums).join(\' \'));\\n}\\n"}', NULL, NULL, NULL, 'Single line of space-separated integers', 'Single line of space-separated next greater integers', '1 <= nums.length <= 10^5', '[{"input":"4 5 2 25","output":"5 25 25 -1"}]', '[{"id":"tc-1","input":"4 5 2 25","isPublic":true,"expectedOutput":"5 25 25 -1"}]', '[{"id":"tc-2","input":"1 2 3 4 5","isPublic":false,"expectedOutput":"2 3 4 5 -1"}]', '["Iterate from left to right pushing indices to stack, popping whenever current element is strictly greater."]', 'Monotonic stack efficiently records the first strictly larger element for every index.', 3000, 256, '2026-09-10T10:36:28.829Z', '2026-09-10T10:36:28.829Z', 'chapter-dsa', 'topic-dsa-stack', 6),
+  ('challenge-two-sum', 'Two Sum', 'two-sum', 'Given an array of integers `nums` and an integer `target`, return indices of the two numbers such that they add up to `target`.\n\nYou may assume that each input would have exactly one solution, and you may not use the same element twice.\n\nPrint the two space-separated indices in ascending order.', 'easy', 'Arrays & Hashing', 'programming', '["python","javascript","java"]', '{"java":"import java.util.*;\\n\\npublic class Solution {\\n    public static String twoSum(int[] nums, int target) {\\n        // TODO: Write your solution here\\n        return \\"\\";\\n    }\\n\\n    public static void main(String[] args) {\\n        Scanner sc = new Scanner(System.in);\\n        if (!sc.hasNextLine()) return;\\n        String[] parts = sc.nextLine().trim().split(\\"\\\\\\\\s+\\");\\n        int[] nums = new int[parts.length];\\n        for (int i = 0; i < parts.length; i++) nums[i] = Integer.parseInt(parts[i]);\\n        if (!sc.hasNextInt()) return;\\n        int target = sc.nextInt();\\n        String res = twoSum(nums, target);\\n        if (res != null && !res.isEmpty()) {\\n            System.out.println(res);\\n        }\\n    }\\n}\\n","python":"import sys\\n\\ndef two_sum(nums, target):\\n    # TODO: Write your solution here\\n    return \\"\\"\\n\\nif __name__ == \\"__main__\\":\\n    lines = sys.stdin.read().strip().splitlines()\\n    if len(lines) >= 2:\\n        nums = [int(x) for x in lines[0].split()]\\n        target = int(lines[1])\\n        res = two_sum(nums, target)\\n        if res:\\n            print(res)\\n","javascript":"const fs = require(\'fs\');\\n\\nfunction twoSum(nums, target) {\\n    // TODO: Write your solution here\\n    return \\"\\";\\n}\\n\\nconst input = fs.readFileSync(0, \'utf-8\').trim().split(\'\\\\n\');\\nif (input.length >= 2) {\\n    const nums = input[0].trim().split(/\\\\s+/).map(Number);\\n    const target = Number(input[1].trim());\\n    const res = twoSum(nums, target);\\n    if (res) console.log(res);\\n}\\n"}', NULL, NULL, NULL, 'Line 1: space-separated integers for nums\nLine 2: single target integer', 'Two space-separated indices (e.g. \'0 1\')', '2 <= nums.length <= 10^4\n-10^9 <= nums[i] <= 10^9\n-10^9 <= target <= 10^9', '[{"input":"2 7 11 15\\n9","output":"0 1","explanation":"nums[0] + nums[1] == 9, so output is 0 1"},{"input":"3 2 4\\n6","output":"1 2","explanation":"nums[1] + nums[2] == 6, so output is 1 2"}]', '[{"id":"tc-1","input":"2 7 11 15\\n9","isPublic":true,"expectedOutput":"0 1"},{"id":"tc-2","input":"3 2 4\\n6","isPublic":true,"expectedOutput":"1 2"}]', '[{"id":"tc-3","input":"3 3\\n6","isPublic":false,"expectedOutput":"0 1"},{"id":"tc-4","input":"1 5 8 12 14\\n20","isPublic":false,"expectedOutput":"2 3"},{"id":"tc-5","input":"-1 -2 -3 -4 -5\\n-8","isPublic":false,"expectedOutput":"2 4"}]', '["A brute force approach checks all pairs in O(n^2) time.","Can you use a hash map to store previously seen numbers and their indices in O(n) time?"]', 'Iterate through the array while maintaining a hash map of value -> index. For each element x, check if target - x is already in the map. If so, return its index and current index.', 3000, 256, '2026-09-10T07:40:22.648Z', '2026-09-10T07:40:22.649Z', 'chapter-dsa', 'topic-dsa-arrays', 0),
+  ('challenge-web-counter', 'Interactive Counter Application', 'web-interactive-counter', 'Build a functional digital counter with Increment, Decrement, and Reset controls. Dynamically style the counter text: green when positive, red when negative, and slate when zero.', 'easy', 'Web Development', 'web', '["html","css","javascript"]', '{}', '<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <title>Interactive Counter</title>\n</head>\n<body>\n  <div class="counter-card">\n    <h2>Interactive Counter</h2>\n    <div id="counterValue" class="count zero">0</div>\n    <div class="btn-group">\n      <button id="decBtn" class="btn btn-danger">- Decrement</button>\n      <button id="resetBtn" class="btn btn-neutral">Reset</button>\n      <button id="incBtn" class="btn btn-success">+ Increment</button>\n    </div>\n  </div>\n</body>\n</html>', 'body {\n  background: #0f172a;\n  color: #f8fafc;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  min-height: 100vh;\n  margin: 0;\n  font-family: sans-serif;\n}\n.counter-card {\n  background: #1e293b;\n  padding: 2.5rem;\n  border-radius: 1rem;\n  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);\n  text-align: center;\n}\n.count {\n  font-size: 4rem;\n  font-weight: 800;\n  margin: 1.5rem 0;\n  font-family: monospace;\n}\n.count.positive { color: #10b981; }\n.count.negative { color: #ef4444; }\n.count.zero { color: #94a3b8; }\n.btn-group { display: flex; gap: 0.75rem; }\n.btn {\n  padding: 0.75rem 1.25rem;\n  border: none;\n  border-radius: 0.5rem;\n  font-weight: 600;\n  cursor: pointer;\n}\n.btn-success { background: #059669; color: white; }\n.btn-danger { background: #dc2626; color: white; }\n.btn-neutral { background: #475569; color: white; }', '// TODO: Implement interactive counter\n// 1. Maintain the current count state variable\n// 2. Add event listeners for #incBtn, #decBtn, and #resetBtn\n// 3. Update #counterValue text and color classes (.positive, .negative, .zero)\n\nlet count = 0;\nconst valEl = document.getElementById(\'counterValue\');\n\nfunction updateDisplay() {\n  // Write display update logic\n}\n', 'Interactive browser controls', 'Dynamic DOM counter updates', 'State persistence in memory, dynamic class switching', '[]', '[]', '[]', '["Use addEventListener or onclick handlers to update variable and DOM."]', 'Event listeners update count variable and mutate DOM class list for color states.', 3000, 256, '2026-09-10T07:40:22.649Z', '2026-09-10T07:40:22.649Z', 'chapter-web', 'topic-web-dom', 1),
+  ('challenge-web-form-val', 'Client-side Form Validation', 'web-client-form-validation', 'Build an interactive registration form with real-time field validation for Email format, Password length (>= 8 chars), and Terms checkbox agreement with dynamic error banners.', 'medium', 'Web Development', 'web', '["html","css","javascript"]', '{}', '<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <title>Account Registration</title>\n</head>\n<body>\n  <div class="card">\n    <h2>Student Registration</h2>\n    <form id="regForm">\n      <div class="field">\n        <label>Email Address</label>\n        <input type="text" id="email" placeholder="student@domain.com">\n        <span class="err" id="emailErr"></span>\n      </div>\n      <div class="field">\n        <label>Password</label>\n        <input type="password" id="password" placeholder="At least 8 characters">\n        <span class="err" id="passErr"></span>\n      </div>\n      <div class="field check">\n        <input type="checkbox" id="terms">\n        <label for="terms">I agree to LMS Code of Conduct</label>\n      </div>\n      <button type="submit" id="submitBtn">Create Account</button>\n      <div id="successMsg" class="success hidden">Registration Successful!</div>\n    </form>\n  </div>\n</body>\n</html>', 'body {\n  background: #0f172a;\n  color: #f8fafc;\n  font-family: system-ui, sans-serif;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n  min-height: 100vh;\n  margin: 0;\n}\n.card {\n  background: #1e293b;\n  padding: 2rem;\n  border-radius: 12px;\n  width: 100%;\n  max-width: 400px;\n}\n.field { margin-bottom: 1.25rem; }\nlabel { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; color: #cbd5e1; }\ninput[type="text"], input[type="password"] {\n  width: 100%;\n  padding: 10px;\n  border-radius: 6px;\n  border: 1px solid #334155;\n  background: #0f172a;\n  color: white;\n  box-sizing: border-box;\n}\n.err { color: #f87171; font-size: 0.8rem; display: block; margin-top: 4px; }\n.check { display: flex; align-items: center; gap: 8px; }\n.check label { margin-bottom: 0; }\nbutton {\n  width: 100%;\n  padding: 10px;\n  background: #3b82f6;\n  color: white;\n  border: none;\n  border-radius: 6px;\n  font-weight: 600;\n  cursor: pointer;\n}\nbutton:hover { background: #2563eb; }\n.success { margin-top: 1rem; padding: 10px; background: #065f46; color: #6ee7b7; border-radius: 6px; text-align: center; }\n.hidden { display: none; }', '// TODO: Implement client-side form validation\n// 1. Listen for form submit on #regForm\n// 2. Validate email (must contain \'@\' and \'.\')\n// 3. Validate password (length >= 8)\n// 4. Validate terms checkbox is checked\n// 5. Display error messages in #emailErr, #passErr or reveal #successMsg\n\nconst form = document.getElementById(\'regForm\');\nconst email = document.getElementById(\'email\');\nconst pass = document.getElementById(\'password\');\nconst terms = document.getElementById(\'terms\');\n\nform.onsubmit = (e) => {\n  e.preventDefault();\n  // Write your validation logic here\n};\n', 'Interactive browser inputs', 'Interactive form submission feedback', 'Client-side validation preventing invalid submission', '[]', '[]', '[]', '["Use preventDefault to stop standard browser reload and execute checks."]', 'JavaScript intercepts submit events, validates values against regex/length conditions, and displays messages.', 3000, 256, '2026-09-10T10:36:28.829Z', '2026-09-10T10:36:28.829Z', 'chapter-web', 'topic-web-forms', 1),
+  ('challenge-web-navbar', 'Build a Responsive Navigation Bar', 'web-responsive-navbar', 'Design and implement a modern, responsive navigation header with brand logo, navigation links, and an interactive CTA button. Verify how it renders on mobile, tablet, and desktop viewports in the live preview.', 'easy', 'Web Development', 'web', '["html","css","javascript"]', '{}', '<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>Responsive Navbar</title>\n</head>\n<body>\n  <nav class="navbar">\n    <div class="logo">MR-<span>TECH</span></div>\n    <ul class="nav-links" id="navLinks">\n      <li><a href="#home" class="active">Home</a></li>\n      <li><a href="#courses">Courses</a></li>\n      <li><a href="#practice">Practice</a></li>\n      <li><a href="#about">About</a></li>\n    </ul>\n    <button class="cta-btn" id="ctaBtn">Contact Us</button>\n  </nav>\n\n  <main class="content">\n    <h1>MR-TECHNOLOGIES Learning Lab</h1>\n    <p>Practice cutting-edge web design and software engineering skills.</p>\n  </main>\n</body>\n</html>', '* {\n  box-sizing: border-box;\n  margin: 0;\n  padding: 0;\n  font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif;\n}\n\nbody {\n  background: #0f172a;\n  color: #f8fafc;\n  min-height: 100vh;\n}\n\n.navbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  padding: 1rem 2rem;\n  background: #1e293b;\n  border-bottom: 1px solid #334155;\n}\n\n.logo {\n  font-size: 1.25rem;\n  font-weight: 800;\n  letter-spacing: 0.05em;\n  color: #ffffff;\n}\n\n.logo span {\n  color: #38bdf8;\n}\n\n.nav-links {\n  display: flex;\n  gap: 1.5rem;\n  list-style: none;\n}\n\n.nav-links a {\n  color: #94a3b8;\n  text-decoration: none;\n  font-size: 0.9rem;\n  font-weight: 500;\n  transition: color 0.2s;\n}\n\n.nav-links a:hover,\n.nav-links a.active {\n  color: #38bdf8;\n}\n\n.cta-btn {\n  background: #2563eb;\n  color: white;\n  border: none;\n  padding: 0.5rem 1.25rem;\n  border-radius: 8px;\n  font-weight: 600;\n  cursor: pointer;\n  transition: background 0.2s;\n}\n\n.cta-btn:hover {\n  background: #1d4ed8;\n}\n\n.content {\n  padding: 4rem 2rem;\n  text-align: center;\n}\n\n.content h1 {\n  font-size: 2.25rem;\n  margin-bottom: 1rem;\n}\n\n.content p {\n  color: #94a3b8;\n}', '// Responsive Navigation Bar\n// TODO: Add interactive mobile menu toggle or event listeners if required\nconst ctaBtn = document.getElementById(\'ctaBtn\');\nif (ctaBtn) {\n  ctaBtn.addEventListener(\'click\', () => {\n    // Action when CTA button is clicked\n  });\n}\n', 'Interactive HTML / CSS / JS Preview', 'Rendered interactive webpage', 'Semantic HTML5, CSS Flexbox/Grid, vanilla JS', '[{"input":"Render page","output":"Interactive navbar with logo and styled links"}]', '[{"id":"tc-web-1","input":"check-dom","isPublic":true,"expectedOutput":"navbar-rendered"}]', '[]', '["Use flexbox on the navbar container for clean horizontal alignment."]', 'A standard flexbox navbar with responsive layout and semantic markup.', 3000, 256, '2026-09-10T07:40:22.649Z', '2026-09-10T07:40:22.649Z', 'chapter-web', 'topic-web-css-layout', 1),
+  ('challenge-web-todo', 'Interactive Todo List with Filter', 'web-todo-list', 'Build a clean task management widget. Implement features to append new items, toggle completed state, and delete items from the list with dynamic counter updates.', 'medium', 'Web Development', 'web', '["html","css","javascript"]', '{}', '<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <title>Task Tracker</title>\n</head>\n<body>\n  <div class="todo-app">\n    <h1>Today\'s Goals</h1>\n    <div class="input-row">\n      <input type="text" id="taskInput" placeholder="Enter a new coding goal...">\n      <button id="addBtn">Add Task</button>\n    </div>\n    <ul id="taskList">\n      <li class="done">Complete Algorithms Practice <button class="del">x</button></li>\n      <li>Review System Design Whitepaper <button class="del">x</button></li>\n    </ul>\n  </div>\n</body>\n</html>', 'body {\n  background: #0b0f19;\n  color: #f1f5f9;\n  font-family: sans-serif;\n  display: flex;\n  justify-content: center;\n  padding: 3rem 1rem;\n}\n.todo-app {\n  width: 100%;\n  max-width: 440px;\n  background: #1e293b;\n  padding: 2rem;\n  border-radius: 16px;\n}\n.input-row { display: flex; gap: 8px; margin: 1.5rem 0; }\ninput { flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: white; }\nbutton { background: #2563eb; color: white; border: none; border-radius: 8px; padding: 10px 16px; font-weight: 600; cursor: pointer; }\nul { list-style: none; padding: 0; }\nli { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #0f172a; margin-bottom: 8px; border-radius: 8px; cursor: pointer; }\nli.done { text-decoration: line-through; opacity: 0.6; }\n.del { background: #ef4444; padding: 4px 8px; font-size: 11px; }', '// TODO: Implement Todo List functionality\n// 1. Add new todo item to #taskList when #addBtn is clicked or Enter is pressed\n// 2. Toggle \'done\' class when a list item is clicked\n// 3. Remove the list item when the delete (.del) button is clicked\n\nconst input = document.getElementById(\'taskInput\');\nconst addBtn = document.getElementById(\'addBtn\');\nconst list = document.getElementById(\'taskList\');\n\n// Write your event handlers here\n', 'DOM input events', 'Rendered list manipulation', 'Event delegation on list element', '[]', '[]', '[]', '["Use event delegation on the <ul> element to handle click toggles and deletions."]', 'Event delegation captures clicks on li elements and delete buttons cleanly.', 3000, 256, '2026-09-10T07:40:22.649Z', '2026-09-10T07:40:22.649Z', 'chapter-web', 'topic-web-projects', 1)
+ON DUPLICATE KEY UPDATE `id` = `id`;
+
+-- ---------------------------------------------------------------------
+-- 4. Default Development Administrator
+-- Initial credentials: admin@lms.com / Admin@123
+-- In production, create additional administrators with 'npm run create-admin'
+-- ---------------------------------------------------------------------
+INSERT INTO `users` (
+  `id`, `organizationId`, `name`, `email`, `role`, `profilePhoto`, `status`, `bookmarkedBlogIds`, `passwordHash`, `createdAt`
+) VALUES (
+  'usr-default-admin-01',
+  'org-default',
+  'System Administrator',
+  'admin@lms.com',
+  'admin',
+  NULL,
+  'active',
+  '[]',
+  '$2b$10$naEks3wN2eheRtj5DVmpqOwVo1O49td.hmcdM8BJHTQTgT31TEu/m',
+  '2026-09-28T11:06:32.000Z'
+) ON DUPLICATE KEY UPDATE `email` = VALUES(`email`);
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- =====================================================================
+-- Setup Complete!
+-- =====================================================================

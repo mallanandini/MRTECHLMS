@@ -73,32 +73,22 @@ export function StudentLogin() {
   return (
     <div 
       style={{ backgroundColor: "var(--theme-background)", color: "var(--theme-text)" }}
-      className="min-h-screen flex flex-col font-sans transition-colors duration-200"
+      className="min-h-screen flex flex-col lg:flex-row font-sans transition-colors duration-200"
     >
-      {/* Header */}
-      <header 
-        style={{ backgroundColor: "var(--theme-surface)", borderColor: "var(--theme-border)" }}
-        className="border-b px-4 sm:px-8 py-3.5 flex items-center justify-between"
-      >
-        <Link to="/" className="flex items-center gap-2.5 text-xs font-semibold hover:opacity-80 transition" style={{ color: "var(--theme-text)" }}>
-          <ArrowLeft className="w-4 h-4" />
-          <img 
-            src="/mr-logo-icon.png" 
-            alt="MR Logo" 
-            className="w-5 h-5 object-contain brand-logo-preserve" 
-            style={{ filter: "none", mixBlendMode: "normal", opacity: 1 }}
-          />
-          <span>Back to Home</span>
-        </Link>
-        <ThemeQuickControls />
-      </header>
+      {/* =========================================================================
+          LEFT COLUMN: STUDENT CAMPUS & LEARNING ECOSYSTEM SHOWCASE (Desktop / Tablet)
+          ========================================================================= */}
+      <aside className="lg:w-1/2 relative overflow-hidden bg-slate-950 text-white flex flex-col justify-between p-8 sm:p-12 lg:p-16 border-b lg:border-b-0 lg:border-r border-slate-800">
+        {/* Subtle Ambient Background Gradients & Glow */}
+        <div className="absolute inset-0 bg-radial from-blue-900/30 via-slate-950 to-slate-950 pointer-events-none" />
+        <div className="absolute -top-32 -left-32 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b0f_1px,transparent_1px),linear-gradient(to_bottom,#1e293b0f_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
 
-      {/* Main Login Card */}
-      <main className="flex-1 flex flex-col justify-center items-center px-4 py-12 sm:px-6 lg:px-8">
-        <div className="w-full max-w-md">
-          {/* Logo & Header */}
-          <div className="text-center mb-8">
-            <div className="inline-flex p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl shadow-blue-500/10 mb-4 hover:scale-105 transition-transform">
+        {/* Brand Header */}
+        <div className="relative z-10 flex items-center justify-between">
+          <Link to="/" className="inline-flex items-center gap-3 group">
+            <div className="p-2 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 group-hover:scale-105 transition-transform">
               <img 
                 src="/mr-logo-icon.png" 
                 alt="MR Technologies" 
@@ -255,10 +245,10 @@ export function StudentLogin() {
             </p>
           </div>
 
-          {/* Form Container */}
+          {/* Form Box */}
           <div 
             style={{ backgroundColor: "var(--theme-surface)", borderColor: "var(--theme-border)" }}
-            className="border rounded-3xl p-6 sm:p-8 shadow-sm space-y-6"
+            className="border rounded-3xl p-6 sm:p-8 shadow-xl shadow-blue-500/5 space-y-6"
           >
             {errorMsg && (
               <div 
@@ -282,36 +272,97 @@ export function StudentLogin() {
                 >
                   Student Email
                 </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    if (errorMsg) setErrorMsg("");
-                  }}
-                  placeholder="student@domain.com"
-                  className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white caret-slate-900 dark:caret-white border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-medium placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-600 transition font-mono"
-                  required
-                />
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <Mail className="w-4 h-4" />
+                  </div>
+                  <input
+                    id="student-email-input"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (errorMsg) setErrorMsg("");
+                    }}
+                    placeholder="student@domain.com"
+                    className="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white caret-blue-500 border border-slate-300 dark:border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-xs font-medium placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-600 transition font-mono"
+                    required
+                  />
+                </div>
               </div>
 
               {/* Password with Show/Hide Toggle */}
               <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider flex items-center gap-1.5 mb-1.5">
-                  <Lock className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Password</span>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label 
+                    htmlFor="student-password-input"
+                    className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase font-mono tracking-wider"
+                  >
+                    Password
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowHelpModal(true)}
+                    className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                  <input
+                    id="student-password-input"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (errorMsg) setErrorMsg("");
+                    }}
+                    placeholder="••••••••"
+                    className="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white caret-blue-500 border border-slate-300 dark:border-slate-700 rounded-xl pl-10 pr-10 py-2.5 text-xs font-medium placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-600 transition"
+                    required
+                  />
+                  <button
+                    type="button"
+                    id="toggle-password-visibility-btn"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Remember Email Option */}
+              <div className="flex items-center justify-between pt-1">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    id="remember-student-email"
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-slate-700 cursor-pointer"
+                  />
+                  <span className="text-xs text-slate-600 dark:text-slate-400 font-medium">
+                    Remember my email
+                  </span>
                 </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    if (errorMsg) setErrorMsg("");
-                  }}
-                  placeholder="••••••••"
-                  className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white caret-slate-900 dark:caret-white border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-medium placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-600 transition"
-                  required
-                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowHelpModal(true)}
+                  className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition cursor-pointer"
+                >
+                  <HelpCircle className="w-3.5 h-3.5" />
+                  <span>Need help?</span>
+                </button>
               </div>
 
               {/* Submit Button */}

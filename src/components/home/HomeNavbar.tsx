@@ -18,7 +18,7 @@ interface HomeNavbarProps {
 }
 
 export function HomeNavbar({ onScrollTo }: HomeNavbarProps) {
-  const { currentUser, authToken } = useAuth();
+  const { studentUser, studentToken, adminUser, adminToken, currentUser, authToken } = useAuth();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -61,16 +61,32 @@ export function HomeNavbar({ onScrollTo }: HomeNavbarProps) {
     onScrollTo(sectionId);
   };
 
-  // Determine user-appropriate dashboard target if already logged in as a student
-  const getDashboardTarget = () => {
-    if (!currentUser || !authToken) return null;
-    if (currentUser.role === UserRole.STUDENT) {
-      return { path: "/student/dashboard", label: "Student Dashboard", shortLabel: "Dashboard" };
+  // Determine user-appropriate portal target based on active authentication
+  const getPortalTarget = () => {
+    // 1. If student session is active, route to Student Dashboard
+    if ((studentUser && studentToken) || (currentUser && authToken && currentUser.role === UserRole.STUDENT)) {
+      return { 
+        path: "/student/dashboard", 
+        label: "Back to Portal", 
+        shortLabel: "Back to Portal",
+        role: "student" 
+      };
+    }
+    // 2. If admin/manager session is active, route to Admin/Manager Dashboard
+    if ((adminUser && adminToken) || (currentUser && authToken && (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.SUPER_ADMIN || currentUser.role === UserRole.MANAGER))) {
+      const activeAdmin = adminUser || currentUser;
+      const isAdminManager = activeAdmin?.role === UserRole.MANAGER;
+      return { 
+        path: isAdminManager ? "/manager/team" : "/admin/dashboard", 
+        label: "Back to Portal", 
+        shortLabel: "Back to Portal",
+        role: "admin" 
+      };
     }
     return null;
   };
 
-  const dashboardTarget = getDashboardTarget();
+  const portalTarget = getPortalTarget();
 
   return (
     <header 
@@ -141,25 +157,27 @@ export function HomeNavbar({ onScrollTo }: HomeNavbarProps) {
             </Link>
           </nav>
 
-          {/* Desktop Actions: Compact Theme Toggle + Fully Visible Student Login / Dashboard */}
+          {/* Desktop Actions: Compact Theme Toggle + Fully Visible Back to Portal / Student Login */}
           <div className="hidden xl:flex items-center gap-2 2xl:gap-2.5 shrink-0">
             <ThemeQuickControls compact={true} />
 
-            {dashboardTarget ? (
+            {portalTarget ? (
               <Link
-                to={dashboardTarget.path}
-                id="header-student-dashboard-btn"
-                className="inline-flex items-center justify-center gap-1.5 px-3 2xl:px-3.5 h-8.5 2xl:h-9 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs 2xl:text-sm font-semibold shadow-xs hover:shadow transition duration-150 cursor-pointer whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                to={portalTarget.path}
+                id="header-back-to-portal-btn"
+                data-testid="back-to-portal-btn"
+                aria-label="Back to Portal"
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 2xl:px-4 h-8.5 2xl:h-9 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs 2xl:text-sm font-semibold shadow-xs hover:shadow transition duration-150 cursor-pointer whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
               >
                 <UserCheck className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 shrink-0" />
-                <span className="hidden 2xl:inline">{dashboardTarget.label}</span>
-                <span className="2xl:hidden">{dashboardTarget.shortLabel}</span>
+                <span>Back to Portal</span>
                 <ArrowRight className="w-3.5 h-3.5 shrink-0" />
               </Link>
             ) : (
               <Link
                 to="/student/login"
                 id="header-student-login-btn"
+                aria-label="Student Login"
                 className="inline-flex items-center justify-center gap-1.5 px-3 2xl:px-3.5 h-8.5 2xl:h-9 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs 2xl:text-sm font-semibold shadow-xs hover:shadow transition duration-150 cursor-pointer whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
               >
                 <GraduationCap className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-emerald-100 shrink-0" />
@@ -170,9 +188,23 @@ export function HomeNavbar({ onScrollTo }: HomeNavbarProps) {
             )}
           </div>
 
-          {/* Mobile/Tablet Controls (Theme Toggle + Hamburger Menu Button) */}
+          {/* Mobile/Tablet Controls (Theme Toggle + Back to Portal + Hamburger Menu Button) */}
           <div className="flex xl:hidden items-center gap-2 shrink-0">
             <ThemeQuickControls compact={true} />
+            {portalTarget && (
+              <Link
+                to={portalTarget.path}
+                id="mobile-header-back-to-portal-btn"
+                data-testid="mobile-header-back-to-portal-btn"
+                aria-label="Back to Portal"
+                className="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-semibold shadow-xs transition duration-150 cursor-pointer whitespace-nowrap"
+              >
+                <UserCheck className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden sm:inline">Back to Portal</span>
+                <span className="sm:hidden">Portal</span>
+                <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+              </Link>
+            )}
             <button
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -236,21 +268,24 @@ export function HomeNavbar({ onScrollTo }: HomeNavbarProps) {
               <ThemeQuickControls />
             </div>
 
-            {dashboardTarget ? (
+            {portalTarget ? (
               <Link
-                to={dashboardTarget.path}
-                id="drawer-student-dashboard-btn"
+                to={portalTarget.path}
+                id="drawer-back-to-portal-btn"
+                data-testid="drawer-back-to-portal-btn"
+                aria-label="Back to Portal"
                 onClick={() => setMobileMenuOpen(false)}
                 className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-md transition"
               >
                 <UserCheck className="w-4 h-4" />
-                <span>Go to {dashboardTarget.label}</span>
+                <span>Back to Portal</span>
                 <ArrowRight className="w-4 h-4" />
               </Link>
             ) : (
               <Link
                 to="/student/login"
                 id="drawer-student-login-btn"
+                aria-label="Student Login"
                 onClick={() => setMobileMenuOpen(false)}
                 className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-md transition"
               >

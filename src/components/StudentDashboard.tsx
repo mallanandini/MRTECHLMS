@@ -5,11 +5,10 @@
 
 import React, { useState } from "react";
 import { 
-  GraduationCap, BookOpen, Code, Award, Sparkles, Play, 
-  ArrowRight, Clock, Star, BookMarked, Calendar, Send, 
+  GraduationCap, BookOpen, Code, Award, Play, 
+  ArrowRight, Clock, Star, BookMarked, Calendar, 
   Terminal, CheckCircle2, XCircle, ChevronRight, TrendingUp, Info, Lock,
-  AlertTriangle, Flame, Medal, Compass, Check, ArrowUpRight, Search, Filter,
-  Copy, Loader2
+  AlertTriangle, Flame, Medal, Compass, ArrowUpRight, Search, Filter
 } from "lucide-react";
 import { User, Course } from "../types.js";
 import { CourseOverviewModal } from "./student/CourseOverviewModal.js";
@@ -45,15 +44,6 @@ export function StudentDashboard({
   // Selected course for overview modal
   const [inspectCourseId, setInspectCourseId] = useState<string | null>(null);
 
-  // AI Tutor state
-  const [aiQuery, setAiQuery] = useState("");
-  const [aiAnswer, setAiAnswer] = useState("");
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
-  const [copiedAi, setCopiedAi] = useState(false);
-  const [lastAttemptedQuery, setLastAttemptedQuery] = useState("");
-  const [aiHistory, setAiHistory] = useState<Array<{ role: "user" | "mentor"; content: string }>>([]);
-
   // Format dynamic dates
   const formattedDate = new Date().toLocaleDateString(undefined, {
     weekday: "long",
@@ -61,60 +51,6 @@ export function StudentDashboard({
     month: "long",
     day: "numeric"
   });
-
-  const handleAskAi = async (e?: React.FormEvent, customQuery?: string) => {
-    if (e) e.preventDefault();
-    const query = (customQuery !== undefined ? customQuery : aiQuery).trim();
-    if (!query || aiLoading) return;
-
-    setLastAttemptedQuery(query);
-    setAiLoading(true);
-    setAiError(null);
-    try {
-      const response = await fetch("/api/ai/explain", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${authToken}`
-        },
-        body: JSON.stringify({
-          content: query,
-          context: "Student Dashboard Quick Help Widget",
-          history: aiHistory.slice(-4),
-          previousAnswer: aiAnswer || undefined
-        })
-      });
-
-      const data = await response.json().catch(() => ({}));
-      if (response.ok && data.explanation) {
-        setAiAnswer(data.explanation);
-        setAiHistory(prev => [
-          ...prev.slice(-6),
-          { role: "user", content: query },
-          { role: "mentor", content: data.explanation }
-        ]);
-        setAiError(null);
-      } else {
-        setAiError(data.error || "Failed to connect to the AI Mentor. Please try again.");
-        setAiAnswer("");
-      }
-    } catch (err) {
-      console.error("AI Explainer failed on dashboard", err);
-      setAiError("Network connection error. Could not contact the AI Mentor.");
-      setAiAnswer("");
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  const handleCopyAiAnswer = async () => {
-    if (!aiAnswer) return;
-    try {
-      await navigator.clipboard.writeText(aiAnswer);
-      setCopiedAi(true);
-      setTimeout(() => setCopiedAi(false), 2000);
-    } catch {}
-  };
 
   // Safe data extractions from the 10-pillar backend
   const continueLearning = myDashboardStats?.continueLearning;
@@ -220,7 +156,7 @@ export function StudentDashboard({
               <span>Learning Journey & Daily Goals</span> <span>🎯</span>
             </h2>
             <p className="text-slate-600 dark:text-slate-300 text-xs sm:text-sm leading-relaxed max-w-2xl font-medium">
-              Keep your momentum moving forward today. Track assigned courses, tackle upcoming assessments, or consult your personal AI Mentor.
+              Keep your momentum moving forward today. Track assigned courses and tackle upcoming assessments.
             </p>
           </div>
 
@@ -479,55 +415,52 @@ export function StudentDashboard({
       </div>
 
       {/* ========================================================================= */}
-      {/* 5. MAIN CONTENT LAYOUT: 2 COLUMNS LEFT, 1 COLUMN RIGHT */}
+      {/* 5. MAIN CONTENT LAYOUT */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <div className="space-y-8 min-w-0">
         
-        {/* Left 2 Columns: Assigned Courses, Learning Paths, Assessments */}
-        <div className="xl:col-span-2 space-y-8 min-w-0">
-          
-          {/* SECTION 2: ASSIGNED COURSES */}
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
-                  <BookMarked className="w-4 h-4 text-blue-600" />
-                  Assigned Courses ({assignedCourses.length})
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Curriculum allocated by your department and LMS administrators</p>
-              </div>
-
-              {/* Filter Tabs */}
-              <div className="inline-flex rounded-lg p-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold">
-                <button
-                  onClick={() => setCourseFilter("all")}
-                  className={`px-3 py-1 rounded-md transition ${
-                    courseFilter === "all" ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs" : "text-slate-500"
-                  }`}
-                >
-                  All ({assignedCourses.length})
-                </button>
-                <button
-                  onClick={() => setCourseFilter("in_progress")}
-                  className={`px-3 py-1 rounded-md transition ${
-                    courseFilter === "in_progress" ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs" : "text-slate-500"
-                  }`}
-                >
-                  In Progress
-                </button>
-                <button
-                  onClick={() => setCourseFilter("completed")}
-                  className={`px-3 py-1 rounded-md transition ${
-                    courseFilter === "completed" ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs" : "text-slate-500"
-                  }`}
-                >
-                  Completed
-                </button>
-              </div>
+        {/* SECTION 2: ASSIGNED COURSES */}
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
+                <BookMarked className="w-4 h-4 text-blue-600" />
+                Assigned Courses ({assignedCourses.length})
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Curriculum allocated by your department and LMS administrators</p>
             </div>
 
-            {/* Courses Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Filter Tabs */}
+            <div className="inline-flex rounded-lg p-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold">
+              <button
+                onClick={() => setCourseFilter("all")}
+                className={`px-3 py-1 rounded-md transition ${
+                  courseFilter === "all" ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs" : "text-slate-500"
+                }`}
+              >
+                All ({assignedCourses.length})
+              </button>
+              <button
+                onClick={() => setCourseFilter("in_progress")}
+                className={`px-3 py-1 rounded-md transition ${
+                  courseFilter === "in_progress" ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs" : "text-slate-500"
+                }`}
+              >
+                In Progress
+              </button>
+              <button
+                onClick={() => setCourseFilter("completed")}
+                className={`px-3 py-1 rounded-md transition ${
+                  courseFilter === "completed" ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs" : "text-slate-500"
+                }`}
+              >
+                Completed
+              </button>
+            </div>
+          </div>
+
+          {/* Courses Grid: Responsive across available width */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {filteredCourses.length > 0 ? (
                 filteredCourses.map((c: any) => {
                   const pct = c.progressPercentage !== undefined ? c.progressPercentage : c.percentage || 0;
@@ -717,180 +650,9 @@ export function StudentDashboard({
             </div>
           )}
 
-        </div>
-
-        {/* Right 1 Column: AI Tutor, Certificates Showcase & Recent Activity */}
-        <div className="space-y-6 min-w-0">
+        {/* SECTION 4: CERTIFICATES & RECENT ACTIVITY */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
           
-          {/* AI TUTOR QUICK CONSULTANT */}
-          <div className="bg-slate-900 border border-slate-800 text-slate-100 rounded-3xl p-5 shadow-md space-y-4">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <span className="text-xs font-bold text-orange-400 font-mono uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
-                AI Learning Mentor
-              </span>
-              <span className="text-[9px] font-mono text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800 uppercase font-bold">
-                Online
-              </span>
-            </div>
-
-            <p className="text-slate-400 text-xs leading-relaxed">
-              Stuck on coding syntax, algorithms, or lesson concepts? Ask your AI tutor for instant explanation.
-            </p>
-
-            {/* Form - Stays fixed and usable at the top */}
-            <form onSubmit={handleAskAi} className="space-y-2.5">
-              <textarea
-                value={aiQuery}
-                onChange={(e) => setAiQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    if (aiQuery.trim() && !aiLoading) {
-                      handleAskAi(e);
-                    }
-                  }
-                }}
-                placeholder="Ask e.g. What is AI? Explain variables in Python with an example"
-                className="w-full bg-slate-950 text-slate-100 text-xs p-3 rounded-xl border border-slate-800 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-orange-500 resize-none h-20 leading-relaxed transition"
-                spellCheck={false}
-              />
-
-              {/* Quick suggestion pills */}
-              <div className="flex flex-wrap gap-1.5 pt-0.5">
-                <button
-                  type="button"
-                  onClick={() => { setAiQuery("what is AI"); handleAskAi(undefined, "what is AI"); }}
-                  className="text-[10px] px-2 py-0.5 bg-slate-800/80 hover:bg-orange-950 hover:text-orange-300 hover:border-orange-800 border border-slate-700/60 text-slate-400 rounded-lg transition cursor-pointer"
-                >
-                  💡 What is AI?
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setAiQuery("Explain variables in Python with an example"); handleAskAi(undefined, "Explain variables in Python with an example"); }}
-                  className="text-[10px] px-2 py-0.5 bg-slate-800/80 hover:bg-orange-950 hover:text-orange-300 hover:border-orange-800 border border-slate-700/60 text-slate-400 rounded-lg transition cursor-pointer"
-                >
-                  🐍 Python Variables
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setAiQuery("Explain inheritance in Java"); handleAskAi(undefined, "Explain inheritance in Java"); }}
-                  className="text-[10px] px-2 py-0.5 bg-slate-800/80 hover:bg-orange-950 hover:text-orange-300 hover:border-orange-800 border border-slate-700/60 text-slate-400 rounded-lg transition cursor-pointer"
-                >
-                  ☕ Java Inheritance
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setAiQuery("Why am I getting a SyntaxError in Python?"); handleAskAi(undefined, "Why am I getting a SyntaxError in Python?"); }}
-                  className="text-[10px] px-2 py-0.5 bg-slate-800/80 hover:bg-orange-950 hover:text-orange-300 hover:border-orange-800 border border-slate-700/60 text-slate-400 rounded-lg transition cursor-pointer"
-                >
-                  ⚠️ Syntax Error
-                </button>
-              </div>
-
-              <button
-                type="submit"
-                disabled={aiLoading || !aiQuery.trim()}
-                className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-bold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-sm"
-              >
-                {aiLoading ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Consulting Mentor...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-3.5 h-3.5" />
-                    <span>Ask Question</span>
-                  </>
-                )}
-              </button>
-            </form>
-
-            {/* Error Notice */}
-            {aiError && (
-              <div className="p-3 bg-rose-950/40 border border-rose-800/70 rounded-xl text-xs text-rose-300 space-y-1.5 animate-in fade-in duration-200">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold flex items-center gap-1.5 text-rose-400">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    AI Mentor Notice
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {lastAttemptedQuery && (
-                      <button
-                        type="button"
-                        onClick={() => handleAskAi(undefined, lastAttemptedQuery)}
-                        className="text-amber-400 hover:text-amber-300 text-[10px] px-2 py-0.5 rounded bg-amber-950/60 border border-amber-800/60 hover:bg-amber-900/60 font-semibold cursor-pointer transition"
-                      >
-                        Retry
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setAiError(null)}
-                      className="text-rose-400 hover:text-rose-200 text-[10px] px-1.5 py-0.5 rounded hover:bg-rose-900/50 cursor-pointer"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-                </div>
-                <p className="text-[11px] leading-relaxed text-rose-200/90">{aiError}</p>
-              </div>
-            )}
-
-            {/* Answer Display Area - Clean vertical scroll, no horizontal overflow */}
-            {(aiAnswer || aiLoading) && (
-              <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 max-h-72 overflow-y-auto overflow-x-hidden text-xs leading-relaxed text-slate-300 break-words space-y-2">
-                {aiLoading ? (
-                  <div className="space-y-2 py-1 animate-pulse">
-                    <div className="flex items-center gap-2 text-slate-400 text-xs font-mono">
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-400" />
-                      <span>Formulating expert explanation...</span>
-                    </div>
-                    <div className="h-3 bg-slate-800 rounded w-1/3" />
-                    <div className="h-3 bg-slate-800 rounded w-full" />
-                    <div className="h-3 bg-slate-800 rounded w-5/6" />
-                  </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    {/* Header with copy & clear controls */}
-                    <div className="flex items-center justify-between border-b border-slate-800/80 pb-2 text-[11px]">
-                      <span className="font-semibold text-orange-300 flex items-center gap-1">
-                        <Sparkles className="w-3 h-3 text-amber-400" />
-                        Mentor Explanation
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={handleCopyAiAnswer}
-                          className="flex items-center gap-1 text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded hover:bg-slate-850 transition"
-                          title="Copy explanation"
-                        >
-                          {copiedAi ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                          <span>{copiedAi ? "Copied" : "Copy"}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setAiAnswer(""); setAiError(null); setAiHistory([]); }}
-                          className="text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded hover:bg-slate-850 transition"
-                          title="Clear explanation"
-                        >
-                          Clear
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Formatted Text Content */}
-                    <div className="whitespace-pre-line text-xs leading-relaxed text-slate-300 break-words overflow-x-hidden">
-                      {aiAnswer}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
           {/* CERTIFICATES SHOWCASE */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 rounded-3xl p-5 shadow-2xs space-y-4">
             <div className="flex justify-between items-center">
@@ -900,7 +662,7 @@ export function StudentDashboard({
               </h3>
               <button
                 onClick={() => onNavigate("certificates")}
-                className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
+                className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
               >
                 View All
               </button>

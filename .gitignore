@@ -7,8 +7,15 @@ coverage/
 .env*
 !.env.example
 scratch/
+
+# Database backups and private SQL dumps
+*.dump
 *.sql
 !setup-database.sql
+!database/**/*.sql
+database/backups/*
+!database/backups/.gitkeep
+!database/backups/README.md
 
 # Runtime media & uploaded assets (Centralized in top-level assets/)
 assets/videos/*

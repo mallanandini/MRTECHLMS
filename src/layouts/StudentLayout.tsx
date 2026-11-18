@@ -80,8 +80,8 @@ export function StudentLayout() {
               <Menu className="w-5 h-5" />
             </button>
             <Link 
-              to="/student/dashboard"
-              aria-label="MR TECHNOLOGIES Student Dashboard"
+              to="/"
+              aria-label="MR TECHNOLOGIES Home"
               className="flex items-center gap-2.5 min-w-0 group cursor-pointer rounded-xl p-1 -m-1 hover:bg-white/5 active:opacity-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <img 

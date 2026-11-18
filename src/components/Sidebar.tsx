@@ -406,9 +406,18 @@ export function Sidebar({
     ? "admin-dashboard" 
     : (userRole === UserRole.MANAGER ? "dashboard" : "dashboard");
 
+  const logoPath = isStudent ? "/" : dashboardPath;
+
   const handleLogoClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    handleNavigate(dashboardPath, dashboardItemId);
+    if (isStudent) {
+      if (onMobileClose) {
+        onMobileClose();
+      }
+      navigate("/");
+    } else {
+      handleNavigate(dashboardPath, dashboardItemId);
+    }
   };
 
   // Filter groups and items based on search query
@@ -816,9 +825,9 @@ export function Sidebar({
               className="p-4 border-b flex items-center justify-between shrink-0"
             >
               <Link
-                to={dashboardPath}
+                to={logoPath}
                 onClick={handleLogoClick}
-                aria-label={`MR TECHNOLOGIES ${userRole} Dashboard`}
+                aria-label={isStudent ? "MR TECHNOLOGIES Home" : `MR TECHNOLOGIES ${userRole} Dashboard`}
                 className="flex items-center gap-2.5 min-w-0 group cursor-pointer rounded-xl p-1 -m-1 hover:bg-white/5 active:opacity-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 <img 
@@ -909,9 +918,9 @@ export function Sidebar({
           className="p-4 border-b flex items-center shrink-0"
         >
           <Link
-            to={dashboardPath}
+            to={logoPath}
             onClick={handleLogoClick}
-            aria-label={`MR TECHNOLOGIES ${userRole} Dashboard`}
+            aria-label={isStudent ? "MR TECHNOLOGIES Home" : `MR TECHNOLOGIES ${userRole} Dashboard`}
             className={`flex items-center min-w-0 group cursor-pointer rounded-xl p-1 -m-1 hover:bg-white/5 active:opacity-90 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${effectiveCompact ? "justify-center w-full" : "gap-3 flex-1"}`}
           >
             <img 
